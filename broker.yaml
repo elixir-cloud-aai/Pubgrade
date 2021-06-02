@@ -1,0 +1,728 @@
+openapi: 3.0.2
+info:
+  title: 'ELIXIR Broker Registry API Specification'
+  version: 1.0.0
+  description: |
+    Broker is a decoupled, publish-subscribe-based continuous integration (CI) and continuous delivery (CD) microservice that allows developers to notify deploments of available updates, which can then autonomously decide what to do with them.
+  license:
+    name: 'Apache 2.0'
+    url: 'https://raw.githubusercontent.com/ga4gh-discovery/ga4gh-service-registry/develop/LICENSE'
+  contact:
+    name: 'ELIXIR Cloud & AAI Members'
+    url: 'https://elixir-europe.github.io/cloud/categories/people.html'
+paths:
+  /projects:
+    post:
+      summary: 'Register project'
+      operationId: postProjects
+      tags:
+        - projects
+      requestBody:
+        description: Project metadata
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Project'
+      responses:
+        '200':
+          description: 'The project was successfully registered'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                    project_id:
+                      type: string
+                      description: Unique id generated for each project
+                      example: project_123
+                    project_access_token:
+                      type: string
+                      description: Used to verify later at /projects/{projects_id} if the request is from a trusted source.
+                      example: xxxxxxxxxxxxxx
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        default:
+          $ref: '#/components/responses/Error'
+    get:
+      summary: 'List all available projects.'
+      operationId: getProjects
+      tags:
+        - projects
+      responses:
+        '200':
+          description: 'List of all available projects'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProjectListItem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        default:
+          $ref: '#/components/responses/Error'
+  /projects/{projectId}:
+    post:
+      summary: 'Registers a new build for the project'
+      operationId: postNewBuild
+      tags:
+        - projects
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema:
+            type: string
+          description: Identifier generated for each project on POST
+        - in: cookie
+          name: Project Access Token
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BuildInfo'
+      responses:
+        '200':
+          description: 'Build identifier'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                    buildName:
+                      type: string
+                      description: Unique id generated on creating a build, Can be used later to get status, info of build
+                      example: build_123
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        default:
+          $ref: '#/components/responses/Error'
+    get:
+      summary: 'Lists all builds for the project'
+      operationId: getAllBuilds
+      tags:
+        - projects
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema:
+            type: string
+          description: Identifier generated for each project on POST
+      responses:
+        '200':
+          description: 'List of all available builds for the project'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  allOf:
+                    - $ref: '#/components/schemas/BuildInfo'
+                  properties:
+                      startedAt:
+                          type: number
+                          example: 1622652933
+                          description: Start time of latest build
+                      finishedAt:
+                          type: number
+                          example: 1622652950
+                          description: Finish time of latest build
+                      buildStatus:
+                          type: string
+                          example: in-progress
+                          description: Shows current status of latest build
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      summary: 'Delete project'
+      operationId: deleteProject
+      tags:
+        - projects
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema:
+            type: string
+          description: Identifier generated for each project on POST
+      responses:
+        '200':
+          description: 'The Project was successfully deleted.'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/BuildInfo'
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        default:
+          $ref: '#/components/responses/Error'  
+  /projects/{projectId}/{buildId}:
+    put:
+      summary: 'Update already created build'
+      operationId: modifyBuild
+      tags:
+        - builds
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema:
+            type: string
+          description: Identifier generated for each project on POST
+        - in: path
+          name: buildId
+          required: true
+          schema:
+            type: string
+          description: Identifier generated for each build on POST project.
+        - in: cookie
+          name: Project Access Token
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BuildInfo'
+      responses:
+        '200':
+          description: 'Build identifier'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                    buildName:
+                      type: string
+                      description: Unique id generated on creating a build, Can be used later to get status, info of build
+                      example: build_123
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        default:
+          $ref: '#/components/responses/Error'
+    get:
+      summary: 'Shows build information'
+      operationId: getBuildInfo
+      tags:
+        - builds
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema:
+            type: string
+          description: Identifier generated for each project on POST
+        - in: path
+          name: buildId
+          required: true
+          schema:
+            type: string
+          description: Identifier generated for each build on POST project.
+      responses:
+        '200':
+          description: 'Build Information'
+          content:
+            application/json:
+              schema:
+                type: object
+                allOf:
+                    - $ref: '#/components/schemas/BuildInfo'
+                properties:
+                      startedAt:
+                          type: number
+                          example: 1622652933
+                          description: Start time of latest build
+                      finishedAt:
+                          type: number
+                          example: 1622652950
+                          description: Finish time of latest build
+                      buildStatus:
+                          type: string
+                          example: in-progress
+                          description: Shows current status of latest build
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      summary: 'Delete Build'
+      operationId: deleteBuild
+      tags:
+        - builds
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema:
+            type: string
+          description: Identifier generated for each project on POST
+        - in: path
+          name: buildId
+          required: true
+          schema:
+            type: string
+          description: Identifier generated for each build on POST project.
+      responses:
+        '200':
+          description: 'The Build was successfully deleted.'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                    buildName:
+                      type: string
+                      description: Unique id generated on creating a build, Can be used later to get status, info of build
+                      example: build_123
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        default:
+          $ref: '#/components/responses/Error'  
+  /services:
+    post:
+      summary: 'Registers a new service subscription.'
+      operationId: postService
+      tags:
+        - services
+      parameters:
+        - in: cookie
+          name: userAccessToken
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              allOf:
+                - $ref: '#/components/schemas/Service'
+              properties:
+                  accessToken:
+                      type: string
+                      description: Token required to send update request at callbackUrl
+                      example: xxxxxxxxxxxx
+      responses:
+        '200':
+          description: 'Service successfully created'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                    subscriptionId:
+                      type: string
+                      description: Unique id generated on creating new service
+                      example: subscription-xyz
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        default:
+          $ref: '#/components/responses/Error'
+    get:
+      summary: 'Lists all subcriptionId'
+      operationId: getAllServices
+      tags:
+        - services
+      parameters:
+        - in: cookie
+          name: userAccessToken
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'List subcriptionId for all subscribed services'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  properties:
+                    subscriptionId:
+                      type: string
+                      description: Unique id generated on creating new service
+                      example: subscription-xyz
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        default:
+          $ref: '#/components/responses/Error'
+  /services/{subscriptionId}:
+    put:
+      summary: 'Update already created service'
+      operationId: modifyService
+      tags:
+        - services
+      parameters:
+        - in: path
+          name: subscriptionId
+          required: true
+          schema:
+            type: string
+          description: Identifier generated for each service on POST
+        - in: cookie
+          name: userAccessToken
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              allOf:
+                - $ref: '#/components/schemas/Service'
+              properties:
+                  accessToken:
+                      type: string
+                      description: Token required to send update request at callbackUrl
+                      example: xxxxxxxxxxxx
+      responses:
+        '200':
+          description: 'Service successfully created'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                    subscriptionId:
+                      type: string
+                      description: Unique id generated on creating new service
+                      example: subscription-xyz
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        default:
+          $ref: '#/components/responses/Error'
+    get:
+      summary: 'Shows build information'
+      operationId: getServiceInfo
+      tags:
+        - services
+      parameters:
+        - in: path
+          name: subscriptionId
+          required: true
+          schema:
+            type: string
+          description: Identifier generated for each service on POST
+        - in: cookie
+          name: userAccessToken
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Service Information'
+          content:
+            application/json:
+              schema:
+                type: object
+                allOf:
+                    - $ref: '#/components/schemas/Service'
+                properties:
+                      state:
+                          type: string
+                          example: Active/InActive
+                          description:  Listening OR Not Listening to changes
+                      updatedAt:
+                          type: number
+                          example: 1622612463
+                          description: Timestamp for latest update
+                      buildName:
+                        type: string
+                        description: Unique id generated on creating a build
+                        example: build_123
+                      buildType:
+                        type: string
+                        description: 'Build type: production, development. testing'
+                        example: production
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      summary: 'Delete Service'
+      operationId: deleteService
+      tags:
+        - services
+      parameters:
+        - in: path
+          name: subscriptionId
+          required: true
+          schema:
+            type: string
+          description: Identifier generated for each service on POST
+        - in: cookie
+          name: userAccessToken
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'The Service was successfully deleted.'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                    subscriptionId:
+                      type: string
+                      description: Unique id generated on creating new service
+                      example: subscription-xyz
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        default:
+          $ref: '#/components/responses/Error'  
+  /services/from-registry:
+    post:
+      summary: 'Register project subscriptions using service registry'
+      operationId: postServiceFromRegistry
+      tags:
+        - services-from-registry
+      parameters:
+        - in: cookie
+          name: userAccessToken
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                serviceRegistryUrl:
+                  type: string
+                  description: 'URL of service registry which when requested returns an array of all services under organisation each object must containing following schema : {project_id, callback_url, access_token}'     
+      responses:
+        '200':
+          description: "List of subscription id's"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                      type: string
+                      description: subscriptionId
+                      example: subscriptionId
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      summary: 'Delete service registry'
+      operationId: d
+      tags:
+        - services-from-registry
+      parameters:
+        - in: cookie
+          name: userAccessToken
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'The service registry is removed successfully'
+          content:
+            application/json:
+              schema:
+                type: string
+                example: "Deleted successfully"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        default:
+          $ref: '#/components/responses/Error'  
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    Unauthorized:
+      description: 'Unauthorized ([RFC 7235](https://tools.ietf.org/html/rfc7235))'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: 'Forbidden ([RFC 7231](https://tools.ietf.org/html/rfc7231))'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: 'Not found ([RFC 7231](https://tools.ietf.org/html/rfc7231))'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InternalServerError:
+      description: 'Internal server error ([RFC 7231](https://tools.ietf.org/html/rfc7231))'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Error:
+      description: 'Unexpected error ([RFC 7231](https://tools.ietf.org/html/rfc7231))'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  
+  schemas:
+    Service:
+      type: object
+      properties:
+        projectId:
+            type: string
+            description: Unique id generated for each project
+            example: project_12
+        callbackUrl:
+            type: string
+            description: URL on which CD is listening for image updates.
+            example: https://ec2-54-203-145-132.compute-1.amazonaws.com/update
+    BuildInfo:
+      type: object
+      properties:
+        commitSHA:
+          type: string
+          description: Last commit sha till where repo needs to be checkout by git
+          example: '6b9899f'
+        imageTag:
+          type: string
+          description: Tag name for the created image
+          example: 'v1'
+        branch:
+          type: string
+          description: Git branch to checkout
+          example: feature-xyz
+    ProjectListItem:
+      type: object
+      properties:
+          projectId:
+              type: string
+              description: Unique id generated for each project
+              example: project_12
+      allOf:
+        - $ref: '#/components/schemas/Project'
+    Project:
+      type: object
+      properties:
+        type:
+          type: string
+          description: Development type
+          example: production
+        url:
+          type: string
+          description: URL to the code repository
+          example: https://github.com/elixir-cloud-aai/trs-filer.git
+        dockerfileLocation:
+          type: string
+          description: Location of Dockerfile relative to repo root dir
+          example: docker/Dockerfile
+        containerRegistryUrl:
+          type: string
+          description: Location of container registry to push build image
+          example: gcr.io/my-project/busybox
+        containerRegistryToken:
+          type: string
+          description: Token to access container registry
+          example: XXXXXXXXXXXXXXX
+    Error:
+      type: object
+      properties:
+        status:
+          type: integer
+          format: int32
+          description: |
+            HTTP status code (as per [RFC 7231](https://tools.ietf.org/html/rfc7231)) generated by the server for this occurrence of the problem.
+            This must match the status code in the actual HTTP response. Used for convenience of clients (e.g. to determine what the original status code was in cases where it has been changed by an intermediary or cache or when message bodies persist without HTTP information).
+          example: '500'
+        title:
+          type: string
+          description: |
+            A short, human-readable description of the error.
+            The value should not change from occurrence to occurrence of an error, except for purposes of localization.
+          example: 'Internal server error'
+        detail:
+          type: string
+          description: 'A human-readable explanation specific to this occurrence of the error.'
+          example: 'Internal server error'
+      required:
+        - status
+        - title
