@@ -339,7 +339,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Service'
+              type: object
+              allOf:
+                - $ref: '#/components/schemas/Service'
+              properties:
+                  accessToken:
+                      type: string
+                      description: Token required to send update request at callbackUrl
+                      example: xxxxxxxxxxxx
       responses:
         '200':
           description: 'Service successfully created'
@@ -377,8 +384,9 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
+                type: array
+                items:
+                  properties:
                     subscriptionId:
                       type: string
                       description: Unique id generated on creating new service
@@ -414,7 +422,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Service'
+              type: object
+              allOf:
+                - $ref: '#/components/schemas/Service'
+              properties:
+                  accessToken:
+                      type: string
+                      description: Token required to send update request at callbackUrl
+                      example: xxxxxxxxxxxx
       responses:
         '200':
           description: 'Service successfully created'
@@ -641,10 +656,6 @@ components:
             type: string
             description: URL on which CD is listening for image updates.
             example: https://ec2-54-203-145-132.compute-1.amazonaws.com/update
-        accessToken:
-            type: string
-            description: Token required to send update request at callbackUrl
-            example: xxxxxxxxxxxx
     BuildInfo:
       type: object
       properties:
