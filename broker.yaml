@@ -3,7 +3,7 @@ info:
   title: 'ELIXIR Broker Registry API Specification'
   version: 1.0.0
   description: |
-    Broker registry is a service providing ....
+    Broker is a decoupled, publish-subscribe-based continuous integration (CI) and continuous delivery (CD) microservice that allows developers to notify deploments of available updates, which can then autonomously decide what to do with them.
   license:
     name: 'Apache 2.0'
     url: 'https://raw.githubusercontent.com/ga4gh-discovery/ga4gh-service-registry/develop/LICENSE'

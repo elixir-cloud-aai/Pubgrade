@@ -4,7 +4,7 @@
 
 ## Synopsis
 
-Broker is a decoupled, publish-subscribe-based continuous integration (CI) and continuous delivery (CD) microservice that allows developers to notify deploments of available updates, which can then autonomously decide what to do with them. Broker has a optional link between between the [ELIXIR Cloud Service Registry][elixir-cloud-registry] and the Broker.
+Broker is a decoupled, publish-subscribe-based continuous integration (CI) and continuous delivery (CD) microservice that allows developers to notify deploments of available updates, which can then autonomously decide what to do with them. Broker has an optional link with [ELIXIR Cloud Service Registry][elixir-cloud-registry].
 
 ![Screenshot from 2021-05-29 15-33-18](https://user-images.githubusercontent.com/46739435/120494133-2c17aa00-c3d9-11eb-80b9-b8c03c76e1cb.png)
 
