@@ -73,7 +73,7 @@ paths:
   /projects/{projectId}:
     post:
       summary: 'Registers a new build for the project'
-      operationId: postNewBuild
+      operationId: postBuild
       tags:
         - projects
       parameters:
@@ -116,7 +116,7 @@ paths:
           $ref: '#/components/responses/Error'
     get:
       summary: 'Lists all builds for the project'
-      operationId: getAllBuilds
+      operationId: getBuilds
       tags:
         - projects
       parameters:
@@ -369,7 +369,7 @@ paths:
           $ref: '#/components/responses/Error'
     get:
       summary: 'Lists all subcriptionId'
-      operationId: getAllServices
+      operationId: getServices
       tags:
         - services
       parameters:
@@ -581,7 +581,7 @@ paths:
           $ref: '#/components/responses/Error'
     delete:
       summary: 'Delete service registry'
-      operationId: d
+      operationId: deleteServiceFromRegistry
       tags:
         - services-from-registry
       parameters:
