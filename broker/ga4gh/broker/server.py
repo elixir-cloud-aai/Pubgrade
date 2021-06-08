@@ -14,7 +14,7 @@ from broker.errors.exceptions import (
 
 @log_traffic
 def getProjects():
-    return "Template function: getProjects"
+    return [{'projectId':'project_12',  'type':'production', 'url':'https://goo.gl', 'dockerfileLocation':'./docker', 'containerRegistryUrl':'gcr.io/my-project/busybox', 'containerRegistryToken':'XXXXXXXXXXXXXXX' }]
 
 @log_traffic
 def postProjects():
