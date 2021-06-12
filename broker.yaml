@@ -132,6 +132,14 @@ paths:
       operationId: putRepositories
       tags:
         - repositories
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Identifier generated when first registering the
+           repository via `POST /repositories`.
       requestBody:
         description: Schema for repository 
         required: true
@@ -362,6 +370,10 @@ paths:
                       description: Secret used by continuous delivery (CD) 
                         pipelines to verify request source for `callback_url`.
                       example: xxxxxxxxxxxx
+              required:
+                - callback_url
+                - access_token
+              additionalProperties: false
       responses:
         '200':
           description: 'Subcription successfully created'
@@ -459,6 +471,11 @@ paths:
                       description: Secret used by continuous delivery (CD) 
                         pipelines to verify request source for `callback_url`.
                       example: xxxxxxxxxxxx
+              required:
+                - repository_id
+                - callback_url
+                - access_token
+              additionalProperties: false
       responses:
         '200':
           description: 'Service successfully created'
@@ -598,11 +615,12 @@ paths:
         default:
           $ref: '#/components/responses/Error'  
 components:
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
+  #### Need some work ####
+  # securitySchemes:
+  #   bearerAuth:
+  #     type: http
+  #     scheme: bearer
+  #     bearerFormat: JWT
   responses:
     BadRequest:
       description: 'Bad Request
@@ -696,6 +714,7 @@ components:
       required:
           - images
           - head_commit
+      additionalProperties: false
     Image:
       type: object
       description: Properties required for building docker image i.e. name/tag
@@ -712,12 +731,14 @@ components:
           default: ./Dockerfile
       required:
             - name
+      additionalProperties: false
     HeadCommit:
+      description: Supply either of two parameters i.e. Branch OR Tag
       oneOf:
         - type: object    # Branch
-          description: branch
+          description: 'Git branch: Used as reference for git checkout'
           properties:
-            name:
+            branch:
                 type: string
                 description: Name of branch to be used to checkout git
                  repository.
@@ -730,10 +751,12 @@ components:
                 default: <Head-commit>
                 example: 930fd5
           required:
-              - name
+              - branch
+          additionalProperties: false
         - type: string    # Tag
-          description: tag
+          description: 'Git Tag: Used as reference for git checkout.'
           example: v1.0
+          additionalProperties: false
     Service:
       type: object
       description: Schema for subscription
@@ -769,11 +792,14 @@ components:
         #   type: string
         #   description: Development type
         #   example: production
-        ###-------------------###
+        ##########################
         url:
           type: string
           description: URL of the git repository.
           example: https://github.com/elixir-cloud-aai/trs-filer.git
+      required:
+        - url
+      additionalProperties: false
     Error:
       type: object
       properties:
