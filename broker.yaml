@@ -47,8 +47,8 @@ paths:
                 properties:
                     id:
                       type: string
-                      description: A unique identifier for the generated 
-                        resource.
+                      description: A unique identifier generated for the
+                       repository.
                       example: repository_123
                     access_token:
                       type: string
@@ -157,8 +157,8 @@ paths:
                 properties:
                     id:
                       type: string
-                      description: A unique identifier for the generated 
-                        resource.
+                      description: Identifier generated when first
+                       registering the repository via `POST /repositories`.
                       example: repository_123
                     access_token:
                       type: string
@@ -384,7 +384,8 @@ paths:
                 properties:
                     subscription_id:
                       type: string
-                      description: Generated to uniquely identify subscriptions.
+                      description: A unique identifier generated for the
+                       subscription.
                       example: subscription-xyz
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -456,7 +457,7 @@ paths:
           schema:
             type: string
           description: Secret used to verify and uniquely identify administrator
-           and perform their specific tasks.
+           in order to perform their specific tasks.
       requestBody:
         required: true
         content:
@@ -705,12 +706,13 @@ components:
         images:
           type: array
           items: 
-          $ref: '#/components/schemas/Image'
+            $ref: '#/components/schemas/Image'
           description: List of image to be build. It can contain single or
            multiple images depending on requirement of repository.
         head_commit:
           $ref: '#/components/schemas/HeadCommit'
-          description: 
+          description: "Reference to the `commit` or `tag` which is to be used
+           for source code checkout"
       required:
           - images
           - head_commit
@@ -733,7 +735,7 @@ components:
             - name
       additionalProperties: false
     HeadCommit:
-      description: Supply either of two parameters i.e. Branch OR Tag
+      description: "`reference` (ref) for checkout could be oneOf Branch OR Tag"
       oneOf:
         - type: object    # Branch
           description: 'Git branch: Used as reference for git checkout'
