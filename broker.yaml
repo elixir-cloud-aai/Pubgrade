@@ -485,7 +485,7 @@ paths:
               schema:
                 type: object
                 properties:
-                    subscriptionId:
+                    subscription_id:
                       type: string
                       description: Identifier which is generated on registering 
                         new subscription via `POST /subcriptions`
@@ -670,7 +670,8 @@ components:
       description: Describes schema for build.
       properties:
         status:
-          $ref: '#/components/schemas/BuildStates'
+          allOf:
+            - $ref: '#/components/schemas/BuildStates'
           example: QUEUED
           description: Current condition/state of build. 
         started_at:
@@ -688,8 +689,6 @@ components:
         - $ref: '#/components/schemas/BuildRegister'
       required:
         - status
-        - images
-        - head_commit
     BuildStates:
       type: string
       enum:
@@ -735,11 +734,15 @@ components:
             - name
       additionalProperties: false
     HeadCommit:
+      type: object
       description: "`reference` (ref) for checkout could be oneOf Branch OR Tag"
       oneOf:
-        - type: object    # Branch
-          description: 'Git branch: Used as reference for git checkout'
-          properties:
+        - $ref: '#/components/schemas/Branch'
+        - $ref: '#/components/schemas/Tag'
+    Branch:
+      type: object  
+      description: 'Git branch: Used as reference for git checkout'
+      properties:
             branch:
                 type: string
                 description: Name of branch to be used to checkout git
@@ -752,13 +755,17 @@ components:
                   is not supplied in request.
                 default: <Head-commit>
                 example: 930fd5
-          required:
-              - branch
-          additionalProperties: false
-        - type: string    # Tag
-          description: 'Git Tag: Used as reference for git checkout.'
-          example: v1.0
-          additionalProperties: false
+      required:
+        - branch
+    Tag:
+      type: object   
+      description: 'Git Tag: Used as reference for git checkout.'
+      properties:
+          tag:
+            type: string
+            example: v1.0
+      required:
+        - tag
     Service:
       type: object
       description: Schema for subscription
@@ -832,5 +839,3 @@ components:
       required:
         - status
         - title
-
-
