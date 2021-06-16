@@ -37,6 +37,7 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/Repository'
+              additionalProperties: false
       responses:
         '200':
           description: 'The repository was successfully registered'
@@ -55,6 +56,7 @@ paths:
                       description: Secret to be used to identify the source when
                         publishing updates via `/repositories/{id}/builds`.
                       example: xxxxxxxxxxxxxx
+                additionalProperties: false
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -83,6 +85,7 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/RepositoryListItem'
+                additionalProperties: false
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -116,6 +119,7 @@ paths:
             application/json:
               schema:
                   $ref: '#/components/schemas/RepositoryListItem'
+                  #additionalProperties: false
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -147,6 +151,7 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/Repository'
+              additionalProperties: false
       responses:
         '200':
           description: 'The repository was successfully modified'
@@ -165,6 +170,7 @@ paths:
                       description: Secret to be used to identify the source when
                         publishing updates via `/repositories/{id}/builds`.
                       example: xxxxxxxxxxxxxx
+                additionalProperties: false
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -204,7 +210,11 @@ paths:
           content:
             application/json:
               schema:
-                  $ref: '#/components/schemas/BuildRegister'
+                  type: object
+                  properties:
+                    message:
+                      type: string
+                      example: Repository deleted successfully
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -245,6 +255,7 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/BuildRegister'
+              additionalProperties: false
       responses:
         '200':
           description: 'Build identifier'
@@ -258,6 +269,7 @@ paths:
                       description: Unique identifier generated on registering 
                         new build. It can be used later to check build status.
                       example: build_123
+                additionalProperties: false
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -289,7 +301,10 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Build'
+                type: array
+                items:
+                  $ref: '#/components/schemas/Build'
+                  #additionalProperties: false
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -330,6 +345,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Build'
+                #additionalProperties: false
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -361,19 +377,20 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              allOf:
+               allOf:
                 - $ref: '#/components/schemas/Service'
-              properties:
-                  access_token:
-                      type: string
-                      description: Secret used by continuous delivery (CD) 
-                        pipelines to verify request source for `callback_url`.
-                      example: xxxxxxxxxxxx
-              required:
-                - callback_url
-                - access_token
-              additionalProperties: false
+                - type: object
+                  properties:
+                    access_token:
+                        type: string
+                        description: Secret used by continuous delivery (CD) 
+                          pipelines to verify request source for `callback_url`.
+                        example: xxxxxxxxxxxx
+                  required:
+                    - repository_id
+                    - callback_url
+                    - access_token
+              #additionalProperties: false    #shows error bad request on using
       responses:
         '200':
           description: 'Subcription successfully created'
@@ -387,6 +404,7 @@ paths:
                       description: A unique identifier generated for the
                        subscription.
                       example: subscription-xyz
+                additionalProperties: false
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -463,20 +481,20 @@ paths:
         content:
           application/json:
             schema:
-              type: object
               allOf:
                 - $ref: '#/components/schemas/Service'
-              properties:
-                  access_token:
-                      type: string
-                      description: Secret used by continuous delivery (CD) 
-                        pipelines to verify request source for `callback_url`.
-                      example: xxxxxxxxxxxx
+                - type: object
+                  properties:
+                    access_token:
+                        type: string
+                        description: Secret used by continuous delivery (CD) 
+                          pipelines to verify request source for `callback_url`.
+                        example: xxxxxxxxxxxx
               required:
                 - repository_id
                 - callback_url
                 - access_token
-              additionalProperties: false
+              #additionalProperties: false
       responses:
         '200':
           description: 'Service successfully created'
@@ -490,6 +508,7 @@ paths:
                       description: Identifier which is generated on registering 
                         new subscription via `POST /subcriptions`
                       example: subscription-xyz
+                additionalProperties: false
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -528,37 +547,37 @@ paths:
           content:
             application/json:
               schema:
-                type: object
                 allOf:
                     - $ref: '#/components/schemas/Service'
-                properties:
-                      state:
-                          type: string
-                          enum:
-                            - Active
-                            - Inactive
-                          example: Active
-                          description: State of subscription, whether it is
-                           active or inactive at deployments.
-                      updated_at:
-                          type: string
-                          format: date-time
-                          example: 2021-06-11T17:32:28Z
-                          description: Timestamp taken when `callback_url` is
-                           called.
-                      build_id:
-                        type: string
-                        description: Identifier generated when registering new
-                         build via `POST /repositories/{id}/builds`
-                        example: build_123
-                      build_type:
-                        type: string
-                        enum:
-                          - production
-                          - development
-                          - testing
-                        description: Type of build # still need clarity
-                        example: production
+                    - type: object
+                      properties:
+                            state:
+                                type: string
+                                enum:
+                                  - Active
+                                  - Inactive
+                                example: Active
+                                description: State of subscription, whether it
+                                 is active or inactive at deployments.
+                            updated_at:
+                                type: string
+                                format: date-time
+                                example: 2021-06-11T17:32:28Z
+                                description: Timestamp taken when `callback_url`
+                                 is called.
+                            build_id:
+                              type: string
+                              description: Identifier generated when registering
+                               new build via `POST /repositories/{id}/builds`
+                              example: build_123
+                            build_type:
+                              type: string
+                              enum:
+                                - production
+                                - development
+                                - testing
+                              description: Type of build # still need clarity
+                              example: production
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -666,29 +685,38 @@ components:
             $ref: '#/components/schemas/Error'
   schemas:
     Build:
-      type: object
-      description: Describes schema for build.
-      properties:
-        status:
-          allOf:
-            - $ref: '#/components/schemas/BuildStates'
-          example: QUEUED
-          description: Current condition/state of build. 
-        started_at:
-          type: string
-          format: date-time
-          example: 2021-06-11T17:32:28Z
-          description: Timestamp taken at the begining of build.
-        finished_at:
-          type: string
-          format: date-time
-          example: 2021-06-11T17:32:28Z
-          description: Timestamp taken when build is finished and ready to
-           deploy.
+      # type: object
+      # description: Describes schema for build.
       allOf:
-        - $ref: '#/components/schemas/BuildRegister'
-      required:
-        - status
+          - $ref: '#/components/schemas/BuildRegister' 
+          - type: object
+            properties:
+              status:
+                type: string
+                enum:
+                  - UNKNOWN
+                  - QUEUED
+                  - RUNNING
+                  - DELETING
+                  - SUCCEEDED
+                  - FAILED
+                example: QUEUED
+                description: Current condition/state of build. 
+              started_at:
+                type: string
+                format: date-time
+                example: 2021-06-11T17:32:28Z
+                description: Timestamp taken at the begining of build.
+              finished_at:
+                type: string
+                format: date-time
+                example: 2021-06-11T17:32:28Z
+                description: Timestamp taken when build is finished and ready to
+                 deploy.
+            required:
+              - status
+              - started_at
+              - finished_at
     BuildStates:
       type: string
       enum:
@@ -709,13 +737,15 @@ components:
           description: List of image to be build. It can contain single or
            multiple images depending on requirement of repository.
         head_commit:
-          $ref: '#/components/schemas/HeadCommit'
+          type: object
+          oneOf:
+            - $ref: '#/components/schemas/Branch'
+            - $ref: '#/components/schemas/Tag'
           description: "Reference to the `commit` or `tag` which is to be used
            for source code checkout"
       required:
           - images
           - head_commit
-      additionalProperties: false
     Image:
       type: object
       description: Properties required for building docker image i.e. name/tag
@@ -732,7 +762,6 @@ components:
           default: ./Dockerfile
       required:
             - name
-      additionalProperties: false
     HeadCommit:
       type: object
       description: "`reference` (ref) for checkout could be oneOf Branch OR Tag"
@@ -782,16 +811,17 @@ components:
               listening for image updates.
             example: https://ec2-54-203-145-132.compute-1.amazonaws.com/update
     RepositoryListItem:
-      type: object
-      description: Schema used to show at `GET /repositories` for repositories.
-      properties:
-        repository_id:
-            type: string
-            description: A unique identifier generated on registering new
-             repository.
-            example: respository123
+      # type: object
+      # description: Schema used to show at `GET /repositories` for repositories.
       allOf:
         - $ref: '#/components/schemas/Repository'
+        - type: object
+          properties:
+            repository_id:
+                type: string
+                description: A unique identifier generated on registering new
+                 repository.
+                example: respository123
     Repository:
       description: Schema for repository.
       type: object
@@ -808,7 +838,6 @@ components:
           example: https://github.com/elixir-cloud-aai/trs-filer.git
       required:
         - url
-      additionalProperties: false
     Error:
       type: object
       properties:
