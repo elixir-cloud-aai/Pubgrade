@@ -13,62 +13,57 @@ from broker.errors.exceptions import (
 )
 
 @log_traffic
-def getProjects():
+def getRepositories():
     return [{'projectId':'project_12',  'type':'production', 'url':'https://goo.gl', 'dockerfileLocation':'./docker', 'containerRegistryUrl':'gcr.io/my-project/busybox', 'containerRegistryToken':'XXXXXXXXXXXXXXX' }]
+
+@log_traffic
+def postRepositories():
+    return "Template function: postProjects"
 
 @log_traffic
 def postProjects():
     return "Template function: postProjects"
 
 @log_traffic
-def postBuild(projectId: str):
+def getRepository(id: str):
     return "Template function: postBuild"
 
 @log_traffic
-def getBuilds(projectId: str):
+def putRepositories(id: str):
     return "Template function: getBuilds"
 
 @log_traffic
-def deleteProject(projectId: str):
+def deleteRepository(id: str):
     return "Template function: deleteProject"
 
 @log_traffic
-def modifyBuild(projectId: str, buildId: str):
+def postBuild(id: str):
     return "Template function: modifyBuild"
 
 @log_traffic
-def getBuildInfo(projectId: str, buildId: str):
+def getBuilds(id: str):
     return "Template function: getBuildInfo"
 
 @log_traffic
-def deleteBuild(projectId: str, buildId: str):
+def getBuildInfo(id: str, build_id: str):
     return "Template function: deleteBuild"
 
 @log_traffic
-def postService():
+def postSubscription():
     return "Template function: postService"
 
 @log_traffic
-def getServices():
+def getSubscriptions():
     return "Template function: getServices"
 
 @log_traffic
-def modifyService(subscriptionId: str):
+def modifySubscription(subscription_id: str):
     return "Template function: modifyService"
 
 @log_traffic
-def getServiceInfo(subscriptionId: str):
+def getSubscriptionInfo(subscription_id: str):
     return "Template function: getServiceInfo"
 
 @log_traffic
-def deleteService(subscriptionId: str):
+def deleteSubscription(subscription_id: str):
     return "Template function: deleteService"
-
-@log_traffic
-def postServiceFromRegistry():
-    return "Template function: postServiceFromRegistry"
-
-@log_traffic
-def deleteServiceFromRegistry():
-    return "Template function: deleteServiceFromRegistry"
-

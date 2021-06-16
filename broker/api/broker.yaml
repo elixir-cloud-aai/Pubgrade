@@ -3,43 +3,60 @@ info:
   title: 'ELIXIR Broker Registry API Specification'
   version: 1.0.0
   description: |
-    Broker is a decoupled, publish-subscribe-based continuous integration (CI) and continuous delivery (CD) microservice that allows developers to notify deploments of available updates, which can then autonomously decide what to do with them.
+    Broker leverages the publish-subscribe (pub/sub) pattern to effectively 
+    decouple continuous integration (CI) from continuous deilivery (CD): 
+    developers can call Broker in their CI pipelines to notify deployments of 
+    available updates ("publish"), while deployments can listen to update 
+    notifications ("subscribe") and trigger specific CD pipelines set up by 
+    administrators.
+
+    Broker is particularly useful wherever deployments are managed by different
+    entities than those managing the underlying code bases, such as in federated
+    networks, in which services are deployed at multiple locations by different
+    organizations.
   license:
-    name: 'Apache 2.0'
-    url: 'https://raw.githubusercontent.com/ga4gh-discovery/ga4gh-service-registry/develop/LICENSE'
+    name: Apache 2.0
+    url: 'https://raw.githubusercontent.com/akash2237778/Broker/main/LICENSE'
   contact:
-    name: 'ELIXIR Cloud & AAI Members'
-    url: 'https://elixir-europe.github.io/cloud/categories/people.html'
+    name: ELIXIR Cloud & AAI
+    url: 'https://github.com/elixir-cloud-aai/elixir-cloud-aai'
 paths:
-  /projects:
+  /repositories:
     post:
-      summary: 'Register project'
-      operationId: postProjects
+      summary: 'Register repository'
+      description: Register a repository to enable publishing updates via the 
+        `/repositories/{id}/builds` endpoint and allow administrators to
+        subscribe to them.
+      operationId: postRepositories
       tags:
-        - projects
+        - repositories
       requestBody:
-        description: Project metadata
+        description: Schema for repository 
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Project'
+              $ref: '#/components/schemas/Repository'
       responses:
         '200':
-          description: 'The project was successfully registered'
+          description: 'The repository was successfully registered'
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                    project_id:
+                    id:
                       type: string
-                      description: Unique id generated for each project
-                      example: project_123
-                    project_access_token:
+                      description: A unique identifier generated for the
+                       repository.
+                      example: repository_123
+                    access_token:
                       type: string
-                      description: Used to verify later at /projects/{projects_id} if the request is from a trusted source.
+                      description: Secret to be used to identify the source when
+                        publishing updates via `/repositories/{id}/builds`.
                       example: xxxxxxxxxxxxxx
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -49,19 +66,25 @@ paths:
         default:
           $ref: '#/components/responses/Error'
     get:
-      summary: 'List all available projects.'
-      operationId: getProjects
+      summary: 'List available repositories.'
+      description: List available repositories to publish updates via the 
+        `/repositories/{id}/builds` endpoint. Administrators can use this 
+        endpoint to get repository identifier which is used to subscribe service
+        at `POST /subscriptions` endpoint.
+      operationId: getRepositories
       tags:
-        - projects
+        - repositories
       responses:
         '200':
-          description: 'List of all available projects'
+          description: 'List of available repositories'
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/ProjectListItem'
+                  $ref: '#/components/schemas/RepositoryListItem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -70,85 +93,80 @@ paths:
           $ref: '#/components/responses/InternalServerError'
         default:
           $ref: '#/components/responses/Error'
-  /projects/{projectId}:
-    post:
-      summary: 'Registers a new build for the project'
-      operationId: postBuild
+  /repositories/{id}:
+    get:
+      summary: Show repository information.
+      description: Show repository information like repository url, repository 
+        identifier for specific repository.
+      operationId: getRepository
       tags:
-        - projects
+        - repositories
       parameters:
         - in: path
-          name: projectId
+          name: id
           required: true
           schema:
             type: string
-          description: Identifier generated for each project on POST
-        - in: cookie
-          name: Project Access Token
+          description: Identifier generated when first registering the
+           repository via `POST /repositories`.
+      responses:
+        '200':
+          description: 'Repository Information'
+          content:
+            application/json:
+              schema:
+                  $ref: '#/components/schemas/RepositoryListItem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        default:
+          $ref: '#/components/responses/Error'  
+    put:
+      summary: Modify registered repository
+      description: Modify already registered repository for any changes.
+      operationId: putRepositories
+      tags:
+        - repositories
+      parameters:
+        - in: path
+          name: id
           required: true
           schema:
             type: string
+          description: Identifier generated when first registering the
+           repository via `POST /repositories`.
       requestBody:
+        description: Schema for repository 
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BuildInfo'
+              $ref: '#/components/schemas/Repository'
       responses:
         '200':
-          description: 'Build identifier'
+          description: 'The repository was successfully modified'
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                    buildName:
+                    id:
                       type: string
-                      description: Unique id generated on creating a build, Can be used later to get status, info of build
-                      example: build_123
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-        default:
-          $ref: '#/components/responses/Error'
-    get:
-      summary: 'Lists all builds for the project'
-      operationId: getBuilds
-      tags:
-        - projects
-      parameters:
-        - in: path
-          name: projectId
-          required: true
-          schema:
-            type: string
-          description: Identifier generated for each project on POST
-      responses:
-        '200':
-          description: 'List of all available builds for the project'
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  allOf:
-                    - $ref: '#/components/schemas/BuildInfo'
-                  properties:
-                      startedAt:
-                          type: number
-                          example: 1622652933
-                          description: Start time of latest build
-                      finishedAt:
-                          type: number
-                          example: 1622652950
-                          description: Finish time of latest build
-                      buildStatus:
-                          type: string
-                          example: in-progress
-                          description: Shows current status of latest build
+                      description: Identifier generated when first
+                       registering the repository via `POST /repositories`.
+                      example: repository_123
+                    access_token:
+                      type: string
+                      description: Secret to be used to identify the source when
+                        publishing updates via `/repositories/{id}/builds`.
+                      example: xxxxxxxxxxxxxx
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -158,26 +176,37 @@ paths:
         default:
           $ref: '#/components/responses/Error'
     delete:
-      summary: 'Delete project'
-      operationId: deleteProject
+      summary: 'Delete repository'
+      description: Delete repository from broker permanently. It removes 
+        available builds and discard administrator's subscription for the 
+        repository.
+      operationId: deleteRepository
       tags:
-        - projects
+        - repositories
       parameters:
         - in: path
-          name: projectId
+          name: id
           required: true
           schema:
             type: string
-          description: Identifier generated for each project on POST
+          description: Identifier generated when first registering the
+           repository via `POST /repositories`.
+        - in: header
+          name: X-Project-Access-Token
+          required: true
+          schema:
+            type: string
+          description: Secret used to identify source, generated when first 
+            registering the repository via `POST /repositories`
       responses:
         '200':
-          description: 'The Project was successfully deleted.'
+          description: 'The repository was successfully deleted.'
           content:
             application/json:
               schema:
-                allOf:
-                  - $ref: '#/components/schemas/BuildInfo'
-                type: object
+                  $ref: '#/components/schemas/BuildRegister'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -186,36 +215,36 @@ paths:
           $ref: '#/components/responses/InternalServerError'
         default:
           $ref: '#/components/responses/Error'  
-  /projects/{projectId}/{buildId}:
-    put:
-      summary: 'Update already created build'
-      operationId: modifyBuild
+  /repositories/{id}/builds:
+    post:
+      summary: 'Register new build for repository.'
+      description: Register a new build for already registered repository. 
+        Ideally this endpoint is directly called by continuous integration (CI) 
+        pipelines. This endpoint is also responsible to trigger build at broker.
+      operationId: postBuild
       tags:
         - builds
       parameters:
         - in: path
-          name: projectId
+          name: id
           required: true
           schema:
             type: string
-          description: Identifier generated for each project on POST
-        - in: path
-          name: buildId
+          description: Identifier generated when first registering the 
+            repository via `POST /repositories`.
+        - in: header
+          name: X-Project-Access-Token
           required: true
           schema:
             type: string
-          description: Identifier generated for each build on POST project.
-        - in: cookie
-          name: Project Access Token
-          required: true
-          schema:
-            type: string
+          description: Secret used to identify source, generated when first 
+            registering the repository via `POST /repositories`
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BuildInfo'
+              $ref: '#/components/schemas/BuildRegister'
       responses:
         '200':
           description: 'Build identifier'
@@ -224,10 +253,13 @@ paths:
               schema:
                 type: object
                 properties:
-                    buildName:
+                    id:
                       type: string
-                      description: Unique id generated on creating a build, Can be used later to get status, info of build
+                      description: Unique identifier generated on registering 
+                        new build. It can be used later to check build status.
                       example: build_123
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -237,45 +269,69 @@ paths:
         default:
           $ref: '#/components/responses/Error'
     get:
-      summary: 'Shows build information'
+      summary: 'List available builds for repository.'
+      description: List available builds for repository with build information 
+        like build identifier, build status, build start time etc.
+      operationId: getBuilds
+      tags:
+        - builds
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Identifier generated when first registering the 
+            repository via `POST /repositories`.
+      responses:
+        '200':
+          description: 'List of available builds for the repository'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Build'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        default:
+          $ref: '#/components/responses/Error'
+  /repositories/{id}/builds/{build_id}:
+    get:
+      summary: Show build information.
+      description: Show build information like build status, build start time 
+        etc. for individual build.
       operationId: getBuildInfo
       tags:
         - builds
       parameters:
         - in: path
-          name: projectId
+          name: id
           required: true
           schema:
             type: string
-          description: Identifier generated for each project on POST
+          description: Identifier generated when first registering the 
+            repository via `POST /repositories`.
         - in: path
-          name: buildId
+          name: build_id
           required: true
           schema:
             type: string
-          description: Identifier generated for each build on POST project.
+          description: Identifier generated when registering new build via
+            `POST /repositories/{id}/builds`
       responses:
         '200':
           description: 'Build Information'
           content:
             application/json:
               schema:
-                type: object
-                allOf:
-                    - $ref: '#/components/schemas/BuildInfo'
-                properties:
-                      startedAt:
-                          type: number
-                          example: 1622652933
-                          description: Start time of latest build
-                      finishedAt:
-                          type: number
-                          example: 1622652950
-                          description: Finish time of latest build
-                      buildStatus:
-                          type: string
-                          example: in-progress
-                          description: Shows current status of latest build
+                $ref: '#/components/schemas/Build'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -284,56 +340,22 @@ paths:
           $ref: '#/components/responses/InternalServerError'
         default:
           $ref: '#/components/responses/Error'
-    delete:
-      summary: 'Delete Build'
-      operationId: deleteBuild
-      tags:
-        - builds
-      parameters:
-        - in: path
-          name: projectId
-          required: true
-          schema:
-            type: string
-          description: Identifier generated for each project on POST
-        - in: path
-          name: buildId
-          required: true
-          schema:
-            type: string
-          description: Identifier generated for each build on POST project.
-      responses:
-        '200':
-          description: 'The Build was successfully deleted.'
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                    buildName:
-                      type: string
-                      description: Unique id generated on creating a build, Can be used later to get status, info of build
-                      example: build_123
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-        default:
-          $ref: '#/components/responses/Error'  
-  /services:
+  /subscriptions:
     post:
-      summary: 'Registers a new service subscription.'
-      operationId: postService
+      summary: Register new subscription.
+      description: Register a new subscription to allow deployments get notified
+        for available updates of opted repository.
+      operationId: postSubscription
       tags:
-        - services
+        - subscriptions
       parameters:
-        - in: cookie
-          name: userAccessToken
+        - in: header
+          name: X-User-Access-Token
           required: true
           schema:
             type: string
+          description: Secret used to verify and uniquely identify administrator
+           and perform their specific tasks.
       requestBody:
         required: true
         content:
@@ -343,22 +365,30 @@ paths:
               allOf:
                 - $ref: '#/components/schemas/Service'
               properties:
-                  accessToken:
+                  access_token:
                       type: string
-                      description: Token required to send update request at callbackUrl
+                      description: Secret used by continuous delivery (CD) 
+                        pipelines to verify request source for `callback_url`.
                       example: xxxxxxxxxxxx
+              required:
+                - callback_url
+                - access_token
+              additionalProperties: false
       responses:
         '200':
-          description: 'Service successfully created'
+          description: 'Subcription successfully created'
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                    subscriptionId:
+                    subscription_id:
                       type: string
-                      description: Unique id generated on creating new service
+                      description: A unique identifier generated for the
+                       subscription.
                       example: subscription-xyz
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -368,29 +398,36 @@ paths:
         default:
           $ref: '#/components/responses/Error'
     get:
-      summary: 'Lists all subcriptionId'
-      operationId: getServices
+      description: List subcription_id's of all subscribed repositories for 
+        particular user identified by `X-User-Access-Token`
+      summary: List subscribed subscription_id's
+      operationId: getSubscriptions
       tags:
-        - services
+        - subscriptions
       parameters:
-        - in: cookie
-          name: userAccessToken
+        - in: header
+          name: X-User-Access-Token
           required: true
           schema:
             type: string
+          description: Secret used to verify and uniquely identify administrator
+           and perform their specific tasks.
       responses:
         '200':
-          description: 'List subcriptionId for all subscribed services'
+          description: subcription_id's of subscribed repositories.
           content:
             application/json:
               schema:
                 type: array
                 items:
                   properties:
-                    subscriptionId:
+                    subscription_id:
                       type: string
-                      description: Unique id generated on creating new service
+                      description: Identifier generated when registering new
+                       subscription via `POST /subscriptions`
                       example: subscription-xyz
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -399,24 +436,28 @@ paths:
           $ref: '#/components/responses/InternalServerError'
         default:
           $ref: '#/components/responses/Error'
-  /services/{subscriptionId}:
+  /subscriptions/{subscription_id}:
     put:
-      summary: 'Update already created service'
-      operationId: modifyService
+      summary: Modify created subscription
+      description: Modify schema values for already created subscriptions.
+      operationId: modifySubscription
       tags:
-        - services
+        - subscriptions
       parameters:
         - in: path
-          name: subscriptionId
+          name: subscription_id
           required: true
           schema:
             type: string
-          description: Identifier generated for each service on POST
-        - in: cookie
-          name: userAccessToken
+          description: Identifier generated when registering new subscription 
+            via `POST /subscriptions`
+        - in: header
+          name: X-User-Access-Token
           required: true
           schema:
             type: string
+          description: Secret used to verify and uniquely identify administrator
+           in order to perform their specific tasks.
       requestBody:
         required: true
         content:
@@ -426,10 +467,16 @@ paths:
               allOf:
                 - $ref: '#/components/schemas/Service'
               properties:
-                  accessToken:
+                  access_token:
                       type: string
-                      description: Token required to send update request at callbackUrl
+                      description: Secret used by continuous delivery (CD) 
+                        pipelines to verify request source for `callback_url`.
                       example: xxxxxxxxxxxx
+              required:
+                - repository_id
+                - callback_url
+                - access_token
+              additionalProperties: false
       responses:
         '200':
           description: 'Service successfully created'
@@ -438,10 +485,13 @@ paths:
               schema:
                 type: object
                 properties:
-                    subscriptionId:
+                    subscription_id:
                       type: string
-                      description: Unique id generated on creating new service
+                      description: Identifier which is generated on registering 
+                        new subscription via `POST /subcriptions`
                       example: subscription-xyz
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -451,25 +501,30 @@ paths:
         default:
           $ref: '#/components/responses/Error'
     get:
-      summary: 'Shows build information'
-      operationId: getServiceInfo
+      summary: Show information for specified subscription.
+      description: Show various information like state, update time, build
+       identifier, repository identifier etc. for specified subscription_id.
+      operationId: getSubscriptionInfo
       tags:
-        - services
+        - subscriptions
       parameters:
         - in: path
-          name: subscriptionId
+          name: subscription_id
           required: true
           schema:
             type: string
-          description: Identifier generated for each service on POST
-        - in: cookie
-          name: userAccessToken
+          description: Identifier generated when registering new subscription 
+            via `POST /subscriptions`
+        - in: header
+          name: X-User-Access-Token
           required: true
           schema:
             type: string
+          description: Secret used to verify and uniquely identify administrator
+           and perform their specific tasks.
       responses:
         '200':
-          description: 'Service Information'
+          description: 'Subscription Information'
           content:
             application/json:
               schema:
@@ -479,20 +534,33 @@ paths:
                 properties:
                       state:
                           type: string
-                          example: Active/InActive
-                          description:  Listening OR Not Listening to changes
-                      updatedAt:
-                          type: number
-                          example: 1622612463
-                          description: Timestamp for latest update
-                      buildName:
+                          enum:
+                            - Active
+                            - Inactive
+                          example: Active
+                          description: State of subscription, whether it is
+                           active or inactive at deployments.
+                      updated_at:
+                          type: string
+                          format: date-time
+                          example: 2021-06-11T17:32:28Z
+                          description: Timestamp taken when `callback_url` is
+                           called.
+                      build_id:
                         type: string
-                        description: Unique id generated on creating a build
+                        description: Identifier generated when registering new
+                         build via `POST /repositories/{id}/builds`
                         example: build_123
-                      buildType:
+                      build_type:
                         type: string
-                        description: 'Build type: production, development. testing'
+                        enum:
+                          - production
+                          - development
+                          - testing
+                        description: Type of build # still need clarity
                         example: production
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -502,102 +570,43 @@ paths:
         default:
           $ref: '#/components/responses/Error'
     delete:
-      summary: 'Delete Service'
-      operationId: deleteService
+      summary: Delete subscription
+      description: Removes subscription information permanently from broker.
+       Stops sending request at callback_url to notify continuous delivery (CD)
+       pipeline.
+      operationId: deleteSubscription
       tags:
-        - services
+        - subscriptions
       parameters:
         - in: path
-          name: subscriptionId
+          name: subscription_id
           required: true
           schema:
             type: string
-          description: Identifier generated for each service on POST
-        - in: cookie
-          name: userAccessToken
+          description: Identifier generated when registering new subscription 
+            via `POST /subscriptions`
+        - in: header
+          name: X-User-Access-Token
           required: true
           schema:
             type: string
+          description: Secret used to verify and uniquely identify administrator
+           and perform their specific tasks.
       responses:
         '200':
-          description: 'The Service was successfully deleted.'
+          description: 'The subscription was successfully deleted.'
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                    subscriptionId:
+                    subscription_id:
                       type: string
-                      description: Unique id generated on creating new service
+                      description: Identifier generated when registering new
+                       subscription via `POST /subscriptions`
                       example: subscription-xyz
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-        default:
-          $ref: '#/components/responses/Error'  
-  /services/from-registry:
-    post:
-      summary: 'Register project subscriptions using service registry'
-      operationId: postServiceFromRegistry
-      tags:
-        - services-from-registry
-      parameters:
-        - in: cookie
-          name: userAccessToken
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                serviceRegistryUrl:
-                  type: string
-                  description: 'URL of service registry which when requested returns an array of all services under organisation each object must containing following schema : {project_id, callback_url, access_token}'     
-      responses:
-        '200':
-          description: "List of subscription id's"
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                      type: string
-                      description: subscriptionId
-                      example: subscriptionId
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-        default:
-          $ref: '#/components/responses/Error'
-    delete:
-      summary: 'Delete service registry'
-      operationId: deleteServiceFromRegistry
-      tags:
-        - services-from-registry
-      parameters:
-        - in: cookie
-          name: userAccessToken
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: 'The service registry is removed successfully'
-          content:
-            application/json:
-              schema:
-                type: string
-                example: "Deleted successfully"
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -607,20 +616,30 @@ paths:
         default:
           $ref: '#/components/responses/Error'  
 components:
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
+  #### Need some work ####
+  # securitySchemes:
+  #   bearerAuth:
+  #     type: http
+  #     scheme: bearer
+  #     bearerFormat: JWT
   responses:
+    BadRequest:
+      description: 'Bad Request
+       ([RFC 7231](https://tools.ietf.org/html/rfc7235))'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'   
     Unauthorized:
-      description: 'Unauthorized ([RFC 7235](https://tools.ietf.org/html/rfc7235))'
+      description: 'Unauthorized
+       ([RFC 7235](https://tools.ietf.org/html/rfc7235))'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
     Forbidden:
-      description: 'Forbidden ([RFC 7231](https://tools.ietf.org/html/rfc7231))'
+      description: 'Forbidden
+       ([RFC 7231](https://tools.ietf.org/html/rfc7231))'
       content:
         application/json:
           schema:
@@ -632,77 +651,164 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
     InternalServerError:
-      description: 'Internal server error ([RFC 7231](https://tools.ietf.org/html/rfc7231))'
+      description: 'Internal server error
+       ([RFC 7231](https://tools.ietf.org/html/rfc7231))'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
     Error:
-      description: 'Unexpected error ([RFC 7231](https://tools.ietf.org/html/rfc7231))'
+      description: 'Unexpected error
+       ([RFC 7231](https://tools.ietf.org/html/rfc7231))'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
-  
   schemas:
+    Build:
+      type: object
+      description: Describes schema for build.
+      properties:
+        status:
+          allOf:
+            - $ref: '#/components/schemas/BuildStates'
+          example: QUEUED
+          description: Current condition/state of build. 
+        started_at:
+          type: string
+          format: date-time
+          example: 2021-06-11T17:32:28Z
+          description: Timestamp taken at the begining of build.
+        finished_at:
+          type: string
+          format: date-time
+          example: 2021-06-11T17:32:28Z
+          description: Timestamp taken when build is finished and ready to
+           deploy.
+      allOf:
+        - $ref: '#/components/schemas/BuildRegister'
+      required:
+        - status
+    BuildStates:
+      type: string
+      enum:
+        - UNKNOWN
+        - QUEUED
+        - RUNNING
+        - DELETING
+        - SUCCEEDED
+        - FAILED
+    BuildRegister:
+      type: object
+      description: Describes schema for registering build
+      properties:
+        images:
+          type: array
+          items: 
+            $ref: '#/components/schemas/Image'
+          description: List of image to be build. It can contain single or
+           multiple images depending on requirement of repository.
+        head_commit:
+          $ref: '#/components/schemas/HeadCommit'
+          description: "Reference to the `commit` or `tag` which is to be used
+           for source code checkout"
+      required:
+          - images
+          - head_commit
+      additionalProperties: false
+    Image:
+      type: object
+      description: Properties required for building docker image i.e. name/tag
+       and location of Dockerfile
+      properties:
+        name:
+          type: string
+          description: Image repository and tag used to build image.
+          example: akash7778/broker:0.0.1
+        location:
+          type: string
+          description: Location of Dockerfile relative to repository root
+           directory.
+          default: ./Dockerfile
+      required:
+            - name
+      additionalProperties: false
+    HeadCommit:
+      type: object
+      description: "`reference` (ref) for checkout could be oneOf Branch OR Tag"
+      oneOf:
+        - $ref: '#/components/schemas/Branch'
+        - $ref: '#/components/schemas/Tag'
+    Branch:
+      type: object    # Branch
+      description: 'Git branch: Used as reference for git checkout'
+      properties:
+            branch:
+                type: string
+                description: Name of branch to be used to checkout git
+                 repository.
+                example: development
+            commit_sha:
+                type: string
+                description: Git commit sha till where repository needs to be
+                 checkout by broker. Head commit will be used if `commit_sha`
+                  is not supplied in request.
+                default: <Head-commit>
+                example: 930fd5
+      required:
+        - branch
+    Tag:
+      type: object    # Tag
+      description: 'Git Tag: Used as reference for git checkout.'
+      properties:
+          tag:
+            type: string
+            example: v1.0
+      required:
+        - tag
     Service:
       type: object
+      description: Schema for subscription
       properties:
-        projectId:
+        repository_id:
             type: string
-            description: Unique id generated for each project
-            example: project_12
-        callbackUrl:
+            description: A unique identifier generated on registering new
+             repository.
+            example: respository123
+        callback_url:
             type: string
-            description: URL on which CD is listening for image updates.
+            format: uri
+            description: URL on which continuous delivery (CD) pipeline is 
+              listening for image updates.
             example: https://ec2-54-203-145-132.compute-1.amazonaws.com/update
-    BuildInfo:
+    RepositoryListItem:
       type: object
+      description: Schema used to show at `GET /repositories` for repositories.
       properties:
-        commitSHA:
-          type: string
-          description: Last commit sha till where repo needs to be checkout by git
-          example: '6b9899f'
-        imageTag:
-          type: string
-          description: Tag name for the created image
-          example: 'v1'
-        branch:
-          type: string
-          description: Git branch to checkout
-          example: feature-xyz
-    ProjectListItem:
-      type: object
-      properties:
-          projectId:
-              type: string
-              description: Unique id generated for each project
-              example: project_12
+        repository_id:
+            type: string
+            description: A unique identifier generated on registering new
+             repository.
+            example: respository123
       allOf:
-        - $ref: '#/components/schemas/Project'
-    Project:
+        - $ref: '#/components/schemas/Repository'
+    Repository:
+      description: Schema for repository.
       type: object
       properties:
-        type:
-          type: string
-          description: Development type
-          example: production
+        ### Still need clarity ###
+        # type:
+        #   type: string
+        #   description: Development type
+        #   example: production
+        ##########################
         url:
           type: string
-          description: URL to the code repository
+          description: URL of the git repository.
           example: https://github.com/elixir-cloud-aai/trs-filer.git
-        dockerfileLocation:
-          type: string
-          description: Location of Dockerfile relative to repo root dir
-          example: docker/Dockerfile
-        containerRegistryUrl:
-          type: string
-          description: Location of container registry to push build image
-          example: gcr.io/my-project/busybox
-        containerRegistryToken:
-          type: string
-          description: Token to access container registry
-          example: XXXXXXXXXXXXXXX
+      required:
+        - url
+      additionalProperties: false
     Error:
       type: object
       properties:
@@ -710,19 +816,27 @@ components:
           type: integer
           format: int32
           description: |
-            HTTP status code (as per [RFC 7231](https://tools.ietf.org/html/rfc7231)) generated by the server for this occurrence of the problem.
-            This must match the status code in the actual HTTP response. Used for convenience of clients (e.g. to determine what the original status code was in cases where it has been changed by an intermediary or cache or when message bodies persist without HTTP information).
+            HTTP status code (as per 
+            [RFC 7231](https://tools.ietf.org/html/rfc7231)) generated by the 
+            server for this occurrence of the problem. This must match the 
+            status code in the actual HTTP response. Used for convenience of 
+            clients (e.g. to determine what the original status code was in 
+            cases where it has been changed by an intermediary or cache or when 
+            message bodies persist without HTTP information).
           example: '500'
         title:
           type: string
           description: |
             A short, human-readable description of the error.
-            The value should not change from occurrence to occurrence of an error, except for purposes of localization.
+            The value should not change from occurrence to occurrence of an 
+            error, except for purposes of localization.
           example: 'Internal server error'
         detail:
           type: string
-          description: 'A human-readable explanation specific to this occurrence of the error.'
+          description: 'A human-readable explanation specific to this occurrence
+           of the error.'
           example: 'Internal server error'
       required:
         - status
         - title
+
