@@ -20,6 +20,8 @@ info:
   contact:
     name: ELIXIR Cloud & AAI
     url: 'https://github.com/elixir-cloud-aai/elixir-cloud-aai'
+servers:
+  - url: 'http://localhost:8080'
 paths:
   /repositories:
     post:
@@ -686,7 +688,7 @@ components:
   schemas:
     Build:
       # type: object
-      # description: Describes schema for build.
+      description: Describes schema for build.
       allOf:
           - $ref: '#/components/schemas/BuildRegister' 
           - type: object
@@ -717,15 +719,15 @@ components:
               - status
               - started_at
               - finished_at
-    BuildStates:
-      type: string
-      enum:
-        - UNKNOWN
-        - QUEUED
-        - RUNNING
-        - DELETING
-        - SUCCEEDED
-        - FAILED
+    # BuildStates:
+    #   type: string
+    #   enum:
+    #     - UNKNOWN
+    #     - QUEUED
+    #     - RUNNING
+    #     - DELETING
+    #     - SUCCEEDED
+    #     - FAILED
     BuildRegister:
       type: object
       description: Describes schema for registering build
@@ -762,12 +764,12 @@ components:
           default: ./Dockerfile
       required:
             - name
-    HeadCommit:
-      type: object
-      description: "`reference` (ref) for checkout could be oneOf Branch OR Tag"
-      oneOf:
-        - $ref: '#/components/schemas/Branch'
-        - $ref: '#/components/schemas/Tag'
+    # HeadCommit:
+    #   type: object
+    #   description: "`reference` (ref) for checkout could be oneOf Branch OR Tag"
+    #   oneOf:
+    #     - $ref: '#/components/schemas/Branch'
+    #     - $ref: '#/components/schemas/Tag'
     Branch:
       type: object    # Branch
       description: 'Git branch: Used as reference for git checkout'
@@ -812,7 +814,7 @@ components:
             example: https://ec2-54-203-145-132.compute-1.amazonaws.com/update
     RepositoryListItem:
       # type: object
-      # description: Schema used to show at `GET /repositories` for repositories.
+      description: Schema used to show at `GET /repositories` for repositories.
       allOf:
         - $ref: '#/components/schemas/Repository'
         - type: object

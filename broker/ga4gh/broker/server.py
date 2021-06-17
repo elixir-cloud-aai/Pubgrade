@@ -2,9 +2,11 @@
 
 import json
 
-from flask import (current_app, make_response)
-
+from flask import (current_app, request)
+import string
+from random import choice
 from foca.utils.logging import log_traffic
+from typing import (Dict)
 
 from broker.errors.exceptions import (
     AccessMethodNotFound,
@@ -14,28 +16,40 @@ from broker.errors.exceptions import (
     BadRequest,
 )
 
+from tests.ga4gh.mock_data import (
+    MOCK_SUBSCRIPTION,
+    MOCK_POST_REPOSITORY,
+    MOCK_BUILD_INFO,
+    MOCK_REPOSITORY,
+    MOCK_SUBSCRIPTION_INFO
+)
+
+
 @log_traffic
 def getRepositories():
-    return json.loads('[{"url":"https", "repository_id": "repo_123"}]')
+    return [MOCK_REPOSITORY, MOCK_REPOSITORY]
+
 @log_traffic
 def postRepositories():
-    return json.loads('{"access_token": "xxxxxxxxxxxxxx","id": "repository_123" }')
+    db_collection = (
+        current_app.config['FOCA'].db.dbs['brokerStore'].
+        collections['repositories'].client
+    )
+    db_collection.insert({"url": request.json['url'] , "repository_id": generate_id() })
+    return MOCK_POST_REPOSITORY
 
-# @log_traffic
-# def postProjects():
-#     return json.loads('')
 
 @log_traffic
 def getRepository(id: str):
-    return json.loads('{"url":"https://localhost:8080/repositories", "repository_id": "repo_123"}')
+    return MOCK_REPOSITORY
 
 @log_traffic
 def putRepositories(id: str):
-    return json.loads('{  "access_token": "xxxxxxxxxxxxxx",  "id": "repository_123"}')
+    return MOCK_POST_REPOSITORY
 
 @log_traffic
 def deleteRepository(id: str):
-    return json.loads('{"message": "Repository deleted successfully"}')
+    return {"message": "Repository deleted successfully"}
 
 @log_traffic
 def postBuild(id: str):
@@ -43,32 +57,44 @@ def postBuild(id: str):
 
 @log_traffic
 def getBuilds(id: str):
-    return json.loads('[   {    "images": [        {            "name": "akash7778/broker:0.0.1",            "location": "./Dockerfile"        },        {            "name": "akash7778/broker:0.0.1",            "location": "./Dockerfile"        }    ],    "head_commit": {        "branch": "development",        "commit_sha": "930fd5"    },    "status": "UNKNOWN",    "started_at" : "2021-06-11T17:32:28Z",    "finished_at": "2021-06-11T17:32:28Z"},    {    "images": [        {            "name": "akash7778/broker:0.0.1",            "location": "./Dockerfile"        },        {            "name": "akash7778/broker:0.0.1",            "location": "./Dockerfile"        }    ],    "head_commit": {        "branch": "development",        "commit_sha": "930fd5"    },    "status": "UNKNOWN",    "started_at" : "2021-06-11T17:32:28Z",    "finished_at": "2021-06-11T17:32:28Z"} ]')
+    return [   MOCK_BUILD_INFO,    MOCK_BUILD_INFO ]
 
 @log_traffic
 def getBuildInfo(id: str, build_id: str):
-    return json.loads('    {    "images": [        {            "name": "akash7778/broker:0.0.1",            "location": "./Dockerfile"        },        {            "name": "akash7778/broker:0.0.1",            "location": "./Dockerfile"        }    ],    "head_commit": {        "branch": "development",        "commit_sha": "930fd5"    },    "status": "UNKNOWN",    "started_at" : "2021-06-11T17:32:28Z",    "finished_at": "2021-06-11T17:32:28Z"}')
+    return MOCK_BUILD_INFO
 
-
-
-   
 
 @log_traffic
 def postSubscription():
-    return json.loads('{ "subscription_id": "subscription-xyz"}')
+    return MOCK_SUBSCRIPTION
 
 @log_traffic
 def getSubscriptions():
-    return json.loads('[  { "subscription_id": "subscription-xyz"  }]')
+    return [MOCK_SUBSCRIPTION]
 
 @log_traffic
 def modifySubscription(subscription_id: str):
-    return json.loads(' { "subscription_id": "subscription-xyz"  }')
+    return MOCK_SUBSCRIPTION
 
 @log_traffic
 def getSubscriptionInfo(subscription_id: str):
-    return json.loads('{  "callback_url": "https://ec2-54-203-145-132.compute-1.amazonaws.com/update",  "repository_id": "respository123",  "build_id": "build_123",  "build_type": "production",  "state": "Active",  "updated_at": "2021-06-11T17:32:28+00:00"}')
+    return MOCK_SUBSCRIPTION_INFO
 
 @log_traffic
 def deleteSubscription(subscription_id: str):
-    return json.loads('{ "subscription_id": "subscription-xyz"  }')
+    return MOCK_SUBSCRIPTION
+
+
+def generate_id(
+    charset: str = ''.join([string.ascii_letters, string.digits]),
+    length: int = 6
+) -> str:
+    """Generate random string based on allowed set of characters.
+    Args:
+        charset: String of allowed characters.
+        length: Length of returned string.
+    Returns:
+        Random string of specified length and composed of defined set of
+        allowed characters.
+    """
+    return ''.join(choice(charset) for __ in range(length))

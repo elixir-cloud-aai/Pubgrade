@@ -13,10 +13,10 @@ db:
     dbs:
         brokerStore:
             collections:
-                objects:
+                repositories:
                     indexes:
                         - keys:
-                              id: 1
+                              repository_id: 1
                           options: 
                             'unique': True
 
