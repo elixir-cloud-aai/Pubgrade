@@ -1,1 +1,0 @@
-"""Controller for /projects endpoint"""

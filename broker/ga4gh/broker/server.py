@@ -1,5 +1,8 @@
 """Controllers for broker endpoints"""
 
+from broker.ga4gh.broker.endpoints.repositories import (
+get_repositories,
+register_repository)
 import json
 
 from flask import (current_app, request)
@@ -27,16 +30,11 @@ from tests.ga4gh.mock_data import (
 
 @log_traffic
 def getRepositories():
-    return [MOCK_REPOSITORY, MOCK_REPOSITORY]
+    return get_repositories()
 
 @log_traffic
 def postRepositories():
-    db_collection = (
-        current_app.config['FOCA'].db.dbs['brokerStore'].
-        collections['repositories'].client
-    )
-    db_collection.insert({"url": request.json['url'] , "repository_id": generate_id() })
-    return MOCK_POST_REPOSITORY
+    return register_repository(request.json)
 
 
 @log_traffic

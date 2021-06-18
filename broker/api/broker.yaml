@@ -819,7 +819,7 @@ components:
         - $ref: '#/components/schemas/Repository'
         - type: object
           properties:
-            repository_id:
+            id:
                 type: string
                 description: A unique identifier generated on registering new
                  repository.
