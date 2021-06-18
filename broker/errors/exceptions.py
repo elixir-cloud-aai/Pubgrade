@@ -22,6 +22,10 @@ class ObjectNotFound(NotFound):
     """Raised when object with given object identifier was not found."""
     pass
 
+class RepositoryNotFound(NotFound):
+    """Raised when object with given repository identifier was not found."""
+    pass
+
 
 class URLNotFound(NotFound):
     """Raised when Access URL for object was not found."""

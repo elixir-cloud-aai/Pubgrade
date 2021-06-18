@@ -6,7 +6,7 @@ import string
 import logging
 
 from pymongo.errors import DuplicateKeyError
-from broker.errors.exceptions import (InternalServerError, NotFound)
+from broker.errors.exceptions import (InternalServerError, NotFound, RepositoryNotFound)
 
 logger = logging.getLogger(__name__)
 
@@ -80,3 +80,57 @@ def generate_id(
         allowed characters.
     """
     return ''.join(choice(charset) for __ in range(length))
+
+
+def get_repository_info(id: str):
+    db_collection = (
+        current_app.config['FOCA'].db.dbs['brokerStore'].
+        collections['repositories'].client
+    )
+    try:
+        data= db_collection.find( 
+        {'id':id}, {'access_token': False, '_id': False}
+        ).limit(1).next()
+        return data
+    except RepositoryNotFound:
+        raise NotFound
+
+
+def modify_repository_info(id: str, data: Dict):
+    id_charset: str = (
+            current_app.config['FOCA'].endpoints['repository']['id_charset']
+    )
+    try:
+        id_charset = eval(id_charset)
+    except Exception:
+        id_charset = ''.join(sorted(set(id_charset)))
+
+    db_collection = (
+        current_app.config['FOCA'].db.dbs['brokerStore'].
+        collections['repositories'].client
+    )
+    try:
+        data['id'] = id
+        hash = generate_id(id_charset,32)
+        data['access_token'] = str(hash)
+        db_collection.replace_one(
+        filter={'id': id},
+        replacement=data,
+        )
+        del data['url']  
+        return data
+    except RepositoryNotFound:
+        raise NotFound
+
+    
+def delete_repository(id: str):
+    db_collection = (
+        current_app.config['FOCA'].db.dbs['brokerStore'].
+        collections['repositories'].client
+    )
+    try:
+        isDeleted = db_collection.delete_one({'id':id})
+        return isDeleted.deleted_count
+    except RepositoryNotFound:
+        logger.error('Not Found any repository with id:' + id)
+        raise NotFound

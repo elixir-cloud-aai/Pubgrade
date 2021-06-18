@@ -1,12 +1,16 @@
 """Controllers for broker endpoints"""
 
+from werkzeug.exceptions import NotFound
 from broker.ga4gh.broker.endpoints.repositories import (
 get_repositories,
-register_repository)
+get_repository_info,
+modify_repository_info,
+register_repository,
+delete_repository)
+
 import json
 
 from flask import (current_app, request)
-import string
 from random import choice
 from foca.utils.logging import log_traffic
 from typing import (Dict)
@@ -14,7 +18,6 @@ from typing import (Dict)
 from broker.errors.exceptions import (
     AccessMethodNotFound,
     InternalServerError,
-    ObjectNotFound,
     URLNotFound,
     BadRequest,
 )
@@ -39,15 +42,18 @@ def postRepositories():
 
 @log_traffic
 def getRepository(id: str):
-    return MOCK_REPOSITORY
+    return get_repository_info(id)
 
 @log_traffic
 def putRepositories(id: str):
-    return MOCK_POST_REPOSITORY
+    return modify_repository_info(id, request.json)
 
 @log_traffic
 def deleteRepository(id: str):
-    return {"message": "Repository deleted successfully"}
+    if delete_repository(id) == 0:
+        raise NotFound
+    else:
+        return {"message": "Repository deleted successfully"}
 
 @log_traffic
 def postBuild(id: str):
@@ -82,17 +88,3 @@ def getSubscriptionInfo(subscription_id: str):
 def deleteSubscription(subscription_id: str):
     return MOCK_SUBSCRIPTION
 
-
-def generate_id(
-    charset: str = ''.join([string.ascii_letters, string.digits]),
-    length: int = 6
-) -> str:
-    """Generate random string based on allowed set of characters.
-    Args:
-        charset: String of allowed characters.
-        length: Length of returned string.
-    Returns:
-        Random string of specified length and composed of defined set of
-        allowed characters.
-    """
-    return ''.join(choice(charset) for __ in range(length))
