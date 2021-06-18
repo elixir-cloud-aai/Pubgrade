@@ -2,7 +2,7 @@
 
 MOCK_REPOSITORY = {
    "url":"https://localhost:8080/repositories",
-   "repository_id":"repo_123"
+   "id":"repo_123"
 }
 MOCK_POST_REPOSITORY = {
    "access_token":"xxxxxxxxxxxxxx",

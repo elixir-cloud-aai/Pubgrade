@@ -1,9 +1,22 @@
 """Controllers for broker endpoints"""
 
+from broker.ga4gh.broker.endpoints.subscriptions import delete_subscription, get_subscription_info, get_subscriptions, register_subscription, test_create_user
+from broker.ga4gh.broker.endpoints.builds import (get_build_info, get_builds, register_builds)
+from flask.wrappers import Response
+from werkzeug.exceptions import NotFound
+from broker.ga4gh.broker.endpoints.repositories import (
+get_repositories,
+get_repository_info,
+modify_repository_info,
+register_repository,
+delete_repository)
+
+import logging
+logger = logging.getLogger(__name__)
+
 import json
 
 from flask import (current_app, request)
-import string
 from random import choice
 from foca.utils.logging import log_traffic
 from typing import (Dict)
@@ -11,7 +24,6 @@ from typing import (Dict)
 from broker.errors.exceptions import (
     AccessMethodNotFound,
     InternalServerError,
-    ObjectNotFound,
     URLNotFound,
     BadRequest,
 )
@@ -27,50 +39,50 @@ from tests.ga4gh.mock_data import (
 
 @log_traffic
 def getRepositories():
-    return [MOCK_REPOSITORY, MOCK_REPOSITORY]
+    return get_repositories()
 
 @log_traffic
 def postRepositories():
-    db_collection = (
-        current_app.config['FOCA'].db.dbs['brokerStore'].
-        collections['repositories'].client
-    )
-    db_collection.insert({"url": request.json['url'] , "repository_id": generate_id() })
-    return MOCK_POST_REPOSITORY
+    return register_repository(request.json)
 
 
 @log_traffic
 def getRepository(id: str):
-    return MOCK_REPOSITORY
+    return get_repository_info(id)
 
 @log_traffic
 def putRepositories(id: str):
-    return MOCK_POST_REPOSITORY
+    return modify_repository_info(id,request.headers['X-Project-Access-Token'], request.json)
 
 @log_traffic
 def deleteRepository(id: str):
-    return {"message": "Repository deleted successfully"}
+    if delete_repository(id, request.headers['X-Project-Access-Token']) == 0:
+        raise NotFound
+    else:
+        return {"message": "Repository deleted successfully"}
 
 @log_traffic
 def postBuild(id: str):
-    return json.loads('{"id": "build_123"}')
+    return register_builds(id, request.headers['X-Project-Access-Token'], request.json)
 
 @log_traffic
 def getBuilds(id: str):
-    return [   MOCK_BUILD_INFO,    MOCK_BUILD_INFO ]
+    return get_builds(id)
 
 @log_traffic
 def getBuildInfo(id: str, build_id: str):
-    return MOCK_BUILD_INFO
+    return get_build_info(id, build_id)
 
 
 @log_traffic
 def postSubscription():
-    return MOCK_SUBSCRIPTION
+    #test_create_user()
+    return register_subscription(request.headers['X-User-Id'], request.headers['X-User-Access-Token'], request.json)
 
 @log_traffic
 def getSubscriptions():
-    return [MOCK_SUBSCRIPTION]
+    return get_subscriptions(request.headers['X-User-Id'], request.headers['X-User-Access-Token'])
+    #return [MOCK_SUBSCRIPTION]
 
 @log_traffic
 def modifySubscription(subscription_id: str):
@@ -78,23 +90,14 @@ def modifySubscription(subscription_id: str):
 
 @log_traffic
 def getSubscriptionInfo(subscription_id: str):
-    return MOCK_SUBSCRIPTION_INFO
+    return get_subscription_info(request.headers['X-User-Id'], request.headers['X-User-Access-Token'], subscription_id)
 
 @log_traffic
 def deleteSubscription(subscription_id: str):
-    return MOCK_SUBSCRIPTION
+    if delete_subscription(request.headers['X-User-Id'], request.headers['X-User-Access-Token'], subscription_id) == 0:
+        raise NotFound
+    else:
+        MOCK_SUBSCRIPTION['subscription_id'] = subscription_id
+        return MOCK_SUBSCRIPTION
 
 
-def generate_id(
-    charset: str = ''.join([string.ascii_letters, string.digits]),
-    length: int = 6
-) -> str:
-    """Generate random string based on allowed set of characters.
-    Args:
-        charset: String of allowed characters.
-        length: Length of returned string.
-    Returns:
-        Random string of specified length and composed of defined set of
-        allowed characters.
-    """
-    return ''.join(choice(charset) for __ in range(length))

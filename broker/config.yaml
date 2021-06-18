@@ -16,9 +16,28 @@ db:
                 repositories:
                     indexes:
                         - keys:
-                              repository_id: 1
+                              id: 1
                           options: 
                             'unique': True
+                builds:
+                    indexes:
+                        - keys:
+                              id: 1
+                          options: 
+                            'unique': True
+                subscriptions:
+                    indexes:
+                        - keys:
+                              id: 1
+                          options: 
+                            'unique': True
+                users:
+                    indexes:
+                        - keys:
+                              uid: 1
+                          options: 
+                            'unique': True
+                
 
 api:
     specs:
@@ -33,6 +52,13 @@ api:
               options:
                   swagger_ui: True
                   serve_spec: True
+
+
+# Custom app configuration
+endpoints:
+    repository:
+        id_charset: 'string.ascii_letters + string.digits + ".-_~"'
+        id_length: 6
 
 # log:
 #     version: 1
