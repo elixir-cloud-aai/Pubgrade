@@ -1,5 +1,6 @@
 """Controllers for broker endpoints"""
 
+from broker.ga4gh.broker.endpoints.builds import register_builds
 from flask.wrappers import Response
 from werkzeug.exceptions import NotFound
 from broker.ga4gh.broker.endpoints.repositories import (
@@ -47,7 +48,7 @@ def getRepository(id: str):
 
 @log_traffic
 def putRepositories(id: str):
-    return modify_repository_info(id, request.json)
+    return modify_repository_info(id,request.headers['X-Project-Access-Token'], request.json)
 
 @log_traffic
 def deleteRepository(id: str):
@@ -58,7 +59,7 @@ def deleteRepository(id: str):
 
 @log_traffic
 def postBuild(id: str):
-    return json.loads('{"id": "build_123"}')
+    return register_builds(id, request.headers['X-Project-Access-Token'], request.json)
 
 @log_traffic
 def getBuilds(id: str):

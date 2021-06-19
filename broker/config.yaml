@@ -19,6 +19,13 @@ db:
                               id: 1
                           options: 
                             'unique': True
+                builds:
+                    indexes:
+                        - keys:
+                              id: 1
+                          options: 
+                            'unique': True
+                
 
 api:
     specs:

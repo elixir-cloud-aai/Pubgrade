@@ -1,5 +1,5 @@
 from typing import (Dict)
-from random import choice, expovariate
+from random import choice
 
 from flask import (current_app)
 import string
@@ -97,32 +97,30 @@ def get_repository_info(id: str):
         raise NotFound
 
 
-def modify_repository_info(id: str, data: Dict):
-    id_charset: str = (
-            current_app.config['FOCA'].endpoints['repository']['id_charset']
-    )
-    try:
-        id_charset = eval(id_charset)
-    except Exception:
-        id_charset = ''.join(sorted(set(id_charset)))
-
+def modify_repository_info(id: str, access_token: str, data: Dict):
     db_collection = (
         current_app.config['FOCA'].db.dbs['brokerStore'].
         collections['repositories'].client
     )
-    try:
-        data['id'] = id
-        hash = generate_id(id_charset,32)
-        data['access_token'] = str(hash)
-        db_collection.replace_one(
-        filter={'id': id},
-        replacement=data,
-        )
-        del data['url']  
-        return data
-    except RepositoryNotFound:
+    dataFromDB = db_collection.find_one({'id':id})
+    if dataFromDB != None:
+        if dataFromDB['access_token'] == access_token:
+            try:
+                data['id'] = id
+                hash = access_token
+                data['access_token'] = str(hash)
+                db_collection.replace_one(
+                filter={'id': id},
+                replacement=data,
+                )
+                del data['url']
+                return data
+            except RepositoryNotFound:
+                raise NotFound
+        else:
+            raise Unauthorized
+    else:
         raise NotFound
-
     
 def delete_repository(id: str, access_token: str):
     db_collection = (

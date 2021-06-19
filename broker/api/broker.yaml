@@ -146,6 +146,13 @@ paths:
             type: string
           description: Identifier generated when first registering the
            repository via `POST /repositories`.
+        - in: header
+          name: X-Project-Access-Token
+          required: true
+          schema:
+            type: string
+          description: Secret used to identify source, generated when first 
+            registering the repository via `POST /repositories`
       requestBody:
         description: Schema for repository 
         required: true
