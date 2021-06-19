@@ -1,11 +1,12 @@
 from typing import (Dict)
-from random import choice
+from random import choice, expovariate
 
 from flask import (current_app)
 import string
 import logging
 
 from pymongo.errors import DuplicateKeyError
+from werkzeug.exceptions import Unauthorized
 from broker.errors.exceptions import (InternalServerError, NotFound, RepositoryNotFound)
 
 logger = logging.getLogger(__name__)
@@ -123,14 +124,25 @@ def modify_repository_info(id: str, data: Dict):
         raise NotFound
 
     
-def delete_repository(id: str):
+def delete_repository(id: str, access_token: str):
     db_collection = (
         current_app.config['FOCA'].db.dbs['brokerStore'].
         collections['repositories'].client
     )
-    try:
-        isDeleted = db_collection.delete_one({'id':id})
-        return isDeleted.deleted_count
-    except RepositoryNotFound:
-        logger.error('Not Found any repository with id:' + id)
+    # try:
+    data = db_collection.find_one({'id':id})
+    if data != None:
+        if data['access_token'] == access_token:
+            try:
+                isDeleted = db_collection.delete_one({'id':id})
+                return isDeleted.deleted_count
+            except RepositoryNotFound:
+                logger.error('Not Found any repository with id:' + id)
+                raise NotFound
+        else:
+            raise Unauthorized
+    else:
         raise NotFound
+    # except StopIteration:
+    #     raise NotFound
+

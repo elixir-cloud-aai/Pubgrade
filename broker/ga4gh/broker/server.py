@@ -1,5 +1,6 @@
 """Controllers for broker endpoints"""
 
+from flask.wrappers import Response
 from werkzeug.exceptions import NotFound
 from broker.ga4gh.broker.endpoints.repositories import (
 get_repositories,
@@ -50,7 +51,7 @@ def putRepositories(id: str):
 
 @log_traffic
 def deleteRepository(id: str):
-    if delete_repository(id) == 0:
+    if delete_repository(id, request.headers['X-Project-Access-Token']) == 0:
         raise NotFound
     else:
         return {"message": "Repository deleted successfully"}
