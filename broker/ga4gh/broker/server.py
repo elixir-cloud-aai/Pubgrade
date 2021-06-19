@@ -1,6 +1,6 @@
 """Controllers for broker endpoints"""
 
-from broker.ga4gh.broker.endpoints.builds import register_builds
+from broker.ga4gh.broker.endpoints.builds import (get_build_info, get_builds, register_builds)
 from flask.wrappers import Response
 from werkzeug.exceptions import NotFound
 from broker.ga4gh.broker.endpoints.repositories import (
@@ -9,6 +9,9 @@ get_repository_info,
 modify_repository_info,
 register_repository,
 delete_repository)
+
+import logging
+logger = logging.getLogger(__name__)
 
 import json
 
@@ -63,11 +66,12 @@ def postBuild(id: str):
 
 @log_traffic
 def getBuilds(id: str):
-    return [   MOCK_BUILD_INFO,    MOCK_BUILD_INFO ]
+    get_builds(id)
+    return get_builds(id)
 
 @log_traffic
 def getBuildInfo(id: str, build_id: str):
-    return MOCK_BUILD_INFO
+    return get_build_info(id, build_id)
 
 
 @log_traffic
