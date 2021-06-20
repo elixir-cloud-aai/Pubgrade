@@ -381,6 +381,13 @@ paths:
             type: string
           description: Secret used to verify and uniquely identify administrator
            and perform their specific tasks.
+        - in: header
+          name: X-User-Id
+          required: true
+          schema:
+            type: string
+          description: Secret used to uniquely identify administrator
+           and perform their specific tasks.
       requestBody:
         required: true
         content:
@@ -438,6 +445,13 @@ paths:
           schema:
             type: string
           description: Secret used to verify and uniquely identify administrator
+           and perform their specific tasks.
+        - in: header
+          name: X-User-Id
+          required: true
+          schema:
+            type: string
+          description: Secret used to uniquely identify administrator
            and perform their specific tasks.
       responses:
         '200':
@@ -550,6 +564,13 @@ paths:
             type: string
           description: Secret used to verify and uniquely identify administrator
            and perform their specific tasks.
+        - in: header
+          name: X-User-Id
+          required: true
+          schema:
+            type: string
+          description: Secret used to uniquely identify administrator
+           and perform their specific tasks.
       responses:
         '200':
           description: 'Subscription Information'
@@ -619,6 +640,13 @@ paths:
           schema:
             type: string
           description: Secret used to verify and uniquely identify administrator
+           and perform their specific tasks.
+        - in: header
+          name: X-User-Id
+          required: true
+          schema:
+            type: string
+          description: Secret used to uniquely identify administrator
            and perform their specific tasks.
       responses:
         '200':

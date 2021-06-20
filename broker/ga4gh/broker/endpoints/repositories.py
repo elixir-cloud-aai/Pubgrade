@@ -63,6 +63,9 @@ def get_repositories():
         {}, {'access_token': False, '_id': False}
         )
         data=list(cursor)
+        for repo in data:
+            if 'subscriptionList' in repo:
+                del repo['subscriptionList']
         return list(data)
     except StopIteration:
         raise NotFound
@@ -92,6 +95,8 @@ def get_repository_info(id: str):
         data= db_collection.find( 
         {'id':id}, {'access_token': False, '_id': False}
         ).limit(1).next()
+        if 'subscriptionList' in data:
+            del data['subscriptionList']
         return data
     except RepositoryNotFound:
         raise NotFound
@@ -102,9 +107,9 @@ def modify_repository_info(id: str, access_token: str, data: Dict):
         current_app.config['FOCA'].db.dbs['brokerStore'].
         collections['repositories'].client
     )
-    dataFromDB = db_collection.find_one({'id':id})
-    if dataFromDB != None:
-        if dataFromDB['access_token'] == access_token:
+    data_from_DB = db_collection.find_one({'id':id})
+    if data_from_DB != None:
+        if data_from_DB['access_token'] == access_token:
             try:
                 data['id'] = id
                 hash = access_token

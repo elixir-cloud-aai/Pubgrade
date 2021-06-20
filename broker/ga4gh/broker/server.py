@@ -1,5 +1,6 @@
 """Controllers for broker endpoints"""
 
+from broker.ga4gh.broker.endpoints.subscriptions import delete_subscription, get_subscription_info, get_subscriptions, register_subscription, test_create_user
 from broker.ga4gh.broker.endpoints.builds import (get_build_info, get_builds, register_builds)
 from flask.wrappers import Response
 from werkzeug.exceptions import NotFound
@@ -66,7 +67,6 @@ def postBuild(id: str):
 
 @log_traffic
 def getBuilds(id: str):
-    get_builds(id)
     return get_builds(id)
 
 @log_traffic
@@ -76,11 +76,13 @@ def getBuildInfo(id: str, build_id: str):
 
 @log_traffic
 def postSubscription():
-    return MOCK_SUBSCRIPTION
+    #test_create_user()
+    return register_subscription(request.headers['X-User-Id'], request.headers['X-User-Access-Token'], request.json)
 
 @log_traffic
 def getSubscriptions():
-    return [MOCK_SUBSCRIPTION]
+    return get_subscriptions(request.headers['X-User-Id'], request.headers['X-User-Access-Token'])
+    #return [MOCK_SUBSCRIPTION]
 
 @log_traffic
 def modifySubscription(subscription_id: str):
@@ -88,9 +90,14 @@ def modifySubscription(subscription_id: str):
 
 @log_traffic
 def getSubscriptionInfo(subscription_id: str):
-    return MOCK_SUBSCRIPTION_INFO
+    return get_subscription_info(request.headers['X-User-Id'], request.headers['X-User-Access-Token'], subscription_id)
 
 @log_traffic
 def deleteSubscription(subscription_id: str):
-    return MOCK_SUBSCRIPTION
+    if delete_subscription(request.headers['X-User-Id'], request.headers['X-User-Access-Token'], subscription_id) == 0:
+        raise NotFound
+    else:
+        MOCK_SUBSCRIPTION['subscription_id'] = subscription_id
+        return MOCK_SUBSCRIPTION
+
 

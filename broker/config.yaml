@@ -25,6 +25,18 @@ db:
                               id: 1
                           options: 
                             'unique': True
+                subscriptions:
+                    indexes:
+                        - keys:
+                              id: 1
+                          options: 
+                            'unique': True
+                users:
+                    indexes:
+                        - keys:
+                              uid: 1
+                          options: 
+                            'unique': True
                 
 
 api:

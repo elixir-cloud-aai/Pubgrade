@@ -4,7 +4,6 @@ from typing import (Dict)
 from random import choice
 
 from flask import (current_app)
-import string
 import logging
 
 from pymongo.errors import DuplicateKeyError
