@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+ name: pv-volume
+ labels:
+   type: local
+spec:
+ storageClassName: manual
+ capacity:
+   storage: 2Gi
+ accessModes:
+   - ReadWriteOnce
+ hostPath:
+   path: {{ .Values.pathToLocalDir }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+ name: {{ .Values.pvClaimName }}
+spec:
+ storageClassName: manual
+ accessModes:
+   - ReadWriteOnce
+ resources:
+   requests:
+     storage: 1Gi
