@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+ name: broker
+spec:
+ replicas: 1
+ selector:
+   matchLabels:
+     app: broker
+ template:
+   metadata:
+     labels:
+       app: broker
+   spec:
+     serviceAccountName: broker
+     automountServiceAccountToken: true
+     containers:
+     - name: broker
+       image: akash7778/broker:v1.0.0
+       ports:
+       - containerPort: 8080
+       volumeMounts:
+       - mountPath: /broker_temp_files  # if changed needs to be changed at builds.py
+         name: pv-storage
+       env:
+         - name: NAMESPACE
+           value: {{ .Release.Namespace }}
+         - name: PV_NAME
+           value: {{ .Values.pvClaimName }}
+     - name: mongodb
+       image: mongo:3.6
+       ports:
+       - containerPort: 27017
+       volumeMounts:
+       - mountPath: /data/db
+         name: mongo-storage
+     volumes:
+       - name: pv-storage
+         persistentVolumeClaim:
+               claimName: {{ .Values.pvClaimName }}
+       - name: mongo-storage
+         emptyDir: {} # wright now its empty dir later this would be PV

@@ -20,6 +20,8 @@ RUN cd /app \
   && python setup.py develop \
   && cd / \
   && chmod g+w /app/broker/api/ \
-  && pip install yq
+  && pip install yq \
+  && pip install kubernetes \
+  && pip install gitpython
 
 CMD ["bash", "-c", "cd /app/broker; python app.py"]

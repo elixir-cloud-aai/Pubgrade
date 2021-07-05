@@ -8,7 +8,7 @@ server:
     use_reloader: True
 
 db:
-    host: mongodb
+    host: localhost
     port: 27017
     dbs:
         brokerStore:
@@ -57,7 +57,7 @@ api:
 # Custom app configuration
 endpoints:
     repository:
-        id_charset: 'string.ascii_letters + string.digits + ".-_~"'
+        id_charset: [string.ascii_lowercase, string.digits , '.' , '-']
         id_length: 6
 
 # log:
