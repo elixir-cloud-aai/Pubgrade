@@ -8,7 +8,7 @@ server:
     use_reloader: True
 
 db:
-    host: mongodb
+    host: localhost
     port: 27017
     dbs:
         brokerStore:

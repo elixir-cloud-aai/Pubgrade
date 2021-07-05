@@ -799,12 +799,6 @@ components:
           default: ./Dockerfile
       required:
             - name
-    # HeadCommit:
-    #   type: object
-    #   description: "`reference` (ref) for checkout could be oneOf Branch OR Tag"
-    #   oneOf:
-    #     - $ref: '#/components/schemas/Branch'
-    #     - $ref: '#/components/schemas/Tag'
     Branch:
       type: object    # Branch
       description: 'Git branch: Used as reference for git checkout'
