@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Pod
+metadata:
+ name: kaniko
+spec:
+ containers:
+  - name: kaniko
+    image: gcr.io/kaniko-project/executor:v0.22.0
+    args: ["--dockerfile=/file/Dockerfile",
+            "--destination=docker.io/akash7778/test-kaniko:tag",
+            "--nopush"] 
+    volumeMounts:
+        - mountPath: "/file"
+          name: task-pv-storage
+        - mountPath: "/kaniko/.docker/"
+          name: task-pv-storage
+ restartPolicy: Never
+ volumes:
+    - name: task-pv-storage
+      persistentVolumeClaim:
+        claimName: task-pv-claim

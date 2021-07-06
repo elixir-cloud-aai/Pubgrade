@@ -72,7 +72,7 @@ def get_repositories():
 
 
 def generate_id(
-    charset: str = ''.join([string.ascii_letters, string.digits]),
+    charset: str = ''.join([string.ascii_lowercase, string.digits]),
     length: int = 6
 ) -> str:
     """Generate random string based on allowed set of characters.
@@ -83,7 +83,19 @@ def generate_id(
         Random string of specified length and composed of defined set of
         allowed characters.
     """
-    return ''.join(choice(charset) for __ in range(length))
+    generated_string =''
+    counter = 0
+    while counter < length:
+        random_char = choice(charset)
+        if counter == 0 or counter == (length-1):
+            if random_char in '.-' or random_char in string.digits:
+                continue
+        counter = counter + 1
+        generated_string = generated_string + ''.join(random_char)
+    return generated_string
+   # return ''.join(choice(charset) for __ in range(length))
+
+#def generate_id( charset: str = ''.join([string.ascii_letters, string.digits]),length: int = 6) -> str:
 
 
 def get_repository_info(id: str):

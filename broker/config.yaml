@@ -57,7 +57,7 @@ api:
 # Custom app configuration
 endpoints:
     repository:
-        id_charset: 'string.ascii_letters + string.digits + ".-_~"'
+        id_charset: [string.ascii_lowercase, string.digits , '.' , '-']
         id_length: 6
 
 # log:
