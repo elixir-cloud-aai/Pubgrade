@@ -1,4 +1,6 @@
+import os
 from re import template
+from git.exc import GitCommandError
 from werkzeug.exceptions import Unauthorized
 from broker.ga4gh.broker.endpoints.repositories import generate_id
 from typing import (Dict)
@@ -54,7 +56,9 @@ def register_builds(repository_id: str, access_token: str,data: Dict):
                     data['started_at'] = str(datetime.datetime.now().isoformat())
                     data['status'] = "QUEUED"
                     db_collection_builds.insert_one(data)
-                    create_build(repo_url='https://github.com/elixir-cloud-aai/drs-filer.git', branch='dev', commit='122c34d', base_dir='/file', build_id= data['id'], dockerfile_location='/Dockerfile', registry_destination='akash7778/test-image:v0.0.1')
+                    create_build(repo_url=dataFromDB['url'], branch=data['head_commit']['branch'], commit=data['head_commit']['commit_sha'] , base_dir='/broker_temp_files', build_id= data['id'], dockerfile_location=data['images'][0]['location'], registry_destination=data['images'][0]['name'])
+                    #data['status'] = "SUCCEEDED"
+                    #db_collection_builds.update_one({ "id": data['id'] }, {"$set": data })
                     break
                 except DuplicateKeyError:
                     continue
@@ -103,7 +107,7 @@ def get_build_info(repository_id: str, build_id: str):
 def create_build(repo_url, branch, commit, base_dir, build_id, dockerfile_location, registry_destination):
     deployment_file_location = base_dir + '/' + build_id + '/' + build_id + '.yaml'
     clone_path = git_clone_and_checkout(repo_url=repo_url, branch=branch, commit=commit, base_dir=base_dir, build_id=build_id)
-    create_deployment_YAML(clone_path + dockerfile_location, registry_destination, clone_path, deployment_file_location)
+    create_deployment_YAML(clone_path +'/' + dockerfile_location, registry_destination, clone_path, deployment_file_location)
     build_push_image_using_kaniko(deployment_file_location=deployment_file_location)
     print('START')
 
@@ -114,15 +118,15 @@ def git_clone_and_checkout(repo_url: str, branch: str, commit: str, base_dir: st
         repo = Repo.clone_from(repo_url, clone_path, branch=branch)
         repo.git.checkout(commit)
         return clone_path
-    except RepositoryNotFound:
-        raise RepositoryNotFound
+    except GitCommandError:
+        raise GitCommandError
 
 
 def create_deployment_YAML(dockerfile: str, destination: str, build_context: str, deployment_file_location: str):
     try:
         fstream = open(template_file, 'r')
         data = yaml.load(fstream)
-        data['metadata']['name'] = deployment_file_location.split('.')[0].split('/')[2]
+        data['metadata']['name'] = deployment_file_location.split('/')[2]
         data['spec']['containers'][0]['args'] = [f"--dockerfile={dockerfile}", f"--destination={destination}", f"--context={build_context}"]
         data['spec']['containers'][0]['volumeMounts'][1]['mountPath'] = '/kaniko/.docker/config.json'
         data['spec']['containers'][0]['volumeMounts'][1]['name'] = 'task-pv-storage'
@@ -135,12 +139,17 @@ def create_deployment_YAML(dockerfile: str, destination: str, build_context: str
 
 
 def build_push_image_using_kaniko(deployment_file_location: str):
-    k8s_config = config.load_incluster_config()
+    if os.getenv('NAMESPACE'):
+        namespace = os.getenv('NAMESPACE')
+    else:
+        namespace = 'default'
+    if os.getenv('KUBERNETES_SERVICE_HOST'):
+        k8s_config = config.load_incluster_config()
+    else:
+        k8s_config = config.load_kube_config()
     v1 = client.CoreV1Api()
-    apiV1 = client.AppsV1Api()
-    namespace='default'
     with open(deployment_file_location) as f:
         dep = yaml.safe_load(f)
         resp = v1.create_namespaced_pod(
-            body=dep, namespace="default")
+            body=dep, namespace=namespace)
         print("Deployment created. status='%s'" % resp.metadata.name)

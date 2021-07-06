@@ -1,21 +1,23 @@
 apiVersion: v1
 kind: Pod
 metadata:
- name: kaniko
+  name: kaniko
 spec:
- containers:
-  - name: kaniko
+  containers:
+  - args:
+    - --dockerfile=/file/sGwDmb.ls~_i/drs-filer./Dockerfile
+    - --destination=akash7778/test-image:v0.0.1
+    - --context=/file/sGwDmb.ls~_i/drs-filer
     image: gcr.io/kaniko-project/executor:v0.22.0
-    args: ["--dockerfile=/file/Dockerfile",
-            "--destination=docker.io/akash7778/test-kaniko:tag",
-            "--nopush"] 
+    name: kaniko
     volumeMounts:
-        - mountPath: "/file"
-          name: task-pv-storage
-        - mountPath: "/kaniko/.docker/"
-          name: task-pv-storage
- restartPolicy: Never
- volumes:
-    - name: task-pv-storage
-      persistentVolumeClaim:
-        claimName: task-pv-claim
+    - mountPath: /broker_temp_files
+      name: task-pv-storage
+    - mountPath: /kaniko/.docker/config.json
+      name: task-pv-storage
+      subPath: config.json
+  restartPolicy: Never
+  volumes:
+  - name: task-pv-storage
+    persistentVolumeClaim:
+      claimName: task-pv-claim
