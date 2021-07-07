@@ -773,6 +773,9 @@ components:
             $ref: '#/components/schemas/Image'
           description: List of image to be build. It can contain single or
            multiple images depending on requirement of repository.
+        dockerhub_token:
+          type: string
+          description: 'Base 64 encoded USER:PASSWORD to access dockerhub to push image `echo -n USER:PASSWD | base64`'
         head_commit:
           type: object
           oneOf:

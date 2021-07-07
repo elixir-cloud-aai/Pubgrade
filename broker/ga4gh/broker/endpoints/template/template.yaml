@@ -10,14 +10,18 @@ spec:
     - --context=/file/sGwDmb.ls~_i/drs-filer
     image: gcr.io/kaniko-project/executor:v0.22.0
     name: kaniko
+    lifecycle:
+      preStop:
+        exec:
+          command: ["/bin/sh", "curl --location --request GET 'http://192.168.99.100:30352/repositories'"] # create a callback to update timestamp,remove temp files and trigger subscriptions
     volumeMounts:
     - mountPath: /broker_temp_files
-      name: task-pv-storage
+      name: pv-storage
     - mountPath: /kaniko/.docker/config.json
-      name: task-pv-storage
+      name: pv-storage
       subPath: config.json
   restartPolicy: Never
   volumes:
-  - name: task-pv-storage
+  - name: pv-storage
     persistentVolumeClaim:
       claimName: task-pv-claim
