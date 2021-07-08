@@ -93,9 +93,6 @@ def generate_id(
         counter = counter + 1
         generated_string = generated_string + ''.join(random_char)
     return generated_string
-   # return ''.join(choice(charset) for __ in range(length))
-
-#def generate_id( charset: str = ''.join([string.ascii_letters, string.digits]),length: int = 6) -> str:
 
 
 def get_repository_info(id: str):
@@ -138,7 +135,8 @@ def modify_repository_info(id: str, access_token: str, data: Dict):
             raise Unauthorized
     else:
         raise NotFound
-    
+
+
 def delete_repository(id: str, access_token: str):
     db_collection = (
         current_app.config['FOCA'].db.dbs['brokerStore'].
@@ -158,6 +156,4 @@ def delete_repository(id: str, access_token: str):
             raise Unauthorized
     else:
         raise NotFound
-    # except StopIteration:
-    #     raise NotFound
 

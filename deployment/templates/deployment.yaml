@@ -12,6 +12,8 @@ spec:
      labels:
        app: broker
    spec:
+     serviceAccountName: broker
+     automountServiceAccountToken: true
      containers:
      - name: broker
        image: akash7778/broker:v1.0.0
@@ -22,7 +24,7 @@ spec:
          name: pv-storage
        env:
          - name: NAMESPACE
-           value: {{ .Values.namespace }}
+           value: {{ .Release.Namespace }}
          - name: PV_NAME
            value: {{ .Values.pvClaimName }}
      - name: mongodb

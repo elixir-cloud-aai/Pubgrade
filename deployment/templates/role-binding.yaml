@@ -1,0 +1,13 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: manage-pods
+  namespace: {{ .Release.Namespace }}
+subjects:
+- kind: User
+  name: broker 
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: role-broker 
+  apiGroup: rbac.authorization.k8s.io
