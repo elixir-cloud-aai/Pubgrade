@@ -263,8 +263,15 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BuildRegister'
-              additionalProperties: false
+              allOf:
+                - $ref: '#/components/schemas/BuildRegister'
+                - type: object
+                  properties:
+                            dockerhub_token:
+                              type: string
+                              description: 'Base 64 encoded USER:PASSWORD to access dockerhub to
+                               push image `echo -n USER:PASSWD | base64`'
+              #additionalProperties: false
       responses:
         '200':
           description: 'Build identifier'
@@ -365,6 +372,71 @@ paths:
           $ref: '#/components/responses/InternalServerError'
         default:
           $ref: '#/components/responses/Error'
+    put:
+      summary: 'Update build info to broker'
+      description: Used by kaniko pod to update build complete info at broker. 
+      operationId: updateBuild
+      tags:
+        - builds
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Identifier generated when first registering the 
+            repository via `POST /repositories`.
+        - in: path
+          name: build_id
+          required: true
+          schema:
+            type: string
+          description: Identifier generated when registering new build via
+            `POST /repositories/{id}/builds`
+        - in: header
+          name: X-Project-Access-Token
+          required: true
+          schema:
+            type: string
+          description: Secret used to identify source, generated when first 
+            registering the repository via `POST /repositories`
+      requestBody:
+        required: true
+        content:
+          application/json:
+              schema:
+                type: object
+                properties:
+                    id:
+                      type: string
+                      description: Unique identifier generated on registering 
+                        new build. It can be used later to check build status.
+                      example: build_123
+                additionalProperties: false
+      responses:
+        '200':
+          description: 'Build identifier'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                    id:
+                      type: string
+                      description: Unique identifier generated on registering 
+                        new build. It can be used later to check build status.
+                      example: build_123
+                additionalProperties: false
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        default:
+          $ref: '#/components/responses/Error'
   /subscriptions:
     post:
       summary: Register new subscription.
@@ -394,7 +466,7 @@ paths:
           application/json:
             schema:
                allOf:
-                - $ref: '#/components/schemas/Service'
+                - $ref: '#/components/schemas/Subscription'
                 - type: object
                   properties:
                     access_token:
@@ -505,7 +577,7 @@ paths:
           application/json:
             schema:
               allOf:
-                - $ref: '#/components/schemas/Service'
+                - $ref: '#/components/schemas/Subscription'
                 - type: object
                   properties:
                     access_token:
@@ -578,7 +650,7 @@ paths:
             application/json:
               schema:
                 allOf:
-                    - $ref: '#/components/schemas/Service'
+                    - $ref: '#/components/schemas/Subscription'
                     - type: object
                       properties:
                             state:
@@ -600,14 +672,6 @@ paths:
                               description: Identifier generated when registering
                                new build via `POST /repositories/{id}/builds`
                               example: build_123
-                            build_type:
-                              type: string
-                              enum:
-                                - production
-                                - development
-                                - testing
-                              description: Type of build # still need clarity
-                              example: production
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -773,9 +837,6 @@ components:
             $ref: '#/components/schemas/Image'
           description: List of image to be build. It can contain single or
            multiple images depending on requirement of repository.
-        dockerhub_token:
-          type: string
-          description: 'Base 64 encoded USER:PASSWORD to access dockerhub to push image `echo -n USER:PASSWD | base64`'
         head_commit:
           type: object
           oneOf:
@@ -829,7 +890,7 @@ components:
             example: v1.0
       required:
         - tag
-    Service:
+    Subscription:
       type: object
       description: Schema for subscription
       properties:
@@ -844,6 +905,18 @@ components:
             description: URL on which continuous delivery (CD) pipeline is 
               listening for image updates.
             example: https://ec2-54-203-145-132.compute-1.amazonaws.com/update
+        type:
+            type: string
+            description: Type of `head_commit` listened by subscription for
+             updates.
+            enum:
+              - branch
+              - tag
+            example: tag
+        value:
+            type: string
+            description: Value to match with type of `head_commit`.
+            example: dev
     RepositoryListItem:
       # type: object
       description: Schema used to show at `GET /repositories` for repositories.

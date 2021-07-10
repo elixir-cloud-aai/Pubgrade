@@ -8,7 +8,7 @@ server:
     use_reloader: True
 
 db:
-    host: localhost
+    host: mongodb.broker
     port: 27017
     dbs:
         brokerStore:
@@ -37,7 +37,7 @@ db:
                               uid: 1
                           options: 
                             'unique': True
-                
+
 
 api:
     specs:
