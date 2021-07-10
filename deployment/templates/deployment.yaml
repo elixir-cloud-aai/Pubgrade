@@ -27,16 +27,7 @@ spec:
            value: {{ .Release.Namespace }}
          - name: PV_NAME
            value: {{ .Values.pvClaimName }}
-     - name: mongodb
-       image: mongo:3.6
-       ports:
-       - containerPort: 27017
-       volumeMounts:
-       - mountPath: /data/db
-         name: mongo-storage
      volumes:
        - name: pv-storage
          persistentVolumeClaim:
                claimName: {{ .Values.pvClaimName }}
-       - name: mongo-storage
-         emptyDir: {} # wright now its empty dir later this would be PV

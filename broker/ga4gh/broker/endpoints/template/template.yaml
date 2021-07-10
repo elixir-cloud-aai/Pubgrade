@@ -13,7 +13,7 @@ spec:
     lifecycle:
       preStop:
         exec:
-          command: ["/bin/sh", "curl --location --request GET 'http://192.168.99.100:30352/repositories'"] # create a callback to update timestamp,remove temp files and trigger subscriptions
+          command: ["/bin/sh", "curl "] # create a callback to update timestamp,remove temp files and trigger subscriptions
     volumeMounts:
     - mountPath: /broker_temp_files
       name: pv-storage

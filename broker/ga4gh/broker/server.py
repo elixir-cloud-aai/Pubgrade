@@ -1,7 +1,7 @@
 """Controllers for broker endpoints"""
 
 from broker.ga4gh.broker.endpoints.subscriptions import delete_subscription, get_subscription_info, get_subscriptions, register_subscription, test_create_user
-from broker.ga4gh.broker.endpoints.builds import (get_build_info, get_builds, register_builds)
+from broker.ga4gh.broker.endpoints.builds import (build_completed, get_build_info, get_builds, register_builds)
 from flask.wrappers import Response
 from werkzeug.exceptions import NotFound
 from broker.ga4gh.broker.endpoints.repositories import (
@@ -72,6 +72,11 @@ def getBuilds(id: str):
 @log_traffic
 def getBuildInfo(id: str, build_id: str):
     return get_build_info(id, build_id)
+
+
+@log_traffic
+def updateBuild(id: str, build_id: str):
+    return build_completed(id, build_id, request.headers['X-Project-Access-Token'])
 
 
 @log_traffic

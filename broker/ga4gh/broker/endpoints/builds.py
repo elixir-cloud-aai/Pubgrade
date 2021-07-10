@@ -6,13 +6,15 @@ from broker.ga4gh.broker.endpoints.repositories import generate_id
 from typing import (Dict)
 from random import choice
 import datetime
-
+import shutil
 
 from flask import (current_app)
 import logging
 
 from pymongo.errors import DuplicateKeyError
-from broker.errors.exceptions import (InternalServerError, NotFound, RepositoryNotFound)
+from broker.errors.exceptions import (InternalServerError,
+ NotFound, 
+ RepositoryNotFound)
 from git import Repo
 import yaml
 from kubernetes import client, config
@@ -51,13 +53,23 @@ def register_builds(repository_id: str, access_token: str,data: Dict):
                     charset=id_charset, 
                     length=id_length, 
                 )
-                db_collection_repositories.update({"id": repository_id}, {"$push":{"buildList": data['id']}} )
+                db_collection_repositories.update({"id": repository_id}, 
+                {"$push":{"buildList": data['id']}} )
                 try:
                     data['finished_at'] = "NULL"
                     data['started_at'] = str(datetime.datetime.now().isoformat())
                     data['status'] = "QUEUED"
                     db_collection_builds.insert_one(data)
-                    create_build(repo_url=dataFromDB['url'], branch=data['head_commit']['branch'], commit=data['head_commit']['commit_sha'] , base_dir='/broker_temp_files', build_id= data['id'], dockerfile_location=data['images'][0]['location'], registry_destination=data['images'][0]['name'], data=data, db_collection_builds=db_collection_builds, dockerhub_token=data['dockerhub_token'])
+                    create_build(repo_url=dataFromDB['url'], 
+                    branch=data['head_commit']['branch'], 
+                    commit=data['head_commit']['commit_sha'], 
+                    base_dir='/broker_temp_files', build_id= data['id'], 
+                    dockerfile_location=data['images'][0]['location'], 
+                    registry_destination=data['images'][0]['name'], 
+                    #data=data, 
+                    #db_collection_builds=db_collection_builds, 
+                    dockerhub_token=data['dockerhub_token'],
+                    project_access_token=access_token)
                     #data['status'] = "SUCCEEDED"
                     #db_collection_builds.update_one({ "id": data['id'] }, {"$set": data })
                     break
@@ -105,17 +117,24 @@ def get_build_info(repository_id: str, build_id: str):
         raise NotFound  
 
 
-def create_build(repo_url, branch, commit, base_dir, build_id, dockerfile_location, registry_destination, data, db_collection_builds, dockerhub_token):
+def create_build(repo_url, branch, commit, base_dir, build_id, 
+dockerfile_location, registry_destination, dockerhub_token, project_access_token):
     deployment_file_location = base_dir + '/' + build_id + '/' + build_id + '.yaml'
     config_file_location=base_dir + '/' + build_id + '/config.json'
-    clone_path = git_clone_and_checkout(repo_url=repo_url, branch=branch, commit=commit, base_dir=base_dir, build_id=build_id)
-    create_deployment_YAML(clone_path +'/' + dockerfile_location, registry_destination, clone_path, deployment_file_location, build_id + '/config.json')
-    create_dockerhub_config_file(dockerhub_token=dockerhub_token,config_file_location=config_file_location)
-    build_push_image_using_kaniko(deployment_file_location=deployment_file_location)
+    clone_path = git_clone_and_checkout(repo_url=repo_url, branch=branch, 
+    commit=commit, base_dir=base_dir, build_id=build_id)
+    create_deployment_YAML(clone_path +'/' + dockerfile_location, 
+    registry_destination, clone_path, deployment_file_location, 
+    build_id + '/config.json', project_access_token )
+    create_dockerhub_config_file(dockerhub_token=dockerhub_token,
+    config_file_location=config_file_location)
+    build_push_image_using_kaniko(
+    deployment_file_location=deployment_file_location)
     print('START')
 
 
-def git_clone_and_checkout(repo_url: str, branch: str, commit: str, base_dir: str, build_id: str):
+def git_clone_and_checkout(repo_url: str, branch: str, commit: str,
+ base_dir: str, build_id: str):
     clone_path = base_dir + '/' + build_id + '/' + repo_url.split('/')[4].split('.')[0]
     try:
         repo = Repo.clone_from(repo_url, clone_path, branch=branch)
@@ -125,15 +144,22 @@ def git_clone_and_checkout(repo_url: str, branch: str, commit: str, base_dir: st
         raise GitCommandError
 
 
-def create_deployment_YAML(dockerfile: str, destination: str, build_context: str, deployment_file_location: str, config_file_location: str):
+def create_deployment_YAML(dockerfile: str, destination: str, 
+build_context: str, deployment_file_location: str, config_file_location: str, project_access_token: str):
     try:
+        build_id=deployment_file_location.split('/')[2]
         fstream = open(template_file, 'r')
         data = yaml.load(fstream)
-        data['metadata']['name'] = deployment_file_location.split('/')[2]
-        data['spec']['containers'][0]['args'] = [f"--dockerfile={dockerfile}", f"--destination={destination}", f"--context={build_context}", "--cleanup"]
+        data['metadata']['name'] = build_id
+        data['spec']['containers'][0]['args'] = [
+        f"--dockerfile={dockerfile}",
+        f"--destination={destination}",
+        f"--context={build_context}",
+        "--cleanup"]
         data['spec']['containers'][0]['volumeMounts'][1]['mountPath'] = '/kaniko/.docker/config.json'
         data['spec']['volumes'][0]['persistentVolumeClaim']['claimName'] = os.getenv('PV_NAME')
         data['spec']['containers'][0]['volumeMounts'][1]['subPath'] = config_file_location
+        data['spec']['containers'][0]['lifecycle']['preStop']['exec']['command']=["/bin/sh", "curl --location --request PUT 'http://{service_url}:{service_port}/repositories/{repo_id}/builds/{build_id}' --header 'X-Project-Access-Token: {project_access_token}' --header 'Content-Type: application/json' --data-raw '{{ \"id\": \"{build_id}\" }}'".format(service_url='broker-service.broker', service_port='5000', repo_id=build_id[0:6], build_id=build_id, project_access_token=project_access_token)]
         with open(deployment_file_location, 'w') as yaml_file:
             yaml_file.write( yaml.dump(data, default_flow_style=False))
         return deployment_file_location
@@ -169,3 +195,43 @@ def build_push_image_using_kaniko(deployment_file_location: str):
         resp = v1.create_namespaced_pod(
             body=dep, namespace=namespace)
         print("Deployment created. status='%s'" % resp.metadata.name)
+
+
+def build_completed(repository_id: str,build_id: str, project_access_token: str):
+    db_collection_repositories = (
+        current_app.config['FOCA'].db.dbs['brokerStore'].
+        collections['repositories'].client
+    )
+    db_collection_builds = (
+        current_app.config['FOCA'].db.dbs['brokerStore'].
+        collections['builds'].client
+    )
+    try:
+
+        dataFromDB = db_collection_repositories.find_one({'id':repository_id})
+        if dataFromDB != None:
+            if dataFromDB['access_token'] == project_access_token:
+                 data= db_collection_builds.find( 
+                 {'id':build_id}, {'_id': False}
+                 ).limit(1).next()
+                 #del data['id']
+                 data['status'] = "SUCCEEDED"
+                 data['finished_at'] = str(datetime.datetime.now().isoformat())
+                 db_collection_builds.update_one({ "id": data['id'] }, {"$set": data })
+                 remove_files('/broker_temp_files/' +build_id, build_id, 'broker' )
+                 return {'id': build_id}
+    except RepositoryNotFound:
+        raise NotFound  
+
+
+def remove_files(dir_location: str, pod_name: str, namespace: str):
+    shutil.rmtree(dir_location)
+    delete_pod(pod_name, namespace)
+    #os.remove(kaniko_file_location)
+
+
+def delete_pod(name, namespace):
+	api_instance = client.CoreV1Api()
+	body = client.V1DeleteOptions()
+	api_response = api_instance.delete_namespaced_pod(name, namespace)
+	return api_response
