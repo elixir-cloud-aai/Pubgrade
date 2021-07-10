@@ -10,6 +10,6 @@
 # Ignore build-specific files and dirs
 **/*.egg-info
 src
-
+venv/
 # Ignore CI-related files and dirs
 .travis.yml

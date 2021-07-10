@@ -22,9 +22,11 @@ class ObjectNotFound(NotFound):
     """Raised when object with given object identifier was not found."""
     pass
 
+
 class RepositoryNotFound(NotFound):
     """Raised when object with given repository identifier was not found."""
     pass
+
 
 class BuildNotFound(NotFound):
     """Raised when object with given build identifier was not found."""
@@ -86,4 +88,3 @@ exceptions = {
         "status_code": '500',
     },
 }
-
