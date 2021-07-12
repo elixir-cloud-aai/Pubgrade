@@ -6,6 +6,9 @@ from werkzeug.exceptions import Unauthorized
 from broker.errors.exceptions import (InternalServerError, NotFound, RepositoryNotFound)
 import logging
 from flask import (current_app)
+import requests
+import urllib.parse
+
 
 logger = logging.getLogger(__name__)
 
@@ -56,8 +59,8 @@ def register_subscription(uid: str, user_access_token: str, data: Dict):
                     )
                     try:
                         db_collection_subscriptions.insert_one(data)
-                        db_collection_user.update({"uid": uid}, {"$push":{"subscriptionList": data['id']}} )
-                        db_collection_repositories.update({"id": data['repository_id']}, {"$push":{"subscriptionList": data['id']}} )
+                        db_collection_user.update({"uid": uid}, {"$push":{"subscription_list": data['id']}} )
+                        db_collection_repositories.update({"id": data['repository_id']}, {"$push":{"subscription_list": data['id']}} )
                         break
                     except DuplicateKeyError:
                         continue
@@ -81,7 +84,7 @@ def get_subscriptions(uid: str, user_access_token: str):
             try:
                 data= db_collection_user.find( {'uid':uid}, {'access_token': False,'_id': False}).limit(1).next()
                 response_data=[]
-                for subscription_id in data['subscriptionList']:
+                for subscription_id in data['subscription_list']:
                     response_data.append({'subscription_id': subscription_id})
                 return response_data
             except KeyError:
@@ -139,4 +142,22 @@ def delete_subscription(uid: str, user_access_token: str, subscription_id: str):
         else:
             raise Unauthorized
     else:
+        raise NotFound
+
+
+def notify_subscriptions(subscription_id: str, image: str):
+    db_collection_subscriptions = (
+        current_app.config['FOCA'].db.dbs['brokerStore'].
+        collections['subscriptions'].client
+    )
+    try:
+        data = db_collection_subscriptions.find_one({'id':subscription_id})
+        url = data['callback_url']
+        payload='image={"image":"'+ image +'"}&uuid=' + data['access_token']
+        headers = {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+        response = requests.request("POST", url, headers=headers, data=payload)
+        print(response.text)
+    except NotFound:
         raise NotFound

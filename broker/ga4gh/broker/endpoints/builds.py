@@ -1,3 +1,4 @@
+from broker.ga4gh.broker.endpoints.subscriptions import notify_subscriptions
 import os
 from re import template
 from git.exc import GitCommandError
@@ -97,6 +98,7 @@ def get_builds(repository_id: str):
             data.append(build_data)
         logger.info('mData   : '  + str(data))
         #get_build_info()
+        del data['dockerhub_token']
         return data
     else:
         raise NotFound
@@ -112,6 +114,7 @@ def get_build_info(repository_id: str, build_id: str):
         {'id':build_id}, {'_id': False}
         ).limit(1).next()
         del data['id']
+        del data['dockerhub_token']
         return data
     except RepositoryNotFound:
         raise NotFound  
@@ -219,6 +222,11 @@ def build_completed(repository_id: str,build_id: str, project_access_token: str)
                  data['finished_at'] = str(datetime.datetime.now().isoformat())
                  db_collection_builds.update_one({ "id": data['id'] }, {"$set": data })
                  remove_files('/broker_temp_files/' +build_id, build_id, 'broker' )
+                 if 'subscription_list' in dataFromDB:
+                    subscription_list = dataFromDB['subscription_list']
+                    for subscription in subscription_list:
+                        #for image_name in data['images']:
+                        notify_subscriptions(subscription, data['images'][0]['name'])
                  return {'id': build_id}
     except RepositoryNotFound:
         raise NotFound  
@@ -232,6 +240,5 @@ def remove_files(dir_location: str, pod_name: str, namespace: str):
 
 def delete_pod(name, namespace):
 	api_instance = client.CoreV1Api()
-	body = client.V1DeleteOptions()
 	api_response = api_instance.delete_namespaced_pod(name, namespace)
 	return api_response

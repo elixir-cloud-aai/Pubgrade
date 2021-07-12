@@ -81,7 +81,7 @@ def updateBuild(id: str, build_id: str):
 
 @log_traffic
 def postSubscription():
-    #test_create_user()
+    test_create_user()
     return register_subscription(request.headers['X-User-Id'], request.headers['X-User-Access-Token'], request.json)
 
 @log_traffic

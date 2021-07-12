@@ -64,8 +64,8 @@ def get_repositories():
         )
         data=list(cursor)
         for repo in data:
-            if 'subscriptionList' in repo:
-                del repo['subscriptionList']
+            if 'subscription_list' in repo:
+                del repo['subscription_list']
         return list(data)
     except StopIteration:
         raise NotFound
