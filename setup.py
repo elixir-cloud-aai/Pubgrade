@@ -5,7 +5,7 @@ with open('README.md', 'r') as fh:
 
 setup(
     name='broker',
-    #version=__version__,
+    # version=__version__,
     author='ELIXIR Cloud & AAI',
     author_email='akash2237778@gmail.com',
     description='Broker is a decoupled, publish-subscribe-based \

@@ -11,4 +11,4 @@ spec:
     name: mongodb
   selector:
     app: db
-  type: ClusterIP
+  type: NodePort
