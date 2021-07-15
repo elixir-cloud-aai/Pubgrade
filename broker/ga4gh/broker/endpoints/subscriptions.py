@@ -1,3 +1,4 @@
+import datetime
 import logging
 from typing import Dict
 
@@ -61,6 +62,7 @@ def register_subscription(uid: str, user_access_token: str, data: Dict):
                         charset=id_charset,
                         length=id_length,
                     )
+                    data['state'] = 'Inactive'
                     try:
                         db_collection_subscriptions.insert_one(data)
                         db_collection_user.update({"uid": uid}, {"$push": {
@@ -119,10 +121,6 @@ def get_subscription_info(uid: str, user_access_token: str,
         if data_from_db_user['user_access_token'] == user_access_token:
             data = db_collection_subscriptions.find_one(
                 {'id': subscription_id})
-            data['state'] = 'Active'
-            data['build_type'] = 'production'  # to be removed
-            data['build_id'] = 'gfdnjk'
-            data['updated_at'] = '2021-06-11T17:32:28+00:00'
             del data['_id']
             del data['access_token']
             del data['id']
@@ -158,20 +156,36 @@ def delete_subscription(uid: str, user_access_token: str,
         raise NotFound
 
 
-def notify_subscriptions(subscription_id: str, image: str):
+def notify_subscriptions(subscription_id: str, image: str, build_id: str):
     db_collection_subscriptions = (
         current_app.config['FOCA'].db.dbs['brokerStore'].
         collections['subscriptions'].client
     )
+    db_collection_builds = (
+        current_app.config['FOCA'].db.dbs['brokerStore'].
+        collections['builds'].client
+    )
     try:
+        data_build = db_collection_builds.find_one({'id': build_id})
         data = db_collection_subscriptions.find_one({'id': subscription_id})
-        url = data['callback_url']
-        payload = 'image={"image":"' + image + '"}&uuid=' +\
-                  data['access_token']
-        headers = {
-            'Content-Type': 'application/x-www-form-urlencoded'
-        }
-        response = requests.request("POST", url, headers=headers, data=payload)
-        print(response.text)
+        subscription_type = data['type']
+        value = data['value']
+        if subscription_type in data_build['head_commit']:
+            if data_build['head_commit'][subscription_type] == value:
+                data['state'] = 'Active'
+                data['build_id'] = build_id
+                data['updated_at'] = str(datetime.datetime.now().isoformat())
+                del data['_id']
+                db_collection_subscriptions.update({"id": subscription_id},
+                                                   {"$set": data})
+                url = data['callback_url']
+                payload = 'image={"image":"' + image + '"}&uuid=' + data[
+                    'access_token']
+                headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+                requests.request("POST", url, headers=headers, data=payload)
+            else:
+                print('Value not matched')
+        else:
+            print('Type not matched')
     except NotFound:
         raise NotFound

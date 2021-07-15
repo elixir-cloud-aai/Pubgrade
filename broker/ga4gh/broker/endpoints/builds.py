@@ -98,12 +98,11 @@ def get_builds(repository_id: str):
     data_from_db = db_collection_repositories.find_one({'id': repository_id})
     if data_from_db is not None:
         for build_id in data_from_db['buildList']:
-            build_data = get_build_info(repository_id, build_id)
+            build_data = get_build_info(build_id)
             build_data['id'] = build_id
             data.append(build_data)
         logger.info('mData   : ' + str(data))
         # get_build_info()
-        del data['dockerhub_token']
         return data
     else:
         raise NotFound
@@ -266,7 +265,8 @@ def build_completed(repository_id: str, build_id: str,
                     for subscription in subscription_list:
                         # for image_name in data['images']:
                         notify_subscriptions(subscription,
-                                             data['images'][0]['name'])
+                                             data['images'][0]['name'],
+                                             build_id)
                 return {'id': build_id}
     except RepositoryNotFound:
         raise NotFound

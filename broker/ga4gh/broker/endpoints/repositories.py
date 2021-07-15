@@ -85,12 +85,14 @@ def generate_id(
         length: Length of returned string.
     Returns:
         Random string of specified length and composed of defined set of
-        allowed characters.
+        allowed characters except '_' and '.' or '-' at index 0 and length-1
     """
     generated_string = ''
     counter = 0
     while counter < length:
         random_char = choice(charset)
+        if random_char in '_':
+            continue
         if counter == 0 or counter == (length - 1):
             if random_char in '.-' or random_char in string.digits:
                 continue
