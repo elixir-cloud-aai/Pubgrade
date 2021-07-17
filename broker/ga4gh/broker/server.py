@@ -22,7 +22,6 @@ from broker.ga4gh.broker.endpoints.subscriptions import (
     get_subscription_info,
     get_subscriptions,
     register_subscription,
-    test_create_user
 )
 from tests.ga4gh.mock_data import MOCK_SUBSCRIPTION
 

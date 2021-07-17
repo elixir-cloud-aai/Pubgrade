@@ -60,6 +60,11 @@ endpoints:
         id_charset: [string.ascii_lowercase, string.digits , '.' , '-']
         id_length: 6
 
+exceptions:
+     required_members: [['msg'], ['status_code']]
+     status_member: ['status_code']
+     exceptions: broker.errors.exceptions.exceptions
+
 # log:
 #     version: 1
 #     disable_existing_loggers: False
@@ -77,8 +82,3 @@ endpoints:
 #     root:
 #         level: 10
 #         handlers: [console]
-
-# exceptions:
-#     required_members: [['msg'], ['status_code']]
-#     status_member: ['status_code']
-#     exceptions: broker.errors.exceptions.exceptions
