@@ -16,7 +16,7 @@ from werkzeug.exceptions import Unauthorized
 from broker.errors.exceptions import (NotFound,
                                       RepositoryNotFound,
                                       BuildNotFound, DeletePodError,
-                                      CreatePodError)
+                                      CreatePodError, WrongGitCommand)
 from broker.ga4gh.broker.endpoints.repositories import generate_id
 from broker.ga4gh.broker.endpoints.subscriptions import notify_subscriptions
 
@@ -164,7 +164,7 @@ def git_clone_and_checkout(repo_url: str, branch: str, commit: str,
         repo.git.checkout(commit)
         return clone_path
     except GitCommandError:
-        raise GitCommandError
+        raise WrongGitCommand
 
 
 def create_deployment_YAML(dockerfile: str, destination: str,

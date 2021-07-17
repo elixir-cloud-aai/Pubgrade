@@ -54,9 +54,9 @@ class RequestException(InternalServerError):
     pass
 
 
-# class GitCommandError(GitCommandError):
-#     """Raised when there is problem while cloning repository."""
-#     pass
+class WrongGitCommand(GitCommandError):
+    """Raised when there is problem while cloning repository."""
+    pass
 
 
 class ValidationError(Exception):
@@ -145,6 +145,10 @@ exceptions = {
     },
     RequestException: {
         "msg": "Unable to update deployment.",
+        "status_code": '500'
+    },
+    WrongGitCommand: {
+        "msg": "Git repository information is wrong",
         "status_code": '500'
     }
 }
