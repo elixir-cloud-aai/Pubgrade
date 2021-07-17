@@ -10,7 +10,7 @@ from werkzeug.exceptions import Unauthorized
 from broker.errors.exceptions import (
     InternalServerError,
     NotFound,
-    RepositoryNotFound
+    RepositoryNotFound, MongoError
 )
 
 logger = logging.getLogger(__name__)
@@ -72,7 +72,7 @@ def get_repositories():
                 del repo['subscription_list']
         return list(data)
     except StopIteration:
-        raise NotFound
+        raise RepositoryNotFound
 
 
 def generate_id(
@@ -113,8 +113,8 @@ def get_repository_info(id: str):
         if 'subscriptionList' in data:
             del data['subscriptionList']
         return data
-    except RepositoryNotFound:
-        raise NotFound
+    except StopIteration:
+        raise RepositoryNotFound
 
 
 def modify_repository_info(id: str, access_token: str, data: Dict):
@@ -134,12 +134,12 @@ def modify_repository_info(id: str, access_token: str, data: Dict):
                 )
                 del data['url']
                 return data
-            except RepositoryNotFound:
-                raise NotFound
+            except Exception:
+                raise MongoError
         else:
             raise Unauthorized
     else:
-        raise NotFound
+        raise RepositoryNotFound
 
 
 def delete_repository(id: str, access_token: str):
@@ -154,10 +154,10 @@ def delete_repository(id: str, access_token: str):
             try:
                 is_deleted = db_collection.delete_one({'id': id})
                 return is_deleted.deleted_count
-            except RepositoryNotFound:
-                logger.error('Not Found any repository with id:' + id)
-                raise NotFound
+            except Exception:
+                raise MongoError
         else:
             raise Unauthorized
     else:
-        raise NotFound
+        logger.error('Not Found any repository with id:' + id)
+        raise RepositoryNotFound

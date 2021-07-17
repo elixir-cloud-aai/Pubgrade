@@ -9,3 +9,5 @@ pymongo~=3.10.1
 Werkzeug~=1.0.1
 requests~=2.23.0
 connexion~=2.7.0
+mongomock~=3.19.0
+pytest~=5.4.3

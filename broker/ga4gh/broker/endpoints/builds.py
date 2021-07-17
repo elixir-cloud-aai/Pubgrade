@@ -9,11 +9,14 @@ from flask import (current_app)
 from git import Repo
 from git.exc import GitCommandError
 from kubernetes import client, config
+from kubernetes.client import ApiException
 from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized
 
 from broker.errors.exceptions import (NotFound,
-                                      RepositoryNotFound)
+                                      RepositoryNotFound,
+                                      BuildNotFound, DeletePodError,
+                                      CreatePodError)
 from broker.ga4gh.broker.endpoints.repositories import generate_id
 from broker.ga4gh.broker.endpoints.subscriptions import notify_subscriptions
 
@@ -76,17 +79,16 @@ def register_builds(repository_id: str, access_token: str, data: Dict):
                                  # db_collection_builds=db_collection_builds,
                                  dockerhub_token=data['dockerhub_token'],
                                  project_access_token=access_token)
-                    # data['status'] = "SUCCEEDED"
-                    # db_collection_builds.update_one({ "id": data['id'] },
-                    # {"$set": data })
                     break
                 except DuplicateKeyError:
+                    logger.log('Encountered DuplicateKeyError. Retrying... '
+                               + str(i) + ' times'.format(i))
                     continue
             return {'id': data['id']}
         else:
             raise Unauthorized
     else:
-        raise NotFound
+        raise RepositoryNotFound
 
 
 def get_builds(repository_id: str):
@@ -105,7 +107,7 @@ def get_builds(repository_id: str):
         # get_build_info()
         return data
     else:
-        raise NotFound
+        raise BuildNotFound
 
 
 def get_build_info(build_id: str):
@@ -120,8 +122,8 @@ def get_build_info(build_id: str):
         del data['id']
         del data['dockerhub_token']
         return data
-    except RepositoryNotFound:
-        raise NotFound
+    except StopIteration:
+        raise BuildNotFound
 
 
 def create_build(repo_url, branch, commit, base_dir, build_id,
@@ -229,8 +231,14 @@ def build_push_image_using_kaniko(deployment_file_location: str):
     v1 = client.CoreV1Api()
     with open(deployment_file_location) as f:
         dep = yaml.safe_load(f)
-        resp = v1.create_namespaced_pod(
-            body=dep, namespace=namespace)
+        try:
+            resp = v1.create_namespaced_pod(
+                body=dep, namespace=namespace)
+        except ApiException as e:
+            logger.error("Exception when calling "
+                         "AppsV1Api->create_namespaced_pod: "
+                         "%s\n" % e)
+            raise CreatePodError
         print("Deployment created. status='%s'" % resp.metadata.name)
 
 
@@ -278,6 +286,12 @@ def remove_files(dir_location: str, pod_name: str, namespace: str):
 
 
 def delete_pod(name, namespace):
-    api_instance = client.CoreV1Api()
-    api_response = api_instance.delete_namespaced_pod(name, namespace)
-    return api_response
+    try:
+        api_instance = client.CoreV1Api()
+        api_response = api_instance.delete_namespaced_pod(name, namespace)
+        return api_response
+    except ApiException as e:
+        logger.error("Exception when calling "
+                     "AppsV1Api->delete_namespaced_deployment: "
+                     "%s\n" % e)
+        raise DeletePodError

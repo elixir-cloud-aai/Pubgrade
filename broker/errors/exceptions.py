@@ -4,6 +4,7 @@ from connexion.exceptions import (
     Unauthorized,
     BadRequestProblem
 )
+from git import GitCommandError
 
 from werkzeug.exceptions import (
     BadRequest,
@@ -18,11 +19,6 @@ class AccessMethodNotFound(NotFound):
     pass
 
 
-class ObjectNotFound(NotFound):
-    """Raised when object with given object identifier was not found."""
-    pass
-
-
 class RepositoryNotFound(NotFound):
     """Raised when object with given repository identifier was not found."""
     pass
@@ -33,13 +29,48 @@ class BuildNotFound(NotFound):
     pass
 
 
+class SubscriptionNotFound(NotFound):
+    """Raised when object with given subscription identifier was not found."""
+    pass
+
+
+class UserNotFound(NotFound):
+    """Raised when user with given identifier was not found."""
+    pass
+
+
 class URLNotFound(NotFound):
     """Raised when Access URL for object was not found."""
     pass
 
 
+class MongoError(InternalServerError):
+    """Raised when Mongo operations raise an Unexpected error."""
+    pass
+
+
+class RequestException(InternalServerError):
+    """Raised when requesting side-car service for updates."""
+    pass
+
+
+# class GitCommandError(GitCommandError):
+#     """Raised when there is problem while cloning repository."""
+#     pass
+
+
 class ValidationError(Exception):
     """Value or object is not compatible with required type or schema."""
+
+
+class CreatePodError(InternalServerError):
+    """Raised when encountered error while creating pod."""
+    pass
+
+
+class DeletePodError(InternalServerError):
+    """Raised when encountered error while deleting pod."""
+    pass
 
 
 exceptions = {
@@ -71,20 +102,49 @@ exceptions = {
         "msg": "The requested resource wasn't found.",
         "status_code": '404',
     },
-    AccessMethodNotFound: {
-        "msg": "The requested access method wasn't found.",
-        "status_code": '404',
-    },
-    ObjectNotFound: {
-        "msg": "The requested `DrsObject` wasn't found.",
-        "status_code": '404',
-    },
-    URLNotFound: {
-        "msg": "The requested access URL wasn't found.",
-        "status_code": '404',
-    },
     InternalServerError: {
         "msg": "An unexpected error occurred",
         "status_code": '500',
     },
+    RepositoryNotFound: {
+        "msg": "The requested `Repository` is not found.",
+        "status_code": '404',
+    },
+    BuildNotFound: {
+        "msg": "The requested `Build` is not found.",
+        "status_code": '404',
+    },
+    UserNotFound: {
+        "msg": "User not found.",
+        "status_code": '404',
+    },
+    SubscriptionNotFound: {
+        "msg": "Subscription not found for this user.",
+        "status_code": '404',
+    },
+    ValidationError: {
+        "msg": "An unexpected error occurred while Mongo read/write/update",
+        "status_code": '500',
+    },
+    GitCommandError: {
+        "msg": "GitCommandError: An expected error occurred while cloning git "
+               "repository.",
+        "status_code": '500'
+    },
+    IOError: {
+        "msg": "Input/Output operation failed while creating deployment file.",
+        "status_code": '400'
+    },
+    DeletePodError: {
+        "msg": "Unable to delete pod check deployment name and namespace ENV.",
+        "status_code": "500"
+    },
+    CreatePodError: {
+        "msg": "Unable to create pod.",
+        "status_code": "500"
+    },
+    RequestException: {
+        "msg": "Unable to update deployment.",
+        "status_code": '500'
+    }
 }

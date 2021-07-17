@@ -4,8 +4,8 @@ from typing import Dict
 
 import requests
 from broker.errors.exceptions import (
-    NotFound,
-    RepositoryNotFound
+    RequestException,
+    RepositoryNotFound, UserNotFound, SubscriptionNotFound, BuildNotFound
 )
 from broker.ga4gh.broker.endpoints.repositories import generate_id
 from flask import current_app
@@ -79,7 +79,7 @@ def register_subscription(uid: str, user_access_token: str, data: Dict):
         else:
             raise Unauthorized
     else:
-        raise NotFound
+        raise UserNotFound
 
 
 def get_subscriptions(uid: str, user_access_token: str):
@@ -91,19 +91,19 @@ def get_subscriptions(uid: str, user_access_token: str):
     if data_from_db_user is not None:
         if data_from_db_user['user_access_token'] == user_access_token:
             try:
-                data = db_collection_user.find(
-                    {'uid': uid},
-                    {'access_token': False, '_id': False}).limit(1).next()
+                # data = db_collection_user.find(
+                #     {'uid': uid},
+                #     {'access_token': False, '_id': False}).limit(1).next()
                 response_data = []
-                for subscription_id in data['subscription_list']:
+                for subscription_id in data_from_db_user['subscription_list']:
                     response_data.append({'subscription_id': subscription_id})
                 return response_data
-            except KeyError:
-                raise KeyError
+            except SubscriptionNotFound:
+                raise SubscriptionNotFound
         else:
             raise Unauthorized
     else:
-        raise NotFound
+        raise UserNotFound
 
 
 def get_subscription_info(uid: str, user_access_token: str,
@@ -119,16 +119,19 @@ def get_subscription_info(uid: str, user_access_token: str,
     data_from_db_user = db_collection_user.find_one({'uid': uid})
     if data_from_db_user is not None:
         if data_from_db_user['user_access_token'] == user_access_token:
-            data = db_collection_subscriptions.find_one(
-                {'id': subscription_id})
-            del data['_id']
-            del data['access_token']
-            del data['id']
-            return data
+            try:
+                data = db_collection_subscriptions.find_one(
+                    {'id': subscription_id})
+                del data['_id']
+                del data['access_token']
+                del data['id']
+                return data
+            except SubscriptionNotFound:
+                raise SubscriptionNotFound
         else:
             raise Unauthorized
     else:
-        raise NotFound
+        raise UserNotFound
 
 
 def delete_subscription(uid: str, user_access_token: str,
@@ -147,13 +150,13 @@ def delete_subscription(uid: str, user_access_token: str,
             try:
                 data = db_collection_subscriptions.delete_one(
                     {'id': subscription_id})
-            except NotFound:
-                raise NotFound
+            except SubscriptionNotFound:
+                raise SubscriptionNotFound
             return data.deleted_count
         else:
             raise Unauthorized
     else:
-        raise NotFound
+        raise UserNotFound
 
 
 def notify_subscriptions(subscription_id: str, image: str, build_id: str):
@@ -167,25 +170,61 @@ def notify_subscriptions(subscription_id: str, image: str, build_id: str):
     )
     try:
         data_build = db_collection_builds.find_one({'id': build_id})
-        data = db_collection_subscriptions.find_one({'id': subscription_id})
-        subscription_type = data['type']
-        value = data['value']
-        if subscription_type in data_build['head_commit']:
-            if data_build['head_commit'][subscription_type] == value:
-                data['state'] = 'Active'
-                data['build_id'] = build_id
-                data['updated_at'] = str(datetime.datetime.now().isoformat())
-                del data['_id']
-                db_collection_subscriptions.update({"id": subscription_id},
-                                                   {"$set": data})
-                url = data['callback_url']
-                payload = 'image={"image":"' + image + '"}&uuid=' + data[
-                    'access_token']
-                headers = {'Content-Type': 'application/x-www-form-urlencoded'}
-                requests.request("POST", url, headers=headers, data=payload)
+        try:
+            data = db_collection_subscriptions.find_one({'id':
+                                                        subscription_id})
+            subscription_type = data['type']
+            value = data['value']
+            if subscription_type in data_build['head_commit']:
+                if data_build['head_commit'][subscription_type] == value:
+                    data['state'] = 'Active'
+                    data['build_id'] = build_id
+                    data['updated_at'] = str(
+                        datetime.datetime.now().isoformat())
+                    del data['_id']
+                    db_collection_subscriptions.update({"id": subscription_id},
+                                                       {"$set": data})
+                    url = data['callback_url']
+                    payload = 'image={"image":"' + image + '"}&uuid=' + data[
+                        'access_token']
+                    headers = {'Content-Type': 'application/x-www-form'
+                                               '-urlencoded'}
+                    try:
+                        requests.request("POST", url, headers=headers,
+                                         data=payload)
+                    except requests.exceptions.Timeout:
+                        # retry
+                        data['state'] = 'Inactive'
+                        data['updated_at'] = str(
+                            datetime.datetime.now().isoformat())
+                        del data['_id']
+                        db_collection_subscriptions.update(
+                            {"id": subscription_id},
+                            {"$set": data})
+                        raise RequestException
+                    except requests.exceptions.TooManyRedirects:
+                        data['state'] = 'Inactive'
+                        data['updated_at'] = str(
+                            datetime.datetime.now().isoformat())
+                        del data['_id']
+                        db_collection_subscriptions.update(
+                            {"id": subscription_id},
+                            {"$set": data})
+                        raise RequestException
+                    except requests.exceptions.RequestException as e:
+                        data['state'] = 'Inactive'
+                        data['updated_at'] = str(
+                            datetime.datetime.now().isoformat())
+                        del data['_id']
+                        db_collection_subscriptions.update(
+                            {"id": subscription_id},
+                            {"$set": data})
+                        raise RequestException
+                else:
+                    print('Value not matched')
             else:
-                print('Value not matched')
-        else:
-            print('Type not matched')
-    except NotFound:
-        raise NotFound
+                print('Type not matched')
+        except SubscriptionNotFound:
+            raise SubscriptionNotFound
+    except BuildNotFound:
+        raise BuildNotFound
