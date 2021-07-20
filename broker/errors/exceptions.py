@@ -39,8 +39,8 @@ class UserNotFound(NotFound):
     pass
 
 
-class URLNotFound(NotFound):
-    """Raised when Access URL for object was not found."""
+class URLNotFound(BadRequest):
+    """Raised when repository URL for object was not found."""
     pass
 
 
@@ -150,5 +150,9 @@ exceptions = {
     WrongGitCommand: {
         "msg": "Git repository information is wrong",
         "status_code": '500'
+    },
+    URLNotFound: {
+        "msg": "Repository URL not found in the request.",
+        "status_request": '400'
     }
 }
