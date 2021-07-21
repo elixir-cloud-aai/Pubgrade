@@ -50,7 +50,8 @@ class MongoError(InternalServerError):
 
 
 class RequestException(InternalServerError):
-    """Raised when requesting side-car service for updates."""
+    """Raised when something unexpected happen while requesting side-car
+    service for deploying updates."""
     pass
 
 

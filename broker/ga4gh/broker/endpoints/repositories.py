@@ -22,8 +22,8 @@ def register_repository(data: Dict):
          data: Dictionary element of request received.
 
     Returns:
-        repository_object: Dictionary element of Repository created along with
-        identifier and access_token.
+        repository_object: Dictionary element of Repository created (
+        identifier and access_token).
 
     Description:
         - Takes request data.
