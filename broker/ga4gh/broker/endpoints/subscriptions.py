@@ -300,7 +300,7 @@ def notify_subscriptions(subscription_id: str, image: str, build_id: str):
         - Update subscription object for state, build_id and update timestamp.
         - Update on subscription collection too.
         - Create payload to request updates at deployment.
-        -
+        - Send a request to deployment(side-car service).
 
     """
     db_collection_subscriptions = (
