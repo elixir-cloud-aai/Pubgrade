@@ -70,7 +70,7 @@ class CreatePodError(InternalServerError):
 
 
 class DeletePodError(InternalServerError):
-    """Raised when encountered error while deleting pod."""
+    """Raised when encountered an error while deleting pod."""
     pass
 
 

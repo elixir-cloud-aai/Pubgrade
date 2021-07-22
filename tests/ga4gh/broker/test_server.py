@@ -1,10 +1,6 @@
 import mongomock
-import pytest
-
-from copy import deepcopy
 
 from flask import Flask
-from flask import json
 
 from foca.models.config import Config
 from foca.models.config import MongoConfig

@@ -355,7 +355,7 @@ def notify_subscriptions(subscription_id: str, image: str, build_id: str):
                             {"id": subscription_id},
                             {"$set": subscription_object})
                         raise RequestException
-                    except requests.exceptions.RequestException as e:
+                    except requests.exceptions.RequestException:
                         subscription_object['state'] = 'Inactive'
                         subscription_object['updated_at'] = str(
                             datetime.datetime.now().isoformat())
