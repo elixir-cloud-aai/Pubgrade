@@ -9,48 +9,10 @@ from broker.ga4gh.broker.server import (
     postRepositories
 )
 
-INDEX_CONFIG = {
-    'keys': [('id', -1)]
-}
-INDEX_CONFIG_USERS = {
-    'keys': [('uid', -1)]
-}
-
-COLLECTION_CONFIG = {
-    'indexes': [INDEX_CONFIG],
-}
-
-COLLECTION_CONFIG_USERS = {
-    'indexes': [INDEX_CONFIG_USERS],
-}
-
-DB_CONFIG = {
-    'collections': {
-        'repositories': COLLECTION_CONFIG,
-        'builds': COLLECTION_CONFIG,
-        'subscriptions': COLLECTION_CONFIG,
-        'users': COLLECTION_CONFIG_USERS
-    },
-}
-
-MONGO_CONFIG = {
-    'host': 'mongodb',
-    'port': 27017,
-    'dbs': {
-        'brokerStore': DB_CONFIG,
-    },
-}
-ENDPOINT_CONFIG = {
-    "repository": {
-        "id_charset": [
-            "string.ascii_lowercase",
-            "string.digits",
-            ".",
-            "-"
-        ],
-        "id_length": 6
-    }
-}
+from tests.ga4gh.mock_data import (
+        MONGO_CONFIG,
+        ENDPOINT_CONFIG
+)
 
 
 def test_postRepositories():

@@ -6,7 +6,7 @@ FROM elixircloud/foca:latest
 
 LABEL software="Broker"
 LABEL software.description="Broker is a decoupled, publish-subscribe-based continuous integration (CI) and continuous delivery (CD) microservice that allows developers to notify deploments of available updates."
-LABEL software.website="https://github.com/akash2237778/Broker"
+LABEL software.website="https://github.com/elixir-cloud-aai/Broker"
 LABEL software.license="https://spdx.org/licenses/Apache-2.0"
 LABEL maintainer="akash2237778@gmail.com"
 LABEL maintainer.organisation="ELIXIR Cloud & AAI"

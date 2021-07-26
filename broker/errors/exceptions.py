@@ -152,8 +152,8 @@ exceptions = {
         "msg": "Git repository information is wrong",
         "status_code": '500'
     },
-    URLNotFound: {
-        "msg": "Repository URL not found in the request.",
-        "status_request": '400'
-    }
+    # URLNotFound: {
+    #     "msg": "Repository URL not found in the request.",
+    #     "status_request": '400'
+    # }
 }

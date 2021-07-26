@@ -16,6 +16,7 @@ spec:
      automountServiceAccountToken: true
      containers:
      - name: broker
+       imagePullPolicy: IfNotPresent
        image: akash7778/broker:v1.0.0
        ports:
        - containerPort: 8080
