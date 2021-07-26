@@ -2,6 +2,7 @@ import datetime
 import logging
 import os
 import shutil
+# import subprocess as sb
 from typing import (Dict)
 
 import yaml
@@ -233,6 +234,8 @@ def create_build(repo_url, branch, commit, base_dir, build_id,
         base_dir=base_dir,
         build_id=build_id
     )
+    # get_commit_list_from_repo_and_verify_commits(
+    # clone_path=clone_path, latest_commit_sha=commit, build_id=build_id)
     create_deployment_YAML(
         clone_path + '/' + dockerfile_location,
         registry_destination,
@@ -320,18 +323,18 @@ def create_deployment_YAML(dockerfile_location: str, registry_destination: str,
             'claimName'] = os.getenv('PV_NAME')
         data['spec']['containers'][0]['volumeMounts'][1][
             'subPath'] = config_file_location
-        data['spec']['containers'][0]['lifecycle']['preStop']['exec'][
-            'command'] = ["/bin/sh",
-                          "curl --location --request PUT 'http://{"
-                          "service_url}:{service_port}/repositories/{"
-                          "repo_id}/builds/{build_id}' --header "
-                          "'X-Project-Access-Token: {project_access_token}' "
-                          "--header 'Content-Type: application/json' "
-                          "--data-raw '{{ \"id\": \"{build_id}\" }}'".format(
-                              service_url='broker-service.broker',
-                              service_port='5000', repo_id=build_id[0:6],
-                              build_id=build_id,
-                              project_access_token=project_access_token)]
+        data['spec']['containers'][0]['env'][0]['value'] = \
+            build_id  # BUILDNAME
+        data['spec']['containers'][0]['env'][1]['value'] = \
+            project_access_token  # ACCESSTOKEN
+        if os.getenv('NAMESPACE'):
+            data['spec']['containers'][0]['env'][2]['value'] = os.getenv(
+                'NAMESPACE')  # NAMESPACE
+        else:
+            data['spec']['containers'][0]['env'][2]['value'] = 'default'
+        data['spec']['containers'][0]['env'][3]['value'] = \
+            'http://broker-service.broker'  # BROKER_URL
+        data['spec']['containers'][0]['env'][4]['value'] = '8080'  # PORT
         with open(deployment_file_location, 'w') as yaml_file:
             yaml_file.write(yaml.dump(data, default_flow_style=False))
         return deployment_file_location
@@ -502,3 +505,61 @@ def delete_pod(name, namespace):
                      "AppsV1Api->delete_namespaced_deployment: "
                      "%s\n" % e)
         raise DeletePodError
+
+
+# Needs gpg setup and public key at service.
+# def get_commit_list_from_repo_and_verify_commits(clone_path: str,
+#                                                  latest_commit_sha: str,
+#                                                  build_id: str,
+#                                                  previous_commit_sha=None):
+#     current_path = os.getcwd()
+#     os.chdir(clone_path)
+#     are_all_verified = False
+#     p, q = sb.getstatusoutput("git log --oneline")
+#     if p == 0:
+#         commit_list = q.split("\n")
+#         commit_sha_list = []
+#         for i in reversed(commit_list):
+#             if i.split(" ")[0] == latest_commit_sha:
+#                 break
+#             commit_sha_list.append(i.split(" ")[0])
+#         if previous_commit_sha is None:
+#             are_all_verified = verified_commits(commit_sha_list[0],
+#                                                 commit_sha_list)
+#         else:
+#             are_all_verified = verified_commits(previous_commit_sha,
+#                                                 commit_sha_list)
+#         db_collection_builds = (
+#             current_app.config['FOCA'].db.dbs['brokerStore'].
+#             collections['builds'].client
+#         )
+#         data = db_collection_builds.find(
+#             {'id': build_id}, {'_id': False}
+#         ).limit(1).next()
+#         data['commits_verified'] = are_all_verified
+#         db_collection_builds.update_one({"id": data['id']},
+#                                         {"$set": data})
+#     else:
+#         print('unable to fetch commit list')
+#     os.chdir(current_path)
+#     return are_all_verified
+#
+#
+# def verified_commits(previous_commit_sha: str, commit_list: list):
+#     verified_commits_list = []
+#     previous_commit_found = False
+#     for i in commit_list:
+#         if previous_commit_sha == i:
+#             previous_commit_found = True
+#             continue
+#         if not previous_commit_found:
+#             continue
+#         # if to_commit == i:
+#         #     break
+#         p, q = sb.getstatusoutput("git verify-commit " + i)
+#         if p == 0:
+#             verified_commits_list.append(i)
+#     if len(verified_commits_list) == 0:
+#         return False
+#     else:
+#         return True

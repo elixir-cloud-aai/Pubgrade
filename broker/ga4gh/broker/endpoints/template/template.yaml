@@ -10,10 +10,17 @@ spec:
     - --context=/file/sGwDmb.ls~_i/drs-filer
     image: gcr.io/kaniko-project/executor:v0.22.0
     name: kaniko
-    lifecycle:
-      preStop:
-        exec:
-          command: ["/bin/sh", "curl "] # create a callback to update timestamp,remove temp files and trigger subscriptions
+    env:
+      - name: BUILDNAME
+        value: 'BUILDNAME'
+      - name: ACCESSTOKEN
+        value: 'ACCESS_TOKEN'
+      - name: NAMESPACE
+        value: 'NAMESPACE'
+      - name: BROKER_URL
+        value: 'BROKER_URL'
+      - name: BROKER_PORT
+        value: 'BROKER_PORT'
     volumeMounts:
     - mountPath: /broker_temp_files
       name: pv-storage
