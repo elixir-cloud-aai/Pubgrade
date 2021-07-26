@@ -320,18 +320,18 @@ def create_deployment_YAML(dockerfile_location: str, registry_destination: str,
             'claimName'] = os.getenv('PV_NAME')
         data['spec']['containers'][0]['volumeMounts'][1][
             'subPath'] = config_file_location
-        data['spec']['containers'][0]['lifecycle']['preStop']['exec'][
-            'command'] = ["/bin/sh",
-                          "curl --location --request PUT 'http://{"
-                          "service_url}:{service_port}/repositories/{"
-                          "repo_id}/builds/{build_id}' --header "
-                          "'X-Project-Access-Token: {project_access_token}' "
-                          "--header 'Content-Type: application/json' "
-                          "--data-raw '{{ \"id\": \"{build_id}\" }}'".format(
-                              service_url='broker-service.broker',
-                              service_port='5000', repo_id=build_id[0:6],
-                              build_id=build_id,
-                              project_access_token=project_access_token)]
+        data['spec']['containers'][0]['env'][0]['value'] =\
+            build_id  # BUILDNAME
+        data['spec']['containers'][0]['env'][1]['value'] = \
+            project_access_token  # ACCESSTOKEN
+        if os.getenv('NAMESPACE'):
+            data['spec']['containers'][0]['env'][2]['value'] = os.getenv(
+                'NAMESPACE')  # NAMESPACE
+        else:
+            data['spec']['containers'][0]['env'][2]['value'] = 'default'
+        data['spec']['containers'][0]['env'][3]['value'] = \
+            'http://broker-service.broker'  # BROKER_URL
+        data['spec']['containers'][0]['env'][4]['value'] = '8080'  # PORT
         with open(deployment_file_location, 'w') as yaml_file:
             yaml_file.write(yaml.dump(data, default_flow_style=False))
         return deployment_file_location

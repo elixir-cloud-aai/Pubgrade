@@ -1,0 +1,18 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: build-complete-updater
+spec:
+ replicas: 1
+ selector:
+   matchLabels:
+     app: broker
+ template:
+   metadata:
+     labels:
+       app: broker
+   spec:
+          containers:
+          - image: akash7778/notify-completion
+            name: notify-completion
+            imagePullPolicy: Never
