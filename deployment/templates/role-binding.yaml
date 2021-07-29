@@ -4,9 +4,9 @@ metadata:
   name: manage-pods
   namespace: {{ .Release.Namespace }}
 subjects:
-- kind: User
+- kind: ServiceAccount
   name: broker 
-  apiGroup: rbac.authorization.k8s.io
+  namespace: {{ .Release.Namespace }}
 roleRef:
   kind: Role
   name: role-broker 

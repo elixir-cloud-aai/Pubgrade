@@ -12,7 +12,9 @@ spec:
      labels:
        app: broker
    spec:
+          serviceAccountName: broker
+          automountServiceAccountToken: true
           containers:
           - image: akash7778/notify-completion
             name: notify-completion
-            imagePullPolicy: Never
+            imagePullPolicy: IfNotPresent
