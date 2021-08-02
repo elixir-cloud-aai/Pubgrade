@@ -173,7 +173,6 @@ def getSubscriptions():
          """
     return get_subscriptions(request.headers['X-User-Id'],
                              request.headers['X-User-Access-Token'])
-    # return [MOCK_SUBSCRIPTION]
 
 
 @log_traffic
