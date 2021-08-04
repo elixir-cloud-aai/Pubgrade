@@ -9,7 +9,7 @@ from broker.ga4gh.broker.server import (
     postRepositories
 )
 
-from broker.tests.ga4gh.mock_data import (
+from tests.ga4gh.mock_data import (
         MONGO_CONFIG,
         ENDPOINT_CONFIG
 )
