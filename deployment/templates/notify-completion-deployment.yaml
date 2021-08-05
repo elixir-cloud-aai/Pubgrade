@@ -15,6 +15,6 @@ spec:
           serviceAccountName: broker
           automountServiceAccountToken: true
           containers:
-          - image: akash7778/notify-completion
+          - image: {{ .Values.imageNotifyCompletion }}
             name: notify-completion
             imagePullPolicy: IfNotPresent

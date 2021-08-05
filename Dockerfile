@@ -18,10 +18,7 @@ COPY ./ /app
 ## Install app
 RUN cd /app \
   && python setup.py develop \
-  && cd / \
   && chmod g+w /app/broker/api/ \
-  && pip install yq \
-  && pip install kubernetes \
-  && pip install gitpython
+  && pip install -r requirements.txt
 
 CMD ["bash", "-c", "cd /app/broker; python app.py"]

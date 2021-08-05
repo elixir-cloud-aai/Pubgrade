@@ -550,70 +550,70 @@ paths:
         default:
           $ref: '#/components/responses/Error'
   /subscriptions/{subscription_id}:
-    put:
-      summary: Modify created subscription
-      description: Modify schema values for already created subscriptions.
-      operationId: modifySubscription
-      tags:
-        - subscriptions
-      parameters:
-        - in: path
-          name: subscription_id
-          required: true
-          schema:
-            type: string
-          description: Identifier generated when registering new subscription 
-            via `POST /subscriptions`
-        - in: header
-          name: X-User-Access-Token
-          required: true
-          schema:
-            type: string
-          description: Secret used to verify and uniquely identify administrator
-           in order to perform their specific tasks.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              allOf:
-                - $ref: '#/components/schemas/Subscription'
-                - type: object
-                  properties:
-                    access_token:
-                        type: string
-                        description: Secret used by continuous delivery (CD) 
-                          pipelines to verify request source for `callback_url`.
-                        example: xxxxxxxxxxxx
-              required:
-                - repository_id
-                - callback_url
-                - access_token
-              #additionalProperties: false
-      responses:
-        '200':
-          description: 'Service successfully created'
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                    subscription_id:
-                      type: string
-                      description: Identifier which is generated on registering 
-                        new subscription via `POST /subcriptions`
-                      example: subscription-xyz
-                additionalProperties: false
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-        default:
-          $ref: '#/components/responses/Error'
+#    put:
+#      summary: Modify created subscription
+#      description: Modify schema values for already created subscriptions.
+#      operationId: modifySubscription
+#      tags:
+#        - subscriptions
+#      parameters:
+#        - in: path
+#          name: subscription_id
+#          required: true
+#          schema:
+#            type: string
+#          description: Identifier generated when registering new subscription
+#            via `POST /subscriptions`
+#        - in: header
+#          name: X-User-Access-Token
+#          required: true
+#          schema:
+#            type: string
+#          description: Secret used to verify and uniquely identify administrator
+#           in order to perform their specific tasks.
+#      requestBody:
+#        required: true
+#        content:
+#          application/json:
+#            schema:
+#              allOf:
+#                - $ref: '#/components/schemas/Subscription'
+#                - type: object
+#                  properties:
+#                    access_token:
+#                        type: string
+#                        description: Secret used by continuous delivery (CD)
+#                          pipelines to verify request source for `callback_url`.
+#                        example: xxxxxxxxxxxx
+#              required:
+#                - repository_id
+#                - callback_url
+#                - access_token
+#              #additionalProperties: false
+#      responses:
+#        '200':
+#          description: 'Service successfully created'
+#          content:
+#            application/json:
+#              schema:
+#                type: object
+#                properties:
+#                    subscription_id:
+#                      type: string
+#                      description: Identifier which is generated on registering
+#                        new subscription via `POST /subcriptions`
+#                      example: subscription-xyz
+#                additionalProperties: false
+#        '400':
+#          $ref: '#/components/responses/BadRequest'
+#        '401':
+#          $ref: '#/components/responses/Unauthorized'
+#        '403':
+#          $ref: '#/components/responses/Forbidden'
+#        '500':
+#          $ref: '#/components/responses/InternalServerError'
+#        default:
+#          $ref: '#/components/responses/Error'
     get:
       summary: Show information for specified subscription.
       description: Show various information like state, update time, build
