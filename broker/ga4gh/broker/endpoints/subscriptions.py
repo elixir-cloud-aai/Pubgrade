@@ -100,9 +100,9 @@ def register_subscription(uid: str, user_access_token: str, data: Dict):
                     data['state'] = 'Inactive'
                     try:
                         db_collection_subscriptions.insert_one(data)
-                        db_collection_user.update({"uid": uid}, {"$push": {
+                        db_collection_user.update_one({"uid": uid}, {"$push": {
                             "subscription_list": data['id']}})
-                        db_collection_repositories.update(
+                        db_collection_repositories.update_one(
                             {"id": data['repository_id']},
                             {"$push": {"subscription_list": data['id']}})
                         break

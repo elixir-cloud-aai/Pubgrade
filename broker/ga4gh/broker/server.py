@@ -2,8 +2,8 @@
 
 from flask import request
 from foca.utils.logging import log_traffic
-from werkzeug.exceptions import NotFound
 
+from broker.errors.exceptions import RepositoryNotFound, SubscriptionNotFound
 from broker.ga4gh.broker.endpoints.builds import (
     build_completed,
     get_build_info,
@@ -90,7 +90,7 @@ def deleteRepository(id: str):
 
     """
     if delete_repository(id, request.headers['X-Project-Access-Token']) == 0:
-        raise NotFound
+        raise RepositoryNotFound
     else:
         return {"message": "Repository deleted successfully"}
 
@@ -208,7 +208,7 @@ def deleteSubscription(subscription_id: str):
     if delete_subscription(request.headers['X-User-Id'],
                            request.headers['X-User-Access-Token'],
                            subscription_id) == 0:
-        raise NotFound
+        raise SubscriptionNotFound
     else:
         MOCK_SUBSCRIPTION['subscription_id'] = subscription_id
         return MOCK_SUBSCRIPTION

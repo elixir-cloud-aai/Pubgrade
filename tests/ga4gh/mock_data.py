@@ -43,44 +43,76 @@ ENDPOINT_CONFIG = {
     }
 }
 
-
-MOCK_REPOSITORY = {
-   "url": "https://localhost:8080/repositories",
-   "id": "repo_123"
+MOCK_REPOSITORY_1 = {
+    "url": "https://github.com/akash2237778/Broker-test",
+    "id": "repo_123",
+    "access_token": "access_token"
 }
+MOCK_REPOSITORY_1 = {
+    "url": "https://github.com/akash2237778/Broker-test",
+    "id": "repo_123",
+    "access_token": "access_token"
+}
+
+MOCK_REPOSITORY_2 = {
+    "url": "https://github.com/akash2237778/Broker-test",
+    "id": "eiic.g",
+    "access_token": "g.i.ssstitrti.ccier.tgsactt.iosg",
+    "buildList": ["eiic.gngdgrs"], "subscription_list": ["tnglot"]
+}
+MOCK_REPOSITORIES = [
+    MOCK_REPOSITORY_1,
+    MOCK_REPOSITORY_2
+]
 MOCK_POST_REPOSITORY = {
-   "access_token": "xxxxxxxxxxxxxx",
-   "id": "repository_123"
+    "access_token": "xxxxxxxxxxxxxx",
+    "id": "repository_123"
 }
 
 MOCK_BUILD_INFO = {
-   "images": [
-      {
-         "name": "akash7778/broker:0.0.1",
-         "location": "./Dockerfile"
-      },
-      {
-         "name": "akash7778/broker:0.0.1",
-         "location": "./Dockerfile"
-      }
-   ],
-   "head_commit": {
-      "branch": "development",
-      "commit_sha": "930fd5"
-   },
-   "status": "UNKNOWN",
-   "started_at": "2021-06-11T17:32:28Z",
-   "finished_at": "2021-06-11T17:32:28Z"
+    "images": [
+        {"name": "akash7778/test-updater:0.0.1", "location": "./Dockerfile"}],
+    "head_commit": {"branch": "main",
+                    "commit_sha": "8cd58eb160014c91e4f181562352"
+                                  "c693d3442c52"},
+    "dockerhub_token": "dockerhub token",
+    "id": "eiic.gngdgrs", "finished_at": "NULL",
+    "started_at": "2021-08-04T17:40:58.344809",
+    "status": "QUEUED", "commits_verified": False
+}
+
+MOCK_BUILD_PAYLOAD = {
+    "images": [
+        {
+            "name": "akash7778/test-updater:0.0.1",
+            "location": "./Dockerfile"
+        }
+    ],
+    "head_commit": {
+        "branch": "main",
+        "commit_sha": "8cd58eb160014c91e4f181562352c693d3442c52"
+    },
+    "dockerhub_token": "dockerhub token"
 }
 
 MOCK_SUBSCRIPTION = {
-   "subscription_id": "subscription-xyz"
+    "subscription_id": "subscription-xyz"
 }
 MOCK_SUBSCRIPTION_INFO = {
-   "callback_url": "https://ec2-54-203-145-132.compute-1.amazonaws.com/update",
-   "repository_id": "respository123",
-   "build_id": "build_123",
-   "build_type": "production",
-   "state": "Active",
-   "updated_at": "2021-06-11T17:32:28+00:00"
+    "repository_id": "eiic.g",
+    "callback_url": "https://ec2-54-203-145-132."
+                    "compute-1.amazonaws.com/update",
+    "access_token": "xxxxxxxxxxxx", "type": "tag",
+    "value": "dev", "id": "tnglot", "state": "Inactive"
+}
+
+MOCK_USER = {
+    'uid': '9fe2c4e93f654fdbb24c02b15259716c',
+    'user_access_token': 'c42a6d44e3d0'
+}
+
+MOCK_USER_DB = {
+    "uid": "9fe2c4e93f654fdbb24c02b15259716c", "name": "Akash",
+    "user_access_token": "c42a6d44e3d0",
+    "subscription_list": ["tnglot"]
 }

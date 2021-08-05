@@ -55,6 +55,7 @@ def register_builds(repository_id: str, access_token: str, build_data: Dict):
         - returns build_id.
     """
     retries = 3
+    base_dir = '/broker_temp_files'
     db_collection_builds = (
         current_app.config['FOCA'].db.dbs['brokerStore'].
         collections['builds'].client
@@ -85,9 +86,9 @@ def register_builds(repository_id: str, access_token: str, build_data: Dict):
                     charset=id_charset,
                     length=id_length,
                 )
-                db_collection_repositories.update({"id": repository_id},
-                                                  {"$push": {
-                                                      "buildList": build_data[
+                db_collection_repositories.update_one({"id": repository_id},
+                                                      {"$push": {
+                                                       "buildList": build_data[
                                                           'id']}})
                 try:
                     build_data['finished_at'] = "NULL"
@@ -99,7 +100,7 @@ def register_builds(repository_id: str, access_token: str, build_data: Dict):
                                  branch=build_data['head_commit']['branch'],
                                  commit=build_data['head_commit'][
                                      'commit_sha'],
-                                 base_dir='/broker_temp_files',
+                                 base_dir=base_dir,
                                  build_id=build_data['id'],
                                  dockerfile_location=build_data['images'][0][
                                      'location'],
