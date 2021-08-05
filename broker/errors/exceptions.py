@@ -49,13 +49,13 @@ class MongoError(InternalServerError):
     pass
 
 
-class RequestException(InternalServerError):
+class RequestNotSent(InternalServerError):
     """Raised when something unexpected happen while requesting side-car
     service for deploying updates."""
     pass
 
 
-class WrongGitCommand(GitCommandError):
+class WrongGitCommand(InternalServerError):
     """Raised when there is problem while cloning repository."""
     pass
 
@@ -92,7 +92,7 @@ exceptions = {
         "status_code": '400',
     },
     Unauthorized: {
-        "msg": " The request is unauthorized.",
+        "msg": "The request is unauthorized.",
         "status_code": '401',
     },
     Forbidden: {
@@ -132,7 +132,7 @@ exceptions = {
                "repository.",
         "status_code": '500'
     },
-    IOError: {
+    OSError: {
         "msg": "Input/Output operation failed while creating deployment file.",
         "status_code": '400'
     },
@@ -144,7 +144,7 @@ exceptions = {
         "msg": "Unable to create pod.",
         "status_code": "500"
     },
-    RequestException: {
+    RequestNotSent: {
         "msg": "Unable to update deployment.",
         "status_code": '500'
     },

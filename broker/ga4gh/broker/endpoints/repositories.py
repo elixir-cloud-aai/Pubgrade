@@ -8,8 +8,9 @@ from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized
 
 from broker.errors.exceptions import (
-    InternalServerError,
-    RepositoryNotFound, MongoError, URLNotFound
+    RepositoryNotFound,
+    URLNotFound,
+    InternalServerError
 )
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,7 @@ def register_repository(data: Dict):
         used later for operations like creating a new build, updating build
         completion.)
         - Inserts object in mongodb.
+        - Remove url from the repository_object
         - Returns id and access_token for the repository_object created.
 
     Raises:
@@ -72,21 +74,24 @@ def register_repository(data: Dict):
             charset=id_charset,
             length=id_length,
         )
+        access_token = str(generate_id(id_charset, 32))
+        repository_object['id'] = repo_id
+        repository_object['access_token'] = access_token
         try:
-            access_token = str(generate_id(id_charset, 32))
-            repository_object['id'] = repo_id
-            repository_object['access_token'] = access_token
             db_collection.insert_one(repository_object)
             break
         except DuplicateKeyError:
+            logger.error(f"DuplicateKeyError ({repo_id}): Key generated"
+                         f" is already present.")
             continue
     else:
         logger.error(
-            f"Could not generate unique identifier. Tried {retries + 1} times."
-        )
+                    f"Could not generate unique identifier."
+                    f" Tried {retries + 1} times."
+                )
         raise InternalServerError
-    del repository_object['_id']
-    del repository_object['url']
+    if repository_object is not None and 'url' in repository_object:
+        del repository_object['url']
     logger.info(f"Added object with '{repository_object}'.")
     return repository_object
 
@@ -111,17 +116,15 @@ def get_repositories():
         current_app.config['FOCA'].db.dbs['brokerStore'].
         collections['repositories'].client
     )
-    try:
-        cursor = db_collection.find(
-            {}, {'access_token': False, '_id': False}
-        )
-        repository_object = list(cursor)
-        for repo in repository_object:
-            if 'subscription_list' in repo:
-                del repo['subscription_list']
-        return list(repository_object)
-    except StopIteration:
-        raise RepositoryNotFound
+
+    cursor = db_collection.find(
+        {}, {'access_token': False, '_id': False}
+    )
+    repository_object = list(cursor)
+    for repo in repository_object:
+        if 'subscription_list' in repo:
+            del repo['subscription_list']
+    return list(repository_object)
 
 
 def generate_id(
@@ -185,6 +188,10 @@ def get_repository_info(repo_id: str):
             del repository_object['subscription_list']
         return repository_object
     except StopIteration:
+        logger.error(
+                    f"Could not find repository with given identifier: " +
+                    repo_id
+                )
         raise RepositoryNotFound
 
 
@@ -221,23 +228,20 @@ def modify_repository_info(repo_id: str, access_token: str, data: Dict):
         collections['repositories'].client
     )
     data_from_db = db_collection_repository.find_one({'id': repo_id})
-    if data_from_db is not None:
-        if data_from_db['access_token'] == access_token:
-            try:
-                data['id'] = repo_id
-                data['access_token'] = str(access_token)
-                db_collection_repository.replace_one(
-                    filter={'id': repo_id},
-                    replacement=data,
+    if data_from_db is None:
+        logger.error(
+                f"Could not find repository with given identifier: " + repo_id
                 )
-                del data['url']
-                return data
-            except Exception:
-                raise MongoError
-        else:
-            raise Unauthorized
-    else:
         raise RepositoryNotFound
+    if data_from_db['access_token'] != access_token:
+        raise Unauthorized
+    data['id'] = repo_id
+    data['access_token'] = str(access_token)
+    db_collection_repository.replace_one(
+        filter={'id': repo_id},
+        replacement=data)
+    del data['url']
+    return data
 
 
 def delete_repository(repo_id: str, access_token: str):
@@ -273,15 +277,10 @@ def delete_repository(repo_id: str, access_token: str):
     )
     # try:
     data = db_collection.find_one({'id': repo_id})
-    if data is not None:
-        if data['access_token'] == access_token:
-            try:
-                is_deleted = db_collection.delete_one({'id': repo_id})
-                return is_deleted.deleted_count
-            except Exception:
-                raise MongoError
-        else:
-            raise Unauthorized
-    else:
+    if data is None:
         logger.error('Not Found any repository with id:' + repo_id)
         raise RepositoryNotFound
+    if data['access_token'] != access_token:
+        raise Unauthorized
+    is_deleted = db_collection.delete_one({'id': repo_id})
+    return is_deleted.deleted_count

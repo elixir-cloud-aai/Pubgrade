@@ -5,9 +5,9 @@ metadata:
 spec:
   containers:
   - args:
-    - --dockerfile=/file/sGwDmb.ls~_i/drs-filer./Dockerfile
-    - --destination=akash7778/test-image:v0.0.1
-    - --context=/file/sGwDmb.ls~_i/drs-filer
+    - --dockerfile=/docker_file_path
+    - --destination=< Upload loaction for build image >
+    - --context=/docker_context_path
     image: gcr.io/kaniko-project/executor:v0.22.0
     name: kaniko
     env:
