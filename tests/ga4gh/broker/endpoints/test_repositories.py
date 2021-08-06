@@ -1,19 +1,19 @@
-"""Tests for /projects endpoint """
+"""Tests for /repositories endpoint """
 
 import mongomock
 import pytest
 from flask import Flask
-from foca.models.config import MongoConfig
 from foca.models.config import Config
+from foca.models.config import MongoConfig
+import string    # required at test_generate_id()
 from werkzeug.exceptions import Unauthorized
 
 from broker.errors.exceptions import URLNotFound, RepositoryNotFound
-from tests.ga4gh.mock_data import MONGO_CONFIG, ENDPOINT_CONFIG, \
-    MOCK_REPOSITORIES
-
 from broker.ga4gh.broker.endpoints.repositories import (
     register_repository, get_repositories, generate_id, get_repository_info,
     modify_repository_info, delete_repository)
+from tests.ga4gh.mock_data import MONGO_CONFIG, ENDPOINT_CONFIG, \
+    MOCK_REPOSITORIES
 
 
 class TestRepository:
