@@ -15,7 +15,7 @@ from broker.errors.exceptions import RepositoryNotFound, BuildNotFound, \
     WrongGitCommand
 from broker.ga4gh.broker.endpoints.builds import register_builds, get_builds, \
     get_build_info, git_clone_and_checkout, create_deployment_YAML, \
-    create_dockerhub_config_file
+    create_dockerhub_config_file, create_build
 import broker.ga4gh.broker.endpoints.builds as builds
 from tests.ga4gh.mock_data import ENDPOINT_CONFIG, MONGO_CONFIG, \
     MOCK_REPOSITORIES, MOCK_BUILD_PAYLOAD, MOCK_BUILD_INFO, MOCK_BUILD_INFO_2
@@ -28,6 +28,9 @@ def mocked_create_build(repo_url, branch, commit, base_dir, build_id,
     # Need a mock for kubernetes
     return 'working fine'
 
+
+def mocked_build_push_image_using_kaniko(deployment_file_location):
+    return 0
 
 class TestBuild:
     app = Flask(__name__)
@@ -197,3 +200,26 @@ class TestBuild:
         # f = open('config.json', "r")
         # pprint(f.readlines())
         os.remove('config.json')
+
+    @patch("broker.ga4gh.broker.endpoints.builds.build_push_image_using_kaniko",
+           mocked_build_push_image_using_kaniko)
+    def test_create_build(self):
+        builds.template_file = os.getcwd().split('Broker')[0] + \
+                               'Broker/broker/ga4gh/broker/endpoints/template/template.yaml'
+        os.mkdir('basedir')
+        os.mkdir('basedir/Broker-test')
+        f = open('basedir/Broker-test/Dockerfile', "w")
+        f.write("test dockerfile")
+        f.close()
+        create_build(
+            repo_url="https://github.com/akash2237778/Broker-test",
+            branch="main",
+            commit="8cd58eb",
+            base_dir="basedir",
+            build_id="build123",
+            dockerfile_location="basedir/Broker-test/Dockerfile",
+            registry_destination='registry_destination',
+            dockerhub_token='dockerhub_token',
+            project_access_token='access_token')
+        shutil.rmtree('basedir')
+
