@@ -8,8 +8,8 @@ from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized
 
 from broker.errors.exceptions import (
-    InternalServerError,
-    RepositoryNotFound, MongoError, URLNotFound
+    RepositoryNotFound,
+    URLNotFound
 )
 
 logger = logging.getLogger(__name__)
@@ -82,7 +82,8 @@ def register_repository(data: Dict):
             continue
     else:
         logger.error(
-                    f"Could not generate unique identifier. Tried {retries + 1} times."
+                    f"Could not generate unique identifier."
+                    f" Tried {retries + 1} times."
                 )
         raise DuplicateKeyError
     if repository_object is not None and '_id' in repository_object:
@@ -114,8 +115,7 @@ def get_repositories():
     )
 
     cursor = db_collection.find(
-        {}, {'access_token': False, '_id':
-        False}
+        {}, {'access_token': False, '_id': False}
     )
     repository_object = list(cursor)
     for repo in repository_object:

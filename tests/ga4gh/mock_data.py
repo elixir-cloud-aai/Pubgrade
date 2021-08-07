@@ -112,13 +112,14 @@ MOCK_SUBSCRIPTION_INFO = {
     "repository_id": "eiic.g",
     "callback_url": "https://ec2-54-203-145-132."
                     "compute-1.amazonaws.com/update",
-    "access_token": "xxxxxxxxxxxx", "type": "tag",
-    "value": "dev", "id": "tnglot", "state": "Inactive"
+    "access_token": "xxxxxxxxxxxx", "type": "branch",
+    "value": "main", "id": "tnglot", "state": "Inactive"
 }
 
 MOCK_USER = {
     'uid': '9fe2c4e93f654fdbb24c02b15259716c',
-    'user_access_token': 'c42a6d44e3d0'
+    'user_access_token': 'c42a6d44e3d0',
+    "name": "Akash"
 }
 
 MOCK_USER_DB = {

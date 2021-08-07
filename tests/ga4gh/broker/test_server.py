@@ -15,18 +15,35 @@ from broker.errors.exceptions import RepositoryNotFound
 from broker.ga4gh.broker.server import (
     getRepositories,
     postRepositories,
-    getRepository, putRepositories, deleteRepository, postBuild, getBuilds,
-    getBuildInfo, updateBuild, postSubscription, getSubscriptions,
-    getSubscriptionInfo, deleteSubscription
+    getRepository,
+    putRepositories,
+    deleteRepository,
+    postBuild,
+    getBuilds,
+    getBuildInfo,
+    updateBuild,
+    postSubscription,
+    getSubscriptions,
+    getSubscriptionInfo,
+    deleteSubscription
 )
 
 from tests.ga4gh.mock_data import (
     MONGO_CONFIG,
     ENDPOINT_CONFIG,
-    MOCK_REPOSITORIES, MOCK_BUILD_PAYLOAD, MOCK_BUILD_INFO,
-    MOCK_SUBSCRIPTION_INFO, MOCK_USER, MOCK_USER_DB, MOCK_BUILD_INFO_2,
+    MOCK_REPOSITORIES,
+    MOCK_BUILD_PAYLOAD,
+    MOCK_BUILD_INFO,
+    MOCK_SUBSCRIPTION_INFO,
+    MOCK_USER,
+    MOCK_USER_DB,
+    MOCK_BUILD_INFO_2,
     SUBSCRIPTION_PAYLOAD
 )
+
+
+def mocked_request_api(method, url, data, headers):
+    return 'successful'
 
 
 def test_getRepositories():
@@ -233,8 +250,7 @@ def mock_notify_subscriptions():
 
 
 @patch('broker.ga4gh.broker.endpoints.builds.remove_files', mock_remove_files)
-@patch('broker.ga4gh.broker.endpoints.subscriptions.notify_subscriptions',
-       mock_notify_subscriptions)
+@patch('requests.request', mocked_request_api)
 def test_updateBuild():
     app = Flask(__name__)
     app.config['FOCA'] = \

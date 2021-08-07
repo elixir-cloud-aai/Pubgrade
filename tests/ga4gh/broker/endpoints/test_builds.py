@@ -1,7 +1,6 @@
 """Tests for /builds endpoint """
 import os
 import shutil
-from pprint import pprint
 from unittest.mock import patch
 
 import mongomock
@@ -9,17 +8,40 @@ import pytest
 from flask import Flask
 from foca.models.config import Config, MongoConfig
 from git import GitCommandError
+from typing import Any
+
+from kubernetes.client import ApiException
 from werkzeug.exceptions import Unauthorized
 
-from broker.errors.exceptions import RepositoryNotFound, BuildNotFound, \
-    WrongGitCommand
-from broker.ga4gh.broker.endpoints.builds import register_builds, get_builds, \
-    get_build_info, git_clone_and_checkout, create_deployment_YAML, \
-    create_dockerhub_config_file, create_build, build_completed, remove_files
+from broker.errors.exceptions import (
+    RepositoryNotFound,
+    BuildNotFound,
+    CreatePodError,
+    DeletePodError
+)
+from broker.ga4gh.broker.endpoints.builds import (
+    register_builds,
+    get_builds,
+    get_build_info,
+    git_clone_and_checkout,
+    create_deployment_YAML,
+    create_dockerhub_config_file,
+    create_build,
+    build_completed,
+    remove_files,
+    build_push_image_using_kaniko
+)
 import broker.ga4gh.broker.endpoints.builds as builds
-from tests.ga4gh.mock_data import ENDPOINT_CONFIG, MONGO_CONFIG, \
-    MOCK_REPOSITORIES, MOCK_BUILD_PAYLOAD, MOCK_BUILD_INFO, MOCK_BUILD_INFO_2, \
-    MOCK_REPOSITORY_2, MOCK_SUBSCRIPTION_INFO
+from tests.ga4gh.mock_data import (
+    ENDPOINT_CONFIG,
+    MONGO_CONFIG,
+    MOCK_REPOSITORIES,
+    MOCK_BUILD_PAYLOAD,
+    MOCK_BUILD_INFO,
+    MOCK_BUILD_INFO_2,
+    MOCK_REPOSITORY_2,
+    MOCK_SUBSCRIPTION_INFO
+)
 
 
 def mocked_create_build(repo_url, branch, commit, base_dir, build_id,
@@ -45,6 +67,38 @@ def mocked_notify_subscriptions(subscription_id: str, image: str,
 
 def mocked_delete_pod(name, namespace):
     return "Pod deleted."
+
+
+def mocked_delete_namespaced_pod(self, name: str, namespace: str,
+                                 **kwargs: Any):
+    return "Pod deleted."
+
+
+def mocked_delete_namespaced_pod_error(self, name: str, namespace: str,
+                                       **kwargs: Any):
+    raise ApiException
+
+
+def mocked_request_api(method, url, data, headers):
+    return 'successful'
+
+
+def mocked_load_cluster_config():
+    return 'Loaded successfully'
+
+
+def mocked_core_v1_api():
+    return 'v1 API'
+
+
+def mocked_create_namespaced_pod(self, namespace: str, body: Any,
+                                 **kwargs: Any):
+    return {"metadata": {"name": "kaniko"}}
+
+
+def mocked_create_namespaced_pod_error(self, namespace: str, body: Any,
+                                       **kwargs: Any):
+    raise ApiException
 
 
 class TestBuild:
@@ -146,7 +200,6 @@ class TestBuild:
             commit="8cd58eb",
             base_dir=".",
             build_id="build123")
-        pprint(clone_path)
         assert clone_path == './build123/Broker-test'
         shutil.rmtree('./build123')
 
@@ -178,7 +231,8 @@ class TestBuild:
 
     def test_create_deployment_yaml(self):
         builds.template_file = os.getcwd().split('Broker')[0] + \
-                               'Broker/broker/ga4gh/broker/endpoints/template/template.yaml'
+                               'Broker/broker/ga4gh/broker/endpoints/' \
+                               'template/template.yaml'
         os.mkdir('build123')
         os.mkdir('build123/Broker-test')
         deployment_file_location = create_deployment_YAML(
@@ -188,15 +242,16 @@ class TestBuild:
             './build123/Broker-test' + '/' + 'deployment_file',
             'build_id' + '/config.json',
             'project_access_token')
-        assert deployment_file_location == \
-               './build123/Broker-test/deployment_file'
+        assert deployment_file_location == './build123/Broker-test/' \
+                                           'deployment_file'
         assert os.path.isfile(deployment_file_location)
         shutil.rmtree('./build123')
 
     def test_create_deployment_yaml_if_env_present(self):
         os.environ['NAMESPACE'] = 'broker'
-        builds.template_file = os.getcwd().split('Broker')[0] + \
-                               'Broker/broker/ga4gh/broker/endpoints/template/template.yaml'
+        builds.template_file = os.getcwd(
+        ).split('Broker')[0] + 'Broker/broker/ga4gh/' \
+                               'broker/endpoints/template/template.yaml'
         os.mkdir('build123')
         os.mkdir('build123/Broker-test')
         deployment_file_location = create_deployment_YAML(
@@ -206,15 +261,17 @@ class TestBuild:
             './build123/Broker-test' + '/' + 'deployment_file',
             'build_id' + '/config.json',
             'project_access_token')
-        assert deployment_file_location == \
-               './build123/Broker-test/deployment_file'
+        assert deployment_file_location == './build123/Broker-test/' \
+                                           'deployment_file'
         assert os.path.isfile(deployment_file_location)
         shutil.rmtree('./build123')
+        del os.environ['NAMESPACE']
 
     def test_create_deployment_yaml_os_error(self):
         with pytest.raises(OSError):
             builds.template_file = os.getcwd().split('Broker')[0] + \
-                                   'Broker/broker/ga4gh/broker/endpoints/template/template.yaml'
+                                   'Broker/broker/ga4gh/broker/endpoints' \
+                                   '/template/template.yaml'
             deployment_file_location = create_deployment_YAML(
                 './build123/Broker-test' + '/' + 'dockerfile_location',
                 'registry_destination',
@@ -222,8 +279,8 @@ class TestBuild:
                 './build123/Broker-test' + '/' + 'deployment_file',
                 'build_id' + '/config.json',
                 'project_access_token')
-            assert deployment_file_location == \
-                   './build123/Broker-test/deployment_file'
+            assert deployment_file_location == './build123/Broker-test/' \
+                                               'deployment_file'
             assert os.path.isfile(deployment_file_location)
             shutil.rmtree('./build123')
 
@@ -239,7 +296,8 @@ class TestBuild:
         mocked_build_push_image_using_kaniko)
     def test_create_build(self):
         builds.template_file = os.getcwd().split('Broker')[0] + \
-                               'Broker/broker/ga4gh/broker/endpoints/template/template.yaml'
+                               'Broker/broker/ga4gh/broker/endpoints/' \
+                               'template/template.yaml'
         os.mkdir('basedir')
         os.mkdir('basedir/Broker-test')
         f = open('basedir/Broker-test/Dockerfile', "w")
@@ -259,8 +317,7 @@ class TestBuild:
 
     @patch("broker.ga4gh.broker.endpoints.builds.remove_files",
            mocked_remove_files)
-    @patch("broker.ga4gh.broker.endpoints.subscriptions.notify_subscriptions"
-        , mocked_notify_subscriptions)
+    @patch('requests.request', mocked_request_api)
     def test_build_completed(self):
         self.setup_with_build()
         self.app.config['FOCA'].db.dbs['brokerStore']. \
@@ -291,8 +348,53 @@ class TestBuild:
                 build_completed('repo125', MOCK_REPOSITORY_2['build_list'][0],
                                 MOCK_REPOSITORY_2['access_token'])
 
-    @patch("broker.ga4gh.broker.endpoints.builds.delete_pod", mocked_delete_pod)
+    @patch("broker.ga4gh.broker.endpoints.builds.delete_pod",
+           mocked_delete_pod)
     def test_remove_files(self):
         os.mkdir('build123')
         remove_files('build123', 'pod_name', 'namespace')
         assert not os.path.isdir('build123')
+
+    @patch('kubernetes.config.incluster_config', mocked_load_cluster_config)
+    @patch('kubernetes.config.kube_config', mocked_load_cluster_config)
+    @patch('kubernetes.client.api.core_v1_api.CoreV1Api', mocked_core_v1_api)
+    @patch('kubernetes.client.api.core_v1_api.CoreV1Api.create_namespaced_pod',
+           mocked_create_namespaced_pod)
+    def test_build_push_image_using_kaniko(self):
+        builds.template_file = os.getcwd().split('Broker')[0] + \
+                               'Broker/broker/ga4gh/broker/endpoints/' \
+                               'template/template.yaml'
+        with self.app.app_context():
+            build_push_image_using_kaniko(builds.template_file)
+        os.environ['NAMESPACE'] = 'broker'
+        with self.app.app_context():
+            build_push_image_using_kaniko(builds.template_file)
+        del os.environ['NAMESPACE']
+
+    @patch('kubernetes.config.incluster_config', mocked_load_cluster_config)
+    @patch('kubernetes.config.kube_config', mocked_load_cluster_config)
+    @patch('kubernetes.client.api.core_v1_api.CoreV1Api', mocked_core_v1_api)
+    @patch('kubernetes.client.api.core_v1_api.CoreV1Api.create_namespaced_pod',
+           mocked_create_namespaced_pod_error)
+    def test_build_push_image_using_kaniko_create_pod_error(self):
+        builds.template_file = os.getcwd().split('Broker')[0] + \
+                               'Broker/broker/ga4gh/broker/endpoints/' \
+                               'template/template.yaml'
+        with self.app.app_context():
+            with pytest.raises(CreatePodError):
+                build_push_image_using_kaniko(builds.template_file)
+
+    @patch('kubernetes.client.api.core_v1_api.CoreV1Api', mocked_core_v1_api)
+    @patch('kubernetes.client.api.core_v1_api.CoreV1Api'
+           '.delete_namespaced_pod', mocked_delete_namespaced_pod)
+    def test_delete_pod(self):
+        with self.app.app_context():
+            builds.delete_pod('name', 'namespace')
+
+    @patch('kubernetes.client.api.core_v1_api.CoreV1Api', mocked_core_v1_api)
+    @patch('kubernetes.client.api.core_v1_api.CoreV1Api'
+           '.delete_namespaced_pod', mocked_delete_namespaced_pod_error)
+    def test_delete_pod_api_error(self):
+        with self.app.app_context():
+            with pytest.raises(DeletePodError):
+                builds.delete_pod('name', 'namespace')

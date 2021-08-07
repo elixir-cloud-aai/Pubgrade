@@ -1,19 +1,54 @@
 """Tests for /subscriptions endpoint """
-from pprint import pprint
+from unittest.mock import patch
 
 import mongomock
 import pytest
+import requests
 from flask import Flask
 from foca.models.config import Config, MongoConfig
 from werkzeug.exceptions import Unauthorized
 
-from broker.errors.exceptions import RepositoryNotFound, UserNotFound, \
-    SubscriptionNotFound
-from broker.ga4gh.broker.endpoints.subscriptions import register_subscription, \
-    get_subscriptions, get_subscription_info
-from tests.ga4gh.mock_data import MONGO_CONFIG, ENDPOINT_CONFIG, \
-    MOCK_REPOSITORIES, MOCK_BUILD_INFO, MOCK_BUILD_INFO_2, MOCK_USER, \
-    MOCK_SUBSCRIPTION_INFO, SUBSCRIPTION_PAYLOAD, MOCK_USER_DB
+from broker.errors.exceptions import (
+    RepositoryNotFound,
+    UserNotFound,
+    SubscriptionNotFound,
+    BuildNotFound,
+    RequestNotSent
+)
+from broker.ga4gh.broker.endpoints.subscriptions import (
+    register_subscription,
+    get_subscriptions,
+    get_subscription_info,
+    delete_subscription,
+    notify_subscriptions
+)
+from tests.ga4gh.mock_data import (
+    MONGO_CONFIG,
+    ENDPOINT_CONFIG,
+    MOCK_REPOSITORIES,
+    MOCK_BUILD_INFO,
+    MOCK_BUILD_INFO_2,
+    MOCK_USER,
+    MOCK_SUBSCRIPTION_INFO,
+    SUBSCRIPTION_PAYLOAD,
+    MOCK_USER_DB
+)
+
+
+def mocked_request_api(method, url, data, headers):
+    return 'successful'
+
+
+def mocked_request_api_timeout_error(method, url, data, headers):
+    raise requests.exceptions.Timeout
+
+
+def mocked_request_api_too_many_redirects(method, url, data, headers):
+    raise requests.exceptions.TooManyRedirects
+
+
+def mocked_request_api_request_exception(method, url, data, headers):
+    raise requests.exceptions.RequestException
 
 
 class TestSubscriptions:
@@ -83,16 +118,15 @@ class TestSubscriptions:
         self.setup()
         with self.app.app_context():
             with pytest.raises(Unauthorized):
-                MOCK_USER['user_access_token'] = 'mock_access_token'
-                register_subscription(MOCK_USER['uid'], MOCK_USER[
-                    'user_access_token'], SUBSCRIPTION_PAYLOAD)
+                register_subscription(MOCK_USER['uid'],
+                                      'user_access_token',
+                                      SUBSCRIPTION_PAYLOAD)
 
     def test_register_subscription_user_not_found(self):
         self.setup()
         with self.app.app_context():
             with pytest.raises(UserNotFound):
-                MOCK_USER['uid'] = 'mock_uid'
-                register_subscription(MOCK_USER['uid'], MOCK_USER[
+                register_subscription('uid', MOCK_USER[
                     'user_access_token'], SUBSCRIPTION_PAYLOAD)
 
     def test_get_subscriptions(self):
@@ -144,19 +178,16 @@ class TestSubscriptions:
         self.insert_subscription()
         with self.app.app_context():
             with pytest.raises(Unauthorized):
-                MOCK_USER['user_access_token'] = 'access_token'
-                get_subscriptions(MOCK_USER['uid'], MOCK_USER[
-                    'user_access_token'])
+                get_subscriptions(MOCK_USER['uid'], 'user_access_token')
 
     def test_get_subscriptions_user_not_found(self):
         self.setup()
         self.insert_subscription()
         with self.app.app_context():
             with pytest.raises(UserNotFound):
-                MOCK_USER['uid'] = 'uid'
-                get_subscriptions(MOCK_USER['uid'], MOCK_USER[
+                get_subscriptions('uid', MOCK_USER[
                     'user_access_token'])
-#####
+
     def test_get_subscription_info(self):
         self.setup()
         self.insert_subscription()
@@ -180,15 +211,145 @@ class TestSubscriptions:
         self.insert_subscription()
         with self.app.app_context():
             with pytest.raises(Unauthorized):
-                MOCK_USER['user_access_token'] = 'access_token'
-                get_subscription_info(MOCK_USER['uid'], MOCK_USER[
-                    'user_access_token'], MOCK_SUBSCRIPTION_INFO['id'])
+                get_subscription_info(MOCK_USER['uid'], 'access_token',
+                                      MOCK_SUBSCRIPTION_INFO['id'])
 
     def test_get_subscription_info_user_not_found(self):
         self.setup()
         self.insert_subscription()
         with self.app.app_context():
             with pytest.raises(UserNotFound):
-                MOCK_USER['uid'] = 'uid'
-                get_subscription_info(MOCK_USER['uid'], MOCK_USER[
+                get_subscription_info('uid', MOCK_USER[
                     'user_access_token'], MOCK_SUBSCRIPTION_INFO['id'])
+
+    def test_delete_subscription(self):
+        self.setup()
+        self.insert_subscription()
+        with self.app.app_context():
+            delete_subscription(MOCK_USER['uid'],
+                                MOCK_USER['user_access_token'],
+                                MOCK_SUBSCRIPTION_INFO['id'])
+
+    def test_delete_subscription_subscription_not_found(self):
+        self.setup()
+        with self.app.app_context():
+            with pytest.raises(SubscriptionNotFound):
+                delete_subscription(MOCK_USER['uid'], MOCK_USER[
+                    'user_access_token'], 'id')
+
+    def test_delete_subscription_unauthorized(self):
+        self.setup()
+        self.insert_subscription()
+        with self.app.app_context():
+            with pytest.raises(Unauthorized):
+                delete_subscription(MOCK_USER['uid'], 'access_token',
+                                    MOCK_SUBSCRIPTION_INFO['id'])
+
+    def test_delete_subscription_user_not_found(self):
+        self.setup()
+        self.insert_subscription()
+        with self.app.app_context():
+            with pytest.raises(UserNotFound):
+                delete_subscription('uid', MOCK_USER[
+                    'user_access_token'], MOCK_SUBSCRIPTION_INFO['id'])
+
+    @patch('requests.request', mocked_request_api)
+    def test_notify_subscriptions(self):
+        self.setup()
+        self.insert_subscription()
+        with self.app.app_context():
+            notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
+                                 'akash7778/broker', MOCK_BUILD_INFO['id'])
+            data = self.app.config['FOCA'].db.dbs['brokerStore']. \
+                collections['subscriptions'].client.find_one(
+                {"id": MOCK_SUBSCRIPTION_INFO['id']})
+            assert isinstance(data, dict)
+            assert data['state'] == 'Active'
+            assert data['build_id'] == MOCK_BUILD_INFO['id']
+
+    @patch('requests.request', mocked_request_api)
+    def test_notify_subscriptions_subscription_not_found(self):
+        self.setup()
+        self.insert_subscription()
+        with self.app.app_context():
+            with pytest.raises(SubscriptionNotFound):
+                notify_subscriptions('id', 'akash7778/broker',
+                                     MOCK_BUILD_INFO['id'])
+
+    @patch('requests.request', mocked_request_api)
+    def test_notify_subscriptions_build_not_found(self):
+        self.setup()
+        self.insert_subscription()
+        with self.app.app_context():
+            with pytest.raises(BuildNotFound):
+                notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
+                                     'akash7778/broker', 'id')
+
+    @patch('requests.request', mocked_request_api_timeout_error)
+    def test_notify_subscriptions_timeout(self):
+        self.setup()
+        self.insert_subscription()
+        with self.app.app_context():
+            with pytest.raises(RequestNotSent):
+                notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
+                                     'akash7778/broker', MOCK_BUILD_INFO['id'])
+            data = self.app.config['FOCA'].db.dbs['brokerStore']. \
+                collections['subscriptions'].client.find_one(
+                {"id": MOCK_SUBSCRIPTION_INFO['id']})
+            assert data['state'] == 'Inactive'
+
+    @patch('requests.request', mocked_request_api_too_many_redirects)
+    def test_notify_subscriptions_too_many_redirects(self):
+        self.setup()
+        self.insert_subscription()
+        with self.app.app_context():
+            with pytest.raises(RequestNotSent):
+                notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
+                                     'akash7778/broker', MOCK_BUILD_INFO['id'])
+            data = self.app.config['FOCA'].db.dbs['brokerStore']. \
+                collections['subscriptions'].client.find_one(
+                {"id": MOCK_SUBSCRIPTION_INFO['id']})
+            assert data['state'] == 'Inactive'
+
+    @patch('requests.request', mocked_request_api_request_exception)
+    def test_notify_subscriptions_request_exception(self):
+        self.setup()
+        self.insert_subscription()
+        with self.app.app_context():
+            with pytest.raises(RequestNotSent):
+                notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
+                                     'akash7778/broker', MOCK_BUILD_INFO['id'])
+            data = self.app.config['FOCA'].db.dbs['brokerStore']. \
+                collections['subscriptions'].client.find_one(
+                {"id": MOCK_SUBSCRIPTION_INFO['id']})
+            assert data['state'] == 'Inactive'
+
+    @patch('requests.request', mocked_request_api)
+    def test_notify_subscriptions_value_not_matched(self):
+        self.setup()
+        MOCK_SUBSCRIPTION_INFO['value'] = 'master'
+        self.insert_subscription()
+        with self.app.app_context():
+            notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
+                                 'akash7778/broker', MOCK_BUILD_INFO['id'])
+            data = self.app.config['FOCA'].db.dbs['brokerStore']. \
+                collections['subscriptions'].client.find_one(
+                {"id": MOCK_SUBSCRIPTION_INFO['id']})
+            assert isinstance(data, dict)
+            assert data['state'] == 'Inactive'
+            assert 'build_id' not in data
+
+    @patch('requests.request', mocked_request_api)
+    def test_notify_subscriptions_type_not_matched(self):
+        self.setup()
+        MOCK_SUBSCRIPTION_INFO['type'] = 'tag'
+        self.insert_subscription()
+        with self.app.app_context():
+            notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
+                                 'akash7778/broker', MOCK_BUILD_INFO['id'])
+            data = self.app.config['FOCA'].db.dbs['brokerStore']. \
+                collections['subscriptions'].client.find_one(
+                {"id": MOCK_SUBSCRIPTION_INFO['id']})
+            assert isinstance(data, dict)
+            assert data['state'] == 'Inactive'
+            assert 'build_id' not in data

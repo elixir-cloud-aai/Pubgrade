@@ -4,8 +4,8 @@ from typing import Dict
 
 import requests
 from broker.errors.exceptions import (
-    RequestException,
-    RepositoryNotFound, UserNotFound, SubscriptionNotFound, BuildNotFound
+    RepositoryNotFound, UserNotFound, SubscriptionNotFound, BuildNotFound,
+    RequestNotSent
 )
 from broker.ga4gh.broker.endpoints.repositories import generate_id
 from flask import current_app
@@ -15,17 +15,17 @@ from werkzeug.exceptions import Unauthorized
 logger = logging.getLogger(__name__)
 
 
-def test_create_user():
-    """
-    Right now this function is used to create user and will be deleted later.
-    """
-    db_collection = (
-        current_app.config['FOCA'].db.dbs['brokerStore'].
-        collections['users'].client
-    )
-    db_collection.insert_one({'uid': '9fe2c4e93f654fdbb24c02b15259716c',
-                              'name': 'Akash',
-                              'user_access_token': 'c42a6d44e3d0'})
+# def test_create_user():
+#     """
+#     Right now this function is used to create user and will be deleted later.
+#     """
+#     db_collection = (
+#         current_app.config['FOCA'].db.dbs['brokerStore'].
+#         collections['users'].client
+#     )
+#     db_collection.insert_one({'uid': '9fe2c4e93f654fdbb24c02b15259716c',
+#                               'name': 'Akash',
+#                               'user_access_token': 'c42a6d44e3d0'})
 
 
 def register_subscription(uid: str, user_access_token: str, data: Dict):
@@ -261,10 +261,9 @@ def delete_subscription(uid: str, user_access_token: str,
     data_from_db_user = db_collection_user.find_one({'uid': uid})
     if data_from_db_user is not None:
         if data_from_db_user['user_access_token'] == user_access_token:
-            try:
-                data = db_collection_subscriptions.delete_one(
+            data = db_collection_subscriptions.delete_one(
                     {'id': subscription_id})
-            except SubscriptionNotFound:
+            if data.deleted_count == 0:
                 raise SubscriptionNotFound
             return data.deleted_count
         else:
@@ -310,8 +309,8 @@ def notify_subscriptions(subscription_id: str, image: str, build_id: str):
         current_app.config['FOCA'].db.dbs['brokerStore'].
         collections['builds'].client
     )
-    try:
-        build_object = db_collection_builds.find_one({'id': build_id})
+    build_object = db_collection_builds.find_one({'id': build_id})
+    if build_object is not None:
         try:
             subscription_object = db_collection_subscriptions.find_one(
                 {'id': subscription_id})
@@ -324,7 +323,7 @@ def notify_subscriptions(subscription_id: str, image: str, build_id: str):
                     subscription_object['updated_at'] = str(
                         datetime.datetime.now().isoformat())
                     del subscription_object['_id']
-                    db_collection_subscriptions.update(
+                    db_collection_subscriptions.update_one(
                         {"id": subscription_id},
                         {"$set": subscription_object})
                     url = subscription_object['callback_url']
@@ -340,34 +339,31 @@ def notify_subscriptions(subscription_id: str, image: str, build_id: str):
                         subscription_object['state'] = 'Inactive'
                         subscription_object['updated_at'] = str(
                             datetime.datetime.now().isoformat())
-                        del subscription_object['_id']
-                        db_collection_subscriptions.update(
+                        db_collection_subscriptions.update_one(
                             {"id": subscription_id},
                             {"$set": subscription_object})
-                        raise RequestException
+                        raise RequestNotSent
                     except requests.exceptions.TooManyRedirects:
                         subscription_object['state'] = 'Inactive'
                         subscription_object['updated_at'] = str(
                             datetime.datetime.now().isoformat())
-                        del subscription_object['_id']
-                        db_collection_subscriptions.update(
+                        db_collection_subscriptions.update_one(
                             {"id": subscription_id},
                             {"$set": subscription_object})
-                        raise RequestException
+                        raise RequestNotSent
                     except requests.exceptions.RequestException:
                         subscription_object['state'] = 'Inactive'
                         subscription_object['updated_at'] = str(
                             datetime.datetime.now().isoformat())
-                        del subscription_object['_id']
-                        db_collection_subscriptions.update(
+                        db_collection_subscriptions.update_one(
                             {"id": subscription_id},
                             {"$set": subscription_object})
-                        raise RequestException
+                        raise RequestNotSent
                 else:
                     print('Value not matched')
             else:
                 print('Type not matched')
-        except SubscriptionNotFound:
+        except TypeError:
             raise SubscriptionNotFound
-    except BuildNotFound:
+    else:
         raise BuildNotFound

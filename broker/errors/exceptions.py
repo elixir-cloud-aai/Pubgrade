@@ -49,7 +49,7 @@ class MongoError(InternalServerError):
     pass
 
 
-class RequestException(InternalServerError):
+class RequestNotSent(InternalServerError):
     """Raised when something unexpected happen while requesting side-car
     service for deploying updates."""
     pass
@@ -144,7 +144,7 @@ exceptions = {
         "msg": "Unable to create pod.",
         "status_code": "500"
     },
-    RequestException: {
+    RequestNotSent: {
         "msg": "Unable to update deployment.",
         "status_code": '500'
     },

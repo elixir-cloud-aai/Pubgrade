@@ -5,15 +5,23 @@ import pytest
 from flask import Flask
 from foca.models.config import Config
 from foca.models.config import MongoConfig
-import string    # required at test_generate_id()
+import string
 from werkzeug.exceptions import Unauthorized
 
 from broker.errors.exceptions import URLNotFound, RepositoryNotFound
 from broker.ga4gh.broker.endpoints.repositories import (
-    register_repository, get_repositories, generate_id, get_repository_info,
-    modify_repository_info, delete_repository)
-from tests.ga4gh.mock_data import MONGO_CONFIG, ENDPOINT_CONFIG, \
+    register_repository,
+    get_repositories,
+    generate_id,
+    get_repository_info,
+    modify_repository_info,
+    delete_repository
+)
+from tests.ga4gh.mock_data import (
+    MONGO_CONFIG,
+    ENDPOINT_CONFIG,
     MOCK_REPOSITORIES
+)
 
 
 class TestRepository:
@@ -85,6 +93,7 @@ class TestRepository:
             assert MOCK_REPOSITORIES[1]['id'] == res[1]['id']
 
     def test_generate_id(self):
+        string.digits       # to avoid lint error
         for i in range(100):
             charset = "string.ascii_lowercase + string.digits +  '.' +  '-'"
             charset = eval(charset)

@@ -2,13 +2,10 @@ import datetime
 import logging
 import os
 import shutil
-# import subprocess as sb
-from typing import (Dict)
 
 import yaml
 from flask import (current_app)
 from git import Repo
-from git.exc import GitCommandError
 from kubernetes import client, config
 from kubernetes.client import ApiException
 from pymongo.errors import DuplicateKeyError
@@ -89,8 +86,7 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
                 db_collection_repositories.update_one({"id": repository_id},
                                                       {"$push": {
                                                        "build_list":
-                                                           build_data[
-                                                          'id']}})
+                                                           build_data['id']}})
                 try:
                     build_data['finished_at'] = "NULL"
                     build_data['started_at'] = str(
@@ -403,7 +399,7 @@ def build_push_image_using_kaniko(deployment_file_location: str):
                          "AppsV1Api->create_namespaced_pod: "
                          "%s\n" % e)
             raise CreatePodError
-        print("Deployment created. status='%s'" % resp.metadata.name)
+        print("Deployment created. status='%s'" % resp)
 
 
 def build_completed(repository_id: str, build_id: str,
