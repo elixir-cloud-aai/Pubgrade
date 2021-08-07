@@ -24,7 +24,8 @@ from tests.ga4gh.mock_data import (
     MONGO_CONFIG,
     ENDPOINT_CONFIG,
     MOCK_REPOSITORIES, MOCK_BUILD_PAYLOAD, MOCK_BUILD_INFO,
-    MOCK_SUBSCRIPTION_INFO, MOCK_USER, MOCK_USER_DB
+    MOCK_SUBSCRIPTION_INFO, MOCK_USER, MOCK_USER_DB, MOCK_BUILD_INFO_2,
+    SUBSCRIPTION_PAYLOAD
 )
 
 
@@ -191,6 +192,9 @@ def test_getBuilds():
     app.config['FOCA'].db.dbs['brokerStore']. \
         collections['builds'].client.insert_one(
         MOCK_BUILD_INFO).inserted_id
+    app.config['FOCA'].db.dbs['brokerStore']. \
+        collections['builds'].client.insert_one(
+        MOCK_BUILD_INFO_2).inserted_id
     with app.test_request_context():
         res = getBuilds.__wrapped__(MOCK_REPOSITORIES[1]['id'])
         assert isinstance(res, list)
@@ -286,13 +290,7 @@ def test_postSubscription():
             collections['repositories'].client.insert_one(
             repository).inserted_id
     with app.test_request_context(
-            json={
-                "repository_id": "eiic.g",
-                "callback_url": "https://ec2-54-203-145-132."
-                                "compute-1.amazonaws.com/update",
-                "access_token": "xxxxxxxxxxxx", "type": "tag",
-                "value": "dev", "id": "tnglot"
-            },
+            json=SUBSCRIPTION_PAYLOAD,
             headers={
                 'X-User-Access-Token': 'c42a6d44e3d0',
                 'X-User-Id': '9fe2c4e93f654fdbb24c02b15259716c',

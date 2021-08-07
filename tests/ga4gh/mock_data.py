@@ -50,7 +50,7 @@ MOCK_REPOSITORY_1 = {
 }
 MOCK_REPOSITORY_1 = {
     "url": "https://github.com/akash2237778/Broker-test",
-    "id": "repo_123",
+    "id": "repo12",
     "access_token": "access_token"
 }
 
@@ -58,7 +58,8 @@ MOCK_REPOSITORY_2 = {
     "url": "https://github.com/akash2237778/Broker-test",
     "id": "eiic.g",
     "access_token": "g.i.ssstitrti.ccier.tgsactt.iosg",
-    "buildList": ["eiic.gngdgrs"], "subscription_list": ["tnglot"]
+    "build_list": ["eiic.gngdgrs", "eiic.gnabmns"],
+    "subscription_list": ["tnglot"]
 }
 MOCK_REPOSITORIES = [
     MOCK_REPOSITORY_1,
@@ -78,7 +79,16 @@ MOCK_BUILD_INFO = {
     "dockerhub_token": "dockerhub token",
     "id": "eiic.gngdgrs", "finished_at": "NULL",
     "started_at": "2021-08-04T17:40:58.344809",
-    "status": "QUEUED", "commits_verified": False
+    "status": "QUEUED"
+}
+MOCK_BUILD_INFO_2 = {
+    "images": [
+        {"name": "akash7778/updater:0.0.1", "location": "./Dockerfile"}],
+    "head_commit": {"tag": "0.4.2"},
+    "dockerhub_token": "dockerhub token",
+    "id": "eiic.gnabmns", "finished_at": "NULL",
+    "started_at": "2021-08-04T17:40:58.344809",
+    "status": "QUEUED"
 }
 
 MOCK_BUILD_PAYLOAD = {
@@ -115,4 +125,17 @@ MOCK_USER_DB = {
     "uid": "9fe2c4e93f654fdbb24c02b15259716c", "name": "Akash",
     "user_access_token": "c42a6d44e3d0",
     "subscription_list": ["tnglot"]
+}
+SUBSCRIPTION_PAYLOAD = {
+    "repository_id": "eiic.g",
+    "callback_url": "https://ec2-54-203-145-132."
+                    "compute-1.amazonaws.com/update",
+    "access_token": "xxxxxxxxxxxx", "type": "tag",
+    "value": "dev", "id": "tnglot"
+}
+MOCK_ENDPOINT = {
+    "repository": {
+        "id_charset": 'A',
+        "id_length": 1,
+    }
 }

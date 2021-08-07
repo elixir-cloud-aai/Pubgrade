@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 template_file = '/app/broker/ga4gh/broker/endpoints/template/template.yaml'
 
 
-def register_builds(repository_id: str, access_token: str, build_data: Dict):
+def register_builds(repository_id: str, access_token: str, build_data: dict):
     """Register new builds for already registered repository.
 
     Args:
@@ -88,7 +88,8 @@ def register_builds(repository_id: str, access_token: str, build_data: Dict):
                 )
                 db_collection_repositories.update_one({"id": repository_id},
                                                       {"$push": {
-                                                       "buildList": build_data[
+                                                       "build_list":
+                                                           build_data[
                                                           'id']}})
                 try:
                     build_data['finished_at'] = "NULL"
@@ -149,19 +150,18 @@ def get_builds(repository_id: str):
         collections['repositories'].client
     )
     build_object_list = []
-    try:
-        data_from_db = db_collection_repositories.find_one(
-            {'id': repository_id})
-        if data_from_db is not None:
-            for build_id in data_from_db['buildList']:
+    data_from_db = db_collection_repositories.find_one(
+        {'id': repository_id})
+    if data_from_db is not None:
+        try:
+            for build_id in data_from_db['build_list']:
                 build_data = get_build_info(build_id)
                 build_data['id'] = build_id
                 build_object_list.append(build_data)
-            # get_build_info()
-            return build_object_list
-        else:
+        except Exception:
             raise BuildNotFound
-    except StopIteration:
+        return build_object_list
+    else:
         raise RepositoryNotFound
 
 
@@ -276,8 +276,10 @@ def git_clone_and_checkout(repo_url: str, branch: str, commit: str,
         repo = Repo.clone_from(repo_url, clone_path, branch=branch)
         repo.git.checkout(commit)
         return clone_path
-    except GitCommandError:
+    except TypeError:
         raise WrongGitCommand
+    # except GitCommandError:
+    #     raise WrongGitCommand
 
 
 def create_deployment_YAML(dockerfile_location: str, registry_destination: str,
@@ -311,7 +313,7 @@ def create_deployment_YAML(dockerfile_location: str, registry_destination: str,
     try:
         build_id = deployment_file_location.split('/')[2]
         file_stream = open(template_file, 'r')
-        data = yaml.load(file_stream)
+        data = yaml.load(file_stream, Loader=yaml.FullLoader)
         data['metadata']['name'] = build_id
         data['spec']['containers'][0]['args'] = [
             f"--dockerfile={dockerfile_location}",
@@ -339,8 +341,8 @@ def create_deployment_YAML(dockerfile_location: str, registry_destination: str,
         with open(deployment_file_location, 'w') as yaml_file:
             yaml_file.write(yaml.dump(data, default_flow_style=False))
         return deployment_file_location
-    except IOError:
-        raise IOError
+    except OSError:
+        raise OSError
 
 
 def create_dockerhub_config_file(dockerhub_token, config_file_location):
@@ -438,35 +440,34 @@ def build_completed(repository_id: str, build_id: str,
         current_app.config['FOCA'].db.dbs['brokerStore'].
         collections['builds'].client
     )
-    try:
 
-        data_from_db = db_collection_repositories.find_one(
-            {'id': repository_id})
-        if data_from_db is not None:
-            if data_from_db['access_token'] == project_access_token:
-                try:
-                    data = db_collection_builds.find(
-                        {'id': build_id}, {'_id': False}
-                    ).limit(1).next()
-                    # del data['id']
-                    data['status'] = "SUCCEEDED"
-                    data['finished_at'] = str(
-                        datetime.datetime.now().isoformat())
-                    db_collection_builds.update_one({"id": data['id']},
-                                                    {"$set": data})
-                    remove_files('/broker_temp_files/' + build_id, build_id,
-                                 'broker')
-                    if 'subscription_list' in data_from_db:
-                        subscription_list = data_from_db['subscription_list']
-                        for subscription in subscription_list:
-                            # for image_name in data['images']:
-                            notify_subscriptions(subscription,
-                                                 data['images'][0]['name'],
-                                                 build_id)
-                    return {'id': build_id}
-                except StopIteration:
-                    raise BuildNotFound
-    except StopIteration:
+    data_from_db = db_collection_repositories.find_one(
+        {'id': repository_id})
+    if data_from_db is not None:
+        if data_from_db['access_token'] == project_access_token:
+            try:
+                data = db_collection_builds.find(
+                    {'id': build_id}, {'_id': False}
+                ).limit(1).next()
+                # del data['id']
+                data['status'] = "SUCCEEDED"
+                data['finished_at'] = str(
+                    datetime.datetime.now().isoformat())
+                db_collection_builds.update_one({"id": data['id']},
+                                                {"$set": data})
+                remove_files('/broker_temp_files/' + build_id, build_id,
+                             'broker')
+                if 'subscription_list' in data_from_db:
+                    subscription_list = data_from_db['subscription_list']
+                    for subscription in subscription_list:
+                        # for image_name in data['images']:
+                        notify_subscriptions(subscription,
+                                             data['images'][0]['name'],
+                                             build_id)
+                return {'id': build_id}
+            except StopIteration:
+                raise BuildNotFound
+    else:
         raise RepositoryNotFound
 
 
@@ -508,7 +509,7 @@ def delete_pod(name, namespace):
         raise DeletePodError
 
 
-# Needs gpg setup and public key at service.
+# Needs gpg setup and public key at microservice.
 # def get_commit_list_from_repo_and_verify_commits(clone_path: str,
 #                                                  latest_commit_sha: str,
 #                                                  build_id: str,

@@ -207,14 +207,13 @@ def get_subscription_info(uid: str, user_access_token: str,
     data_from_db_user = db_collection_user.find_one({'uid': uid})
     if data_from_db_user is not None:
         if data_from_db_user['user_access_token'] == user_access_token:
-            try:
-                subscription_object = db_collection_subscriptions.find_one(
+            subscription_object = db_collection_subscriptions.find_one(
                     {'id': subscription_id})
+            if subscription_object is not None:
                 del subscription_object['_id']
                 del subscription_object['access_token']
-                del subscription_object['id']
                 return subscription_object
-            except SubscriptionNotFound:
+            else:
                 raise SubscriptionNotFound
         else:
             raise Unauthorized

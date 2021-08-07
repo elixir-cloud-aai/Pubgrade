@@ -132,7 +132,7 @@ exceptions = {
                "repository.",
         "status_code": '500'
     },
-    IOError: {
+    OSError: {
         "msg": "Input/Output operation failed while creating deployment file.",
         "status_code": '400'
     },
