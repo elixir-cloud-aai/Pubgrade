@@ -9,7 +9,8 @@ from werkzeug.exceptions import Unauthorized
 
 from broker.errors.exceptions import (
     RepositoryNotFound,
-    URLNotFound
+    URLNotFound,
+    InternalServerError
 )
 
 logger = logging.getLogger(__name__)
@@ -85,7 +86,7 @@ def register_repository(data: Dict):
                     f"Could not generate unique identifier."
                     f" Tried {retries + 1} times."
                 )
-        raise DuplicateKeyError
+        raise InternalServerError
     if repository_object is not None and '_id' in repository_object:
         del repository_object['_id']
         del repository_object['url']

@@ -13,7 +13,8 @@ from werkzeug.exceptions import Unauthorized
 
 from broker.errors.exceptions import (RepositoryNotFound,
                                       BuildNotFound, DeletePodError,
-                                      CreatePodError, WrongGitCommand)
+                                      CreatePodError, WrongGitCommand,
+                                      InternalServerError)
 from broker.ga4gh.broker.endpoints.repositories import generate_id
 from broker.ga4gh.broker.endpoints.subscriptions import notify_subscriptions
 
@@ -109,9 +110,13 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
                                  project_access_token=access_token)
                     break
                 except DuplicateKeyError:
-                    logger.log('Encountered DuplicateKeyError. Retrying... '
-                               + str(i) + ' times'.format(i))
                     continue
+            else:
+                logger.error(
+                    f"Could not generate unique identifier."
+                    f" Tried {retries + 1} times."
+                )
+                raise InternalServerError
             return {'id': build_data['id']}
         else:
             raise Unauthorized
@@ -274,8 +279,6 @@ def git_clone_and_checkout(repo_url: str, branch: str, commit: str,
         return clone_path
     except TypeError:
         raise WrongGitCommand
-    # except GitCommandError:
-    #     raise WrongGitCommand
 
 
 def create_deployment_YAML(dockerfile_location: str, registry_destination: str,

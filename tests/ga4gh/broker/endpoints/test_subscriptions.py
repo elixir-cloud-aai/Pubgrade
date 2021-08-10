@@ -1,12 +1,13 @@
 """Tests for /subscriptions endpoint """
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 import mongomock
 import pytest
 import requests
 from flask import Flask
 from foca.models.config import Config, MongoConfig
-from werkzeug.exceptions import Unauthorized
+from pymongo.errors import DuplicateKeyError
+from werkzeug.exceptions import Unauthorized, InternalServerError
 
 from broker.errors.exceptions import (
     RepositoryNotFound,
@@ -105,6 +106,16 @@ class TestSubscriptions:
             assert isinstance(res, dict)
             assert res['subscription_id'] in data['subscription_list']
             assert subscription['state'] == 'Inactive'
+
+    def test_register_subscription_duplicate_key_error(self):
+        self.setup()
+        mock_resp = MagicMock(side_effect=DuplicateKeyError(''))
+        self.app.config['FOCA'].db.dbs['brokerStore'].collections[
+            'subscriptions'].client.insert_one = mock_resp
+        with self.app.app_context():
+            with pytest.raises(InternalServerError):
+                register_subscription(MOCK_USER['uid'], MOCK_USER[
+                    'user_access_token'], SUBSCRIPTION_PAYLOAD)
 
     def test_register_subscription_repo_not_found(self):
         self.setup()

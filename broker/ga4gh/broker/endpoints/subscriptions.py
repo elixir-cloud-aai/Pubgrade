@@ -5,7 +5,7 @@ from typing import Dict
 import requests
 from broker.errors.exceptions import (
     RepositoryNotFound, UserNotFound, SubscriptionNotFound, BuildNotFound,
-    RequestNotSent
+    RequestNotSent, InternalServerError
 )
 from broker.ga4gh.broker.endpoints.repositories import generate_id
 from flask import current_app
@@ -108,6 +108,12 @@ def register_subscription(uid: str, user_access_token: str, data: Dict):
                         break
                     except DuplicateKeyError:
                         continue
+                else:
+                    logger.error(
+                        f"Could not generate unique identifier."
+                        f" Tried {retries + 1} times."
+                    )
+                    raise InternalServerError
                 return {"subscription_id": data['id']}
             else:
                 raise RepositoryNotFound

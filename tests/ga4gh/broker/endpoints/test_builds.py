@@ -1,7 +1,7 @@
 """Tests for /builds endpoint """
 import os
 import shutil
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 import mongomock
 import pytest
@@ -11,7 +11,8 @@ from git import GitCommandError
 from typing import Any
 
 from kubernetes.client import ApiException
-from werkzeug.exceptions import Unauthorized
+from pymongo.errors import DuplicateKeyError
+from werkzeug.exceptions import Unauthorized, InternalServerError
 
 from broker.errors.exceptions import (
     RepositoryNotFound,
@@ -140,6 +141,19 @@ class TestBuild:
 
     @patch('broker.ga4gh.broker.endpoints.builds.create_build',
            mocked_create_build)
+    def test_register_builds_duplicate_key_error(self):
+        self.setup()
+        mock_resp = MagicMock(side_effect=DuplicateKeyError(''))
+        self.app.config['FOCA'].db.dbs['brokerStore'].collections['builds']. \
+            client.insert_one = mock_resp
+        with self.app.app_context():
+            with pytest.raises(InternalServerError):
+                register_builds(MOCK_REPOSITORIES[1]['id'],
+                                MOCK_REPOSITORIES[1]['access_token'],
+                                MOCK_BUILD_PAYLOAD)
+
+    @patch('broker.ga4gh.broker.endpoints.builds.create_build',
+           mocked_create_build)
     def test_register_builds_unauthorized(self):
         self.setup()
         with self.app.app_context():
@@ -206,9 +220,9 @@ class TestBuild:
     def test_git_clone_and_checkout_type_error(self):
         with pytest.raises(GitCommandError):
             git_clone_and_checkout(
-                repo_url="https://github.com/akash2237778/unknownrepo",
-                branch="main",
-                commit="8cd58eb",
+                repo_url="https://github.com/akash2237778/Broker-test",
+                branch="master",
+                commit="8cd58b",
                 base_dir=".",
                 build_id="build123")
         shutil.rmtree('./build123')
@@ -287,8 +301,6 @@ class TestBuild:
     def test_create_dockerhub_config_file(self):
         create_dockerhub_config_file('token', 'config.json')
         assert os.path.isfile('config.json')
-        # f = open('config.json', "r")
-        # pprint(f.readlines())
         os.remove('config.json')
 
     @patch(

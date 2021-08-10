@@ -172,9 +172,9 @@ def getSubscriptions():
                              request.headers['X-User-Access-Token'])
 
 
-@log_traffic
-def modifySubscription(subscription_id: str):
-    return MOCK_SUBSCRIPTION
+# @log_traffic
+# def modifySubscription(subscription_id: str):
+#     return MOCK_SUBSCRIPTION
 
 
 @log_traffic

@@ -1,4 +1,5 @@
 """Tests for /repositories endpoint """
+from unittest.mock import MagicMock
 
 import mongomock
 import pytest
@@ -6,7 +7,9 @@ from flask import Flask
 from foca.models.config import Config
 from foca.models.config import MongoConfig
 import string
-from werkzeug.exceptions import Unauthorized
+
+from pymongo.errors import DuplicateKeyError
+from werkzeug.exceptions import Unauthorized, InternalServerError
 
 from broker.errors.exceptions import URLNotFound, RepositoryNotFound
 from broker.ga4gh.broker.endpoints.repositories import (
@@ -60,22 +63,24 @@ class TestRepository:
                 assert 'access_token' in res
                 assert isinstance(res, dict)
 
-    # def test_register_repository_duplicate_key_error(self):
-    #     self.app.config['FOCA'] = Config(
-    #         db=MongoConfig(**MONGO_CONFIG),
-    #         endpoints=MOCK_ENDPOINT,
-    #     )
-    #     data = {
-    #         "url": "https://github.com/akash2237778/Broker-test"
-    #     }
-    #     self.app.config['FOCA'].db.dbs['brokerStore'].collections[
-    #         'repositories'].client = mongomock.MongoClient().db.collection
-    #     with self.app.app_context():
-    #         res = register_repository(data=data)
-    #         pprint(res)
-    #     with self.app.app_context():
-    #         with pytest.raises(DuplicateKeyError):
-    #             register_repository(data=data)
+    def test_register_repository_duplicate_key_error(self):
+        app = Flask(__name__)
+        app.config['FOCA'] = \
+            Config(
+                db=MongoConfig(**MONGO_CONFIG),
+                endpoints=ENDPOINT_CONFIG,
+            )
+        mock_resp = MagicMock(side_effect=DuplicateKeyError(''))
+        app.config['FOCA'].db.dbs['brokerStore'].collections['repositories']. \
+            client = MagicMock()
+        app.config['FOCA'].db.dbs['brokerStore'].collections['repositories']. \
+            client.insert_one = mock_resp
+        request_data = {
+            "url": "https://github.com/akash2237778/Broker-test"
+        }
+        with app.app_context():
+            with pytest.raises(InternalServerError):
+                register_repository(data=request_data)
 
     def test_get_repositories(self):
         self.app.config['FOCA'] = \
