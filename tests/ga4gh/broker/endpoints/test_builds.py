@@ -82,7 +82,9 @@ def mocked_request_api(method, url, data, headers):
     return 'successful'
 
 
-def mocked_load_cluster_config():
+def mocked_load_cluster_config(config_file=None, context=None,
+                               client_configuration=None,
+                               persist_config=True):
     return 'Loaded successfully'
 
 
@@ -102,6 +104,26 @@ def mocked_create_namespaced_pod(self, namespace: str, body: Any,
 def mocked_create_namespaced_pod_error(self, namespace: str, body: Any,
                                        **kwargs: Any):
     raise ApiException
+
+
+def mocked_load_kube_config(
+        config_file=None, context=None,
+        client_configuration=None,
+        persist_config=True):
+    return 'success'
+
+
+def mocked_get_kube_config_loader(
+        filename=None,
+        config_dict=None,
+        persist_config=False,
+        **kwargs):
+    return MockKubeConfigLoader
+
+
+class MockKubeConfigLoader:
+    def load_and_set(self):
+        return 'success'
 
 
 class TestBuild:
@@ -393,9 +415,14 @@ class TestBuild:
             build_push_image_using_kaniko(builds.template_file)
         del os.environ['NAMESPACE']
 
-    @patch('kubernetes.config.kube_config', mocked_load_cluster_config)
+    @patch('kubernetes.config.kube_config.load_kube_config',
+           mocked_load_kube_config)
     @patch('kubernetes.client.api.core_v1_api.CoreV1Api.create_namespaced_pod',
            mocked_create_namespaced_pod_error)
+    @patch('kubernetes.config.kube_config._get_kube_config_loader',
+           mocked_get_kube_config_loader)
+    @patch('kubernetes.config.kube_config.KubeConfigLoader',
+           MockKubeConfigLoader)
     def test_build_push_image_using_kaniko_create_pod_error(self):
         builds.template_file = os.getcwd().split('Broker')[0] + \
                                'Broker/broker/ga4gh/broker/endpoints/' \
@@ -426,7 +453,7 @@ class TestBuild:
     def test_build_push_image_using_kaniko_incluster(self):
         os.environ['KUBERNETES_SERVICE_HOST'] = 'Incluster'
         builds.template_file = os.getcwd().split('Broker')[0] + \
-            'Broker/broker/ga4gh/broker/endpoints/template/template.yaml'
+                               'Broker/broker/ga4gh/broker/endpoints/template/template.yaml'
         with self.app.app_context():
             build_push_image_using_kaniko(builds.template_file)
         os.environ['NAMESPACE'] = 'broker'
