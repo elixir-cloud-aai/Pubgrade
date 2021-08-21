@@ -13,13 +13,13 @@ from kubernetes.client import ApiException
 from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized, InternalServerError
 
-from broker.errors.exceptions import (
+from pubgrade.errors.exceptions import (
     RepositoryNotFound,
     BuildNotFound,
     CreatePodError,
-    DeletePodError, WrongGitCommand
+    DeletePodError, GitCloningError
 )
-from broker.ga4gh.broker.endpoints.builds import (
+from pubgrade.ga4gh.pubgrade.endpoints.builds import (
     register_builds,
     get_builds,
     get_build_info,
@@ -31,7 +31,7 @@ from broker.ga4gh.broker.endpoints.builds import (
     remove_files,
     build_push_image_using_kaniko
 )
-import broker.ga4gh.broker.endpoints.builds as builds
+import pubgrade.ga4gh.pubgrade.endpoints.builds as builds
 from tests.ga4gh.mock_data import (
     ENDPOINT_CONFIG,
     MONGO_CONFIG,
@@ -82,8 +82,9 @@ def mocked_request_api(method, url, data, headers):
     return 'successful'
 
 
-def mocked_load_cluster_config(client_configuration=None,
-                               try_refresh_token=True):
+def mocked_load_cluster_config(config_file=None, context=None,
+                               client_configuration=None,
+                               persist_config=True):
     return 'Loaded successfully'
 
 
@@ -105,35 +106,55 @@ def mocked_create_namespaced_pod_error(self, namespace: str, body: Any,
     raise ApiException
 
 
+def mocked_load_kube_config(
+        config_file=None, context=None,
+        client_configuration=None,
+        persist_config=True):
+    return 'success'
+
+
+def mocked_get_kube_config_loader(
+        filename=None,
+        config_dict=None,
+        persist_config=False,
+        **kwargs):
+    return MockKubeConfigLoader
+
+
+class MockKubeConfigLoader:
+    def load_and_set(self):
+        return 'success'
+
+
 class TestBuild:
     app = Flask(__name__)
 
-    repository_url = "https://github.com/akash2237778/Broker-test"
+    repository_url = "https://github.com/elixir-cloud-aai/drs-filer"
 
     def setup(self):
         self.app.config['FOCA'] = \
             Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-        self.app.config['FOCA'].db.dbs['brokerStore']. \
+        self.app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['repositories'].client = mongomock.MongoClient(
         ).db.collection
         for repository in MOCK_REPOSITORIES:
-            self.app.config['FOCA'].db.dbs['brokerStore']. \
+            self.app.config['FOCA'].db.dbs['pubgradeStore']. \
                 collections['repositories'].client.insert_one(
                 repository).inserted_id
-        self.app.config['FOCA'].db.dbs['brokerStore']. \
+        self.app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['builds'].client = mongomock.MongoClient(
         ).db.collection
 
     def setup_with_build(self):
         self.setup()
-        self.app.config['FOCA'].db.dbs['brokerStore']. \
+        self.app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['builds'].client.insert_one(
             MOCK_BUILD_INFO).inserted_id
-        self.app.config['FOCA'].db.dbs['brokerStore']. \
+        self.app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['builds'].client.insert_one(
             MOCK_BUILD_INFO_2).inserted_id
 
-    @patch('broker.ga4gh.broker.endpoints.builds.create_build',
+    @patch('pubgrade.ga4gh.pubgrade.endpoints.builds.create_build',
            mocked_create_build)
     def test_register_builds(self):
         self.setup()
@@ -144,20 +165,46 @@ class TestBuild:
             assert isinstance(res, dict)
             assert 'id' in res and res['id'][:6] == MOCK_REPOSITORIES[1]['id']
 
-    @patch('broker.ga4gh.broker.endpoints.builds.create_build',
+    @patch('pubgrade.ga4gh.pubgrade.endpoints.builds.create_build',
+           mocked_create_build)
+    def test_register_builds_branch_only(self):
+        self.setup()
+        del MOCK_BUILD_PAYLOAD['head_commit']
+        MOCK_BUILD_PAYLOAD['head_commit'] = {"branch": "sample_branch"}
+        with self.app.app_context():
+            res = register_builds(MOCK_REPOSITORIES[1]['id'],
+                                  MOCK_REPOSITORIES[1]['access_token'],
+                                  MOCK_BUILD_PAYLOAD)
+            assert isinstance(res, dict)
+            assert 'id' in res and res['id'][:6] == MOCK_REPOSITORIES[1]['id']
+
+    @patch('pubgrade.ga4gh.pubgrade.endpoints.builds.create_build',
+           mocked_create_build)
+    def test_register_builds_tag(self):
+        self.setup()
+        del MOCK_BUILD_PAYLOAD['head_commit']
+        MOCK_BUILD_PAYLOAD['head_commit'] = {"tag": "12345"}
+        with self.app.app_context():
+            res = register_builds(MOCK_REPOSITORIES[1]['id'],
+                                  MOCK_REPOSITORIES[1]['access_token'],
+                                  MOCK_BUILD_PAYLOAD)
+            assert isinstance(res, dict)
+            assert 'id' in res and res['id'][:6] == MOCK_REPOSITORIES[1]['id']
+
+    @patch('pubgrade.ga4gh.pubgrade.endpoints.builds.create_build',
            mocked_create_build)
     def test_register_builds_duplicate_key_error(self):
         self.setup()
         mock_resp = MagicMock(side_effect=DuplicateKeyError(''))
-        self.app.config['FOCA'].db.dbs['brokerStore'].collections['builds']. \
-            client.insert_one = mock_resp
+        self.app.config['FOCA'].db.dbs['pubgradeStore'].collections[
+            'builds'].client.insert_one = mock_resp
         with self.app.app_context():
             with pytest.raises(InternalServerError):
                 register_builds(MOCK_REPOSITORIES[1]['id'],
                                 MOCK_REPOSITORIES[1]['access_token'],
                                 MOCK_BUILD_PAYLOAD)
 
-    @patch('broker.ga4gh.broker.endpoints.builds.create_build',
+    @patch('pubgrade.ga4gh.pubgrade.endpoints.builds.create_build',
            mocked_create_build)
     def test_register_builds_unauthorized(self):
         self.setup()
@@ -167,7 +214,7 @@ class TestBuild:
                                 'access_token',
                                 MOCK_BUILD_PAYLOAD)
 
-    @patch('broker.ga4gh.broker.endpoints.builds.create_build',
+    @patch('pubgrade.ga4gh.pubgrade.endpoints.builds.create_build',
            mocked_create_build)
     def test_register_builds_repository_not_found(self):
         self.setup()
@@ -215,15 +262,25 @@ class TestBuild:
     def test_git_clone_and_checkout(self):
         clone_path = git_clone_and_checkout(
             repo_url=self.repository_url,
-            branch="main",
-            commit="8cd58eb",
+            branch="dev",
+            commit="122c34d",
             base_dir=".",
             build_id="build123")
-        assert clone_path == './build123/Broker-test'
+        assert clone_path == './build123/drs-filer'
+        shutil.rmtree('./build123')
+
+    def test_git_clone_and_checkout_without_branch(self):
+        clone_path = git_clone_and_checkout(
+            repo_url=self.repository_url,
+            branch="",
+            commit="122c34d",
+            base_dir=".",
+            build_id="build123")
+        assert clone_path == './build123/drs-filer'
         shutil.rmtree('./build123')
 
     def test_git_clone_and_checkout_type_error(self):
-        with pytest.raises(WrongGitCommand):
+        with pytest.raises(GitCloningError):
             git_clone_and_checkout(
                 repo_url=self.repository_url,
                 branch="master",
@@ -233,54 +290,52 @@ class TestBuild:
         shutil.rmtree('./build123')
 
     def test_git_clone_and_checkout_git_command_error(self):
-        with pytest.raises(WrongGitCommand):
+        with pytest.raises(GitCloningError):
             git_clone_and_checkout(
                 repo_url=self.repository_url,
-                branch="main",
-                commit="8cd58eb",
+                branch="dev",
+                commit="122c34d",
                 base_dir=".",
                 build_id="build123")
             git_clone_and_checkout(
                 repo_url=self.repository_url,
-                branch="main",
-                commit="8cd58eb",
+                branch="dev",
+                commit="122c34d",
                 base_dir=".",
                 build_id="build123")
         shutil.rmtree('./build123')
 
     def test_create_deployment_yaml(self):
-        builds.template_file = os.getcwd().split('Broker')[0] + \
-                               'Broker/broker/ga4gh/broker/endpoints/' \
-                               'template/template.yaml'
+        builds.template_file = 'pubgrade/ga4gh/pubgrade/endpoints/kaniko' \
+                               '/template.yaml'
         os.mkdir('build123')
-        os.mkdir('build123/Broker-test')
+        os.mkdir('build123/drs-filer')
         deployment_file_location = create_deployment_YAML(
-            './build123/Broker-test/dockerfile_location',
+            './build123/drs-filer/dockerfile_location',
             'registry_destination',
             'clone_path',
-            './build123/Broker-test/deployment_file',
+            './build123/drs-filer/deployment_file',
             'build_id/config.json',
             'project_access_token')
-        assert deployment_file_location == './build123/Broker-test/' \
+        assert deployment_file_location == './build123/drs-filer/' \
                                            'deployment_file'
         assert os.path.isfile(deployment_file_location)
         shutil.rmtree('./build123')
 
     def test_create_deployment_yaml_if_env_present(self):
-        os.environ['NAMESPACE'] = 'broker'
-        builds.template_file = os.getcwd(
-        ).split('Broker')[0] + 'Broker/broker/ga4gh/' \
-                               'broker/endpoints/template/template.yaml'
+        os.environ['NAMESPACE'] = 'pubgrade'
+        builds.template_file = 'pubgrade/ga4gh/pubgrade/endpoints/kaniko' \
+                               '/template.yaml'
         os.mkdir('build123')
-        os.mkdir('build123/Broker-test')
+        os.mkdir('build123/drs-filer')
         deployment_file_location = create_deployment_YAML(
-            './build123/Broker-test/dockerfile_location',
+            './build123/drs-filer/dockerfile_location',
             'registry_destination',
             'clone_path',
-            './build123/Broker-test/deployment_file',
+            './build123/drs-filer/deployment_file',
             'build_id/config.json',
             'project_access_token')
-        assert deployment_file_location == './build123/Broker-test/' \
+        assert deployment_file_location == './build123/drs-filer/' \
                                            'deployment_file'
         assert os.path.isfile(deployment_file_location)
         shutil.rmtree('./build123')
@@ -288,17 +343,16 @@ class TestBuild:
 
     def test_create_deployment_yaml_os_error(self):
         with pytest.raises(OSError):
-            builds.template_file = os.getcwd().split('Broker')[0] + \
-                                   'Broker/broker/ga4gh/broker/endpoints' \
-                                   '/template/template.yaml'
+            builds.template_file = 'pubgrade/ga4gh/pubgrade/endpoints/kaniko' \
+                               '/template.yaml'
             deployment_file_location = create_deployment_YAML(
-                './build123/Broker-test/dockerfile_location',
+                './build123/drs-filer/dockerfile_location',
                 'registry_destination',
                 'clone_path',
-                './build123/Broker-test/deployment_file',
+                './build123/drs-filer/deployment_file',
                 'build_id' + '/config.json',
                 'project_access_token')
-            assert deployment_file_location == './build123/Broker-test/' \
+            assert deployment_file_location == './build123/drs-filer/' \
                                                'deployment_file'
             assert os.path.isfile(deployment_file_location)
             shutil.rmtree('./build123')
@@ -309,44 +363,44 @@ class TestBuild:
         os.remove('config.json')
 
     @patch(
-        "broker.ga4gh.broker.endpoints.builds.build_push_image_using_kaniko",
+        "pubgrade.ga4gh.pubgrade.endpoints.builds."
+        "build_push_image_using_kaniko",
         mocked_build_push_image_using_kaniko)
     def test_create_build(self):
-        builds.template_file = os.getcwd().split('Broker')[0] + \
-                               'Broker/broker/ga4gh/broker/endpoints/' \
-                               'template/template.yaml'
+        builds.template_file = 'pubgrade/ga4gh/pubgrade/endpoints/kaniko' \
+                               '/template.yaml'
         os.mkdir('basedir')
-        os.mkdir('basedir/Broker-test')
-        f = open('basedir/Broker-test/Dockerfile', "w")
+        os.mkdir('basedir/drs-filer')
+        f = open('basedir/drs-filer/Dockerfile', "w")
         f.write("test dockerfile")
         f.close()
         create_build(
             repo_url=self.repository_url,
-            branch="main",
-            commit="8cd58eb",
+            branch="dev",
+            commit="122c34d",
             base_dir="basedir",
             build_id="build123",
-            dockerfile_location="basedir/Broker-test/Dockerfile",
+            dockerfile_location="basedir/drs-filer/Dockerfile",
             registry_destination='registry_destination',
             dockerhub_token='dockerhub_token',
             project_access_token='access_token')
         shutil.rmtree('basedir')
 
-    @patch("broker.ga4gh.broker.endpoints.builds.remove_files",
+    @patch("pubgrade.ga4gh.pubgrade.endpoints.builds.remove_files",
            mocked_remove_files)
     @patch('requests.request', mocked_request_api)
     def test_build_completed(self):
         self.setup_with_build()
-        self.app.config['FOCA'].db.dbs['brokerStore']. \
+        self.app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['subscriptions'].client = mongomock.MongoClient(
         ).db.collection
-        self.app.config['FOCA'].db.dbs['brokerStore']. \
+        self.app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['subscriptions'].client.insert_one(
             MOCK_SUBSCRIPTION_INFO).inserted_id
         with self.app.app_context():
             res = build_completed(MOCK_REPOSITORY_2['id'], MOCK_REPOSITORY_2[
                 'build_list'][0], MOCK_REPOSITORY_2['access_token'])
-            data = self.app.config['FOCA'].db.dbs['brokerStore']. \
+            data = self.app.config['FOCA'].db.dbs['pubgradeStore']. \
                 collections['builds'].client.find_one(res)
             assert data['status'] == 'SUCCEEDED'
             assert res['id'] == MOCK_REPOSITORY_2['build_list'][0]
@@ -373,7 +427,7 @@ class TestBuild:
                 build_completed('repo125', MOCK_REPOSITORY_2['build_list'][0],
                                 MOCK_REPOSITORY_2['access_token'])
 
-    @patch("broker.ga4gh.broker.endpoints.builds.delete_pod",
+    @patch("pubgrade.ga4gh.pubgrade.endpoints.builds.delete_pod",
            mocked_delete_pod)
     def test_remove_files(self):
         os.mkdir('build123')
@@ -384,23 +438,26 @@ class TestBuild:
     @patch('kubernetes.client.api.core_v1_api.CoreV1Api.create_namespaced_pod',
            mocked_create_namespaced_pod)
     def test_build_push_image_using_kaniko(self):
-        builds.template_file = os.getcwd().split('Broker')[0] + \
-                               'Broker/broker/ga4gh/broker/endpoints/' \
-                               'template/template.yaml'
+        builds.template_file = 'pubgrade/ga4gh/pubgrade/endpoints/kaniko' \
+                               '/template.yaml'
         with self.app.app_context():
             build_push_image_using_kaniko(builds.template_file)
-        os.environ['NAMESPACE'] = 'broker'
+        os.environ['NAMESPACE'] = 'pubgrade'
         with self.app.app_context():
             build_push_image_using_kaniko(builds.template_file)
         del os.environ['NAMESPACE']
 
-    @patch('kubernetes.config.kube_config', mocked_load_cluster_config)
+    @patch('kubernetes.config.kube_config.load_kube_config',
+           mocked_load_kube_config)
     @patch('kubernetes.client.api.core_v1_api.CoreV1Api.create_namespaced_pod',
            mocked_create_namespaced_pod_error)
+    @patch('kubernetes.config.kube_config._get_kube_config_loader',
+           mocked_get_kube_config_loader)
+    @patch('kubernetes.config.kube_config.KubeConfigLoader',
+           MockKubeConfigLoader)
     def test_build_push_image_using_kaniko_create_pod_error(self):
-        builds.template_file = os.getcwd().split('Broker')[0] + \
-                               'Broker/broker/ga4gh/broker/endpoints/' \
-                               'template/template.yaml'
+        builds.template_file = 'pubgrade/ga4gh/pubgrade/endpoints/kaniko' \
+                               '/template.yaml'
         with self.app.app_context():
             with pytest.raises(CreatePodError):
                 build_push_image_using_kaniko(builds.template_file)
@@ -426,11 +483,11 @@ class TestBuild:
            mocked_create_namespaced_pod)
     def test_build_push_image_using_kaniko_incluster(self):
         os.environ['KUBERNETES_SERVICE_HOST'] = 'Incluster'
-        builds.template_file = os.getcwd().split('Broker')[0] + \
-            'Broker/broker/ga4gh/broker/endpoints/template/template.yaml'
+        builds.template_file = 'pubgrade/ga4gh/pubgrade/endpoints/kaniko' \
+                               '/template.yaml'
         with self.app.app_context():
             build_push_image_using_kaniko(builds.template_file)
-        os.environ['NAMESPACE'] = 'broker'
+        os.environ['NAMESPACE'] = 'pubgrade'
         with self.app.app_context():
             build_push_image_using_kaniko(builds.template_file)
         del os.environ['NAMESPACE']

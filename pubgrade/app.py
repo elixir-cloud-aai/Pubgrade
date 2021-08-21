@@ -7,18 +7,20 @@ from foca.foca import foca
 
 logger = logging.getLogger(__name__)
 
-uid = "9fe2c4e93f654fdbb24c02b15259716c"
-name = "Akash"
-user_access_token = "c42a6d44e3d0"
-
 
 def test_create_user(app):
     """
-    Right now this function is used to create user and will be deleted later.
+    Function is used to create admin user.
     """
     with app.app.app_context():
+        uid = current_app.config['FOCA'].endpoints['subscriptions'][
+            'admin_user']['uid']
+        name = current_app.config['FOCA'].endpoints['subscriptions'][
+            'admin_user']['name']
+        user_access_token = current_app.config['FOCA'].endpoints['subscriptions'][
+            'admin_user']['user_access_token']
         db_collection = (
-            current_app.config['FOCA'].db.dbs['brokerStore'].
+            current_app.config['FOCA'].db.dbs['pubgradeStore'].
             collections['users'].client
         )
         data = db_collection.find({"uid": uid})

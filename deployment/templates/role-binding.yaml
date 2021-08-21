@@ -5,9 +5,9 @@ metadata:
   namespace: {{ .Release.Namespace }}
 subjects:
 - kind: ServiceAccount
-  name: broker 
+  name: pubgrade
   namespace: {{ .Release.Namespace }}
 roleRef:
   kind: Role
-  name: role-broker 
+  name: role-pubgrade
   apiGroup: rbac.authorization.k8s.io

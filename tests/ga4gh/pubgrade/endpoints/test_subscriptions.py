@@ -9,14 +9,14 @@ from foca.models.config import Config, MongoConfig
 from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized, InternalServerError
 
-from broker.errors.exceptions import (
+from pubgrade.errors.exceptions import (
     RepositoryNotFound,
     UserNotFound,
     SubscriptionNotFound,
     BuildNotFound,
     RequestNotSent
 )
-from broker.ga4gh.broker.endpoints.subscriptions import (
+from pubgrade.ga4gh.pubgrade.endpoints.subscriptions import (
     register_subscription,
     get_subscriptions,
     get_subscription_info,
@@ -58,37 +58,37 @@ class TestSubscriptions:
     def setup(self):
         self.app.config['FOCA'] = \
             Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-        self.app.config['FOCA'].db.dbs['brokerStore']. \
+        self.app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['repositories'].client = mongomock.MongoClient(
         ).db.collection
-        self.app.config['FOCA'].db.dbs['brokerStore']. \
+        self.app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['builds'].client = mongomock.MongoClient(
         ).db.collection
-        self.app.config['FOCA'].db.dbs['brokerStore']. \
+        self.app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['users'].client = mongomock.MongoClient(
         ).db.collection
-        self.app.config['FOCA'].db.dbs['brokerStore']. \
+        self.app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['subscriptions'].client = mongomock.MongoClient(
         ).db.collection
         for repository in MOCK_REPOSITORIES:
-            self.app.config['FOCA'].db.dbs['brokerStore']. \
+            self.app.config['FOCA'].db.dbs['pubgradeStore']. \
                 collections['repositories'].client.insert_one(
                 repository).inserted_id
-        self.app.config['FOCA'].db.dbs['brokerStore']. \
+        self.app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['builds'].client.insert_one(
             MOCK_BUILD_INFO).inserted_id
-        self.app.config['FOCA'].db.dbs['brokerStore']. \
+        self.app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['builds'].client.insert_one(
             MOCK_BUILD_INFO_2).inserted_id
-        self.app.config['FOCA'].db.dbs['brokerStore']. \
+        self.app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['users'].client.insert_one(
             MOCK_USER).inserted_id
 
     def insert_subscription(self):
-        self.app.config['FOCA'].db.dbs['brokerStore']. \
+        self.app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['users'].client.insert_one(
             MOCK_USER_DB).inserted_id
-        self.app.config['FOCA'].db.dbs['brokerStore']. \
+        self.app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['subscriptions'].client.insert_one(
             MOCK_SUBSCRIPTION_INFO).inserted_id
 
@@ -97,10 +97,10 @@ class TestSubscriptions:
         with self.app.app_context():
             res = register_subscription(MOCK_USER['uid'], MOCK_USER[
                 'user_access_token'], SUBSCRIPTION_PAYLOAD)
-            data = self.app.config['FOCA'].db.dbs['brokerStore']. \
+            data = self.app.config['FOCA'].db.dbs['pubgradeStore']. \
                 collections['repositories'].client.find_one(
                 {"id": SUBSCRIPTION_PAYLOAD['repository_id']})
-            subscription = self.app.config['FOCA'].db.dbs['brokerStore']. \
+            subscription = self.app.config['FOCA'].db.dbs['pubgradeStore']. \
                 collections['subscriptions'].client.find_one(
                 {"id": res['subscription_id']})
             assert isinstance(res, dict)
@@ -110,7 +110,7 @@ class TestSubscriptions:
     def test_register_subscription_duplicate_key_error(self):
         self.setup()
         mock_resp = MagicMock(side_effect=DuplicateKeyError(''))
-        self.app.config['FOCA'].db.dbs['brokerStore'].collections[
+        self.app.config['FOCA'].db.dbs['pubgradeStore'].collections[
             'subscriptions'].client.insert_one = mock_resp
         with self.app.app_context():
             with pytest.raises(InternalServerError):
@@ -143,29 +143,29 @@ class TestSubscriptions:
     def test_get_subscriptions(self):
         self.app.config['FOCA'] = \
             Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-        self.app.config['FOCA'].db.dbs['brokerStore']. \
+        self.app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['repositories'].client = mongomock.MongoClient(
         ).db.collection
-        self.app.config['FOCA'].db.dbs['brokerStore']. \
+        self.app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['builds'].client = mongomock.MongoClient(
         ).db.collection
-        self.app.config['FOCA'].db.dbs['brokerStore']. \
+        self.app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['users'].client = mongomock.MongoClient(
         ).db.collection
-        self.app.config['FOCA'].db.dbs['brokerStore']. \
+        self.app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['subscriptions'].client = mongomock.MongoClient(
         ).db.collection
         for repository in MOCK_REPOSITORIES:
-            self.app.config['FOCA'].db.dbs['brokerStore']. \
+            self.app.config['FOCA'].db.dbs['pubgradeStore']. \
                 collections['repositories'].client.insert_one(
                 repository).inserted_id
-        self.app.config['FOCA'].db.dbs['brokerStore']. \
+        self.app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['builds'].client.insert_one(
             MOCK_BUILD_INFO).inserted_id
-        self.app.config['FOCA'].db.dbs['brokerStore']. \
+        self.app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['builds'].client.insert_one(
             MOCK_BUILD_INFO_2).inserted_id
-        self.app.config['FOCA'].db.dbs['brokerStore']. \
+        self.app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['users'].client.insert_one(
             MOCK_USER_DB).inserted_id
         with self.app.app_context():
@@ -177,7 +177,7 @@ class TestSubscriptions:
 
     def test_get_subscriptions_subscription_not_found(self):
         self.setup()
-        self.app.config['FOCA'].db.dbs['brokerStore'].collections[
+        self.app.config['FOCA'].db.dbs['pubgradeStore'].collections[
             'users'].client.insert_one(MOCK_USER_DB).inserted_id
         with self.app.app_context():
             with pytest.raises(SubscriptionNotFound):
@@ -270,9 +270,9 @@ class TestSubscriptions:
         self.insert_subscription()
         with self.app.app_context():
             notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
-                                 'elixir-cloud-aai/broker',
+                                 'elixir-cloud-aai/pubgrade',
                                  MOCK_BUILD_INFO['id'])
-            data = self.app.config['FOCA'].db.dbs['brokerStore']. \
+            data = self.app.config['FOCA'].db.dbs['pubgradeStore']. \
                 collections['subscriptions'].client.find_one(
                 {"id": MOCK_SUBSCRIPTION_INFO['id']})
             assert isinstance(data, dict)
@@ -285,7 +285,7 @@ class TestSubscriptions:
         self.insert_subscription()
         with self.app.app_context():
             with pytest.raises(SubscriptionNotFound):
-                notify_subscriptions('id', 'elixir-cloud-aai/broker',
+                notify_subscriptions('id', 'elixir-cloud-aai/pubgrade',
                                      MOCK_BUILD_INFO['id'])
 
     @patch('requests.request', mocked_request_api)
@@ -295,7 +295,7 @@ class TestSubscriptions:
         with self.app.app_context():
             with pytest.raises(BuildNotFound):
                 notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
-                                     'elixir-cloud-aai/broker', 'id')
+                                     'elixir-cloud-aai/pubgrade', 'id')
 
     @patch('requests.request', mocked_request_api_timeout_error)
     def test_notify_subscriptions_timeout(self):
@@ -304,9 +304,9 @@ class TestSubscriptions:
         with self.app.app_context():
             with pytest.raises(RequestNotSent):
                 notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
-                                     'elixir-cloud-aai/broker',
+                                     'elixir-cloud-aai/pubgrade',
                                      MOCK_BUILD_INFO['id'])
-            data = self.app.config['FOCA'].db.dbs['brokerStore']. \
+            data = self.app.config['FOCA'].db.dbs['pubgradeStore']. \
                 collections['subscriptions'].client.find_one(
                 {"id": MOCK_SUBSCRIPTION_INFO['id']})
             assert data['state'] == 'Inactive'
@@ -318,9 +318,9 @@ class TestSubscriptions:
         with self.app.app_context():
             with pytest.raises(RequestNotSent):
                 notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
-                                     'elixir-cloud-aai/broker',
+                                     'elixir-cloud-aai/pubgrade',
                                      MOCK_BUILD_INFO['id'])
-            data = self.app.config['FOCA'].db.dbs['brokerStore']. \
+            data = self.app.config['FOCA'].db.dbs['pubgradeStore']. \
                 collections['subscriptions'].client.find_one(
                 {"id": MOCK_SUBSCRIPTION_INFO['id']})
             assert data['state'] == 'Inactive'
@@ -332,9 +332,9 @@ class TestSubscriptions:
         with self.app.app_context():
             with pytest.raises(RequestNotSent):
                 notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
-                                     'elixir-cloud-aai/broker',
+                                     'elixir-cloud-aai/pubgrade',
                                      MOCK_BUILD_INFO['id'])
-            data = self.app.config['FOCA'].db.dbs['brokerStore']. \
+            data = self.app.config['FOCA'].db.dbs['pubgradeStore']. \
                 collections['subscriptions'].client.find_one(
                 {"id": MOCK_SUBSCRIPTION_INFO['id']})
             assert data['state'] == 'Inactive'
@@ -346,9 +346,9 @@ class TestSubscriptions:
         self.insert_subscription()
         with self.app.app_context():
             notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
-                                 'elixir-cloud-aai/broker',
+                                 'elixir-cloud-aai/pubgrade',
                                  MOCK_BUILD_INFO['id'])
-            data = self.app.config['FOCA'].db.dbs['brokerStore']. \
+            data = self.app.config['FOCA'].db.dbs['pubgradeStore']. \
                 collections['subscriptions'].client.find_one(
                 {"id": MOCK_SUBSCRIPTION_INFO['id']})
             assert isinstance(data, dict)
@@ -362,9 +362,9 @@ class TestSubscriptions:
         self.insert_subscription()
         with self.app.app_context():
             notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
-                                 'elixir-cloud-aai/broker',
+                                 'elixir-cloud-aai/pubgrade',
                                  MOCK_BUILD_INFO['id'])
-            data = self.app.config['FOCA'].db.dbs['brokerStore']. \
+            data = self.app.config['FOCA'].db.dbs['pubgradeStore']. \
                 collections['subscriptions'].client.find_one(
                 {"id": MOCK_SUBSCRIPTION_INFO['id']})
             assert isinstance(data, dict)

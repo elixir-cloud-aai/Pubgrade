@@ -1,22 +1,22 @@
-"""Controllers for broker endpoints"""
+"""Controllers for pubgrade endpoints"""
 
 from flask import request
 from foca.utils.logging import log_traffic
 
-from broker.ga4gh.broker.endpoints.builds import (
+from pubgrade.ga4gh.pubgrade.endpoints.builds import (
     build_completed,
     get_build_info,
     get_builds,
     register_builds
 )
-from broker.ga4gh.broker.endpoints.repositories import (
+from pubgrade.ga4gh.pubgrade.endpoints.repositories import (
     delete_repository,
     get_repositories,
-    get_repository_info,
+    get_repository,
     modify_repository_info,
     register_repository
 )
-from broker.ga4gh.broker.endpoints.subscriptions import (
+from pubgrade.ga4gh.pubgrade.endpoints.subscriptions import (
     delete_subscription,
     get_subscription_info,
     get_subscriptions,
@@ -57,7 +57,7 @@ def getRepository(id: str):
     Returns:
         Repository Object containing build_list, subscription_list, id, url.
         """
-    return get_repository_info(id)
+    return get_repository(id)
 
 
 @log_traffic
@@ -170,11 +170,6 @@ def getSubscriptions():
          """
     return get_subscriptions(request.headers['X-User-Id'],
                              request.headers['X-User-Access-Token'])
-
-
-# @log_traffic
-# def modifySubscription(subscription_id: str):
-#     return MOCK_SUBSCRIPTION
 
 
 @log_traffic

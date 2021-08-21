@@ -1,22 +1,22 @@
 openapi: 3.0.2
 info:
-  title: 'ELIXIR Broker Registry API Specification'
+  title: 'ELIXIR Pubgrade Registry API Specification'
   version: 1.0.0
   description: |
-    Broker leverages the publish-subscribe (pub/sub) pattern to effectively 
+    Pubgrade leverages the publish-subscribe (pub/sub) pattern to effectively 
     decouple continuous integration (CI) from continuous deilivery (CD): 
-    developers can call Broker in their CI pipelines to notify deployments of 
+    developers can call Pubgrade in their CI pipelines to notify deployments of 
     available updates ("publish"), while deployments can listen to update 
     notifications ("subscribe") and trigger specific CD pipelines set up by 
     administrators.
 
-    Broker is particularly useful wherever deployments are managed by different
+    Pubgrade is particularly useful wherever deployments are managed by different
     entities than those managing the underlying code bases, such as in federated
     networks, in which services are deployed at multiple locations by different
     organizations.
   license:
     name: Apache 2.0
-    url: 'https://raw.githubusercontent.com/akash2237778/Broker/main/LICENSE'
+    url: 'https://raw.githubusercontent.com/akash2237778/Pubgrade/main/LICENSE'
   contact:
     name: ELIXIR Cloud & AAI
     url: 'https://github.com/elixir-cloud-aai/elixir-cloud-aai'
@@ -192,7 +192,7 @@ paths:
           $ref: '#/components/responses/Error'
     delete:
       summary: 'Delete repository'
-      description: Delete repository from broker permanently. It removes 
+      description: Delete repository from pubgrade permanently. It removes 
         available builds and discard administrator's subscription for the 
         repository.
       operationId: deleteRepository
@@ -239,7 +239,7 @@ paths:
       summary: 'Register new build for repository.'
       description: Register a new build for already registered repository. 
         Ideally this endpoint is directly called by continuous integration (CI) 
-        pipelines. This endpoint is also responsible to trigger build at broker.
+        pipelines. This endpoint is also responsible to trigger build at pubgrade.
       operationId: postBuild
       tags:
         - builds
@@ -269,8 +269,9 @@ paths:
                   properties:
                             dockerhub_token:
                               type: string
-                              description: 'Base 64 encoded USER:PASSWORD to access dockerhub to
-                               push image `echo -n USER:PASSWD | base64`'
+                              description: 'Base 64 encoded USER:PASSWORD to
+                               access dockerhub to push image
+                                `echo -n USER:PASSWD | base64`'
               #additionalProperties: false
       responses:
         '200':
@@ -373,8 +374,8 @@ paths:
         default:
           $ref: '#/components/responses/Error'
     put:
-      summary: 'Update build info to broker'
-      description: Used by kaniko pod to update build complete info at broker. 
+      summary: 'Update build info to pubgrade'
+      description: Used by kaniko pod to update build complete info at pubgrade. 
       operationId: updateBuild
       tags:
         - builds
@@ -550,70 +551,6 @@ paths:
         default:
           $ref: '#/components/responses/Error'
   /subscriptions/{subscription_id}:
-#    put:
-#      summary: Modify created subscription
-#      description: Modify schema values for already created subscriptions.
-#      operationId: modifySubscription
-#      tags:
-#        - subscriptions
-#      parameters:
-#        - in: path
-#          name: subscription_id
-#          required: true
-#          schema:
-#            type: string
-#          description: Identifier generated when registering new subscription
-#            via `POST /subscriptions`
-#        - in: header
-#          name: X-User-Access-Token
-#          required: true
-#          schema:
-#            type: string
-#          description: Secret used to verify and uniquely identify administrator
-#           in order to perform their specific tasks.
-#      requestBody:
-#        required: true
-#        content:
-#          application/json:
-#            schema:
-#              allOf:
-#                - $ref: '#/components/schemas/Subscription'
-#                - type: object
-#                  properties:
-#                    access_token:
-#                        type: string
-#                        description: Secret used by continuous delivery (CD)
-#                          pipelines to verify request source for `callback_url`.
-#                        example: xxxxxxxxxxxx
-#              required:
-#                - repository_id
-#                - callback_url
-#                - access_token
-#              #additionalProperties: false
-#      responses:
-#        '200':
-#          description: 'Service successfully created'
-#          content:
-#            application/json:
-#              schema:
-#                type: object
-#                properties:
-#                    subscription_id:
-#                      type: string
-#                      description: Identifier which is generated on registering
-#                        new subscription via `POST /subcriptions`
-#                      example: subscription-xyz
-#                additionalProperties: false
-#        '400':
-#          $ref: '#/components/responses/BadRequest'
-#        '401':
-#          $ref: '#/components/responses/Unauthorized'
-#        '403':
-#          $ref: '#/components/responses/Forbidden'
-#        '500':
-#          $ref: '#/components/responses/InternalServerError'
-#        default:
-#          $ref: '#/components/responses/Error'
     get:
       summary: Show information for specified subscription.
       description: Show various information like state, update time, build
@@ -684,7 +621,7 @@ paths:
           $ref: '#/components/responses/Error'
     delete:
       summary: Delete subscription
-      description: Removes subscription information permanently from broker.
+      description: Removes subscription information permanently from pubgrade.
        Stops sending request at callback_url to notify continuous delivery (CD)
        pipeline.
       operationId: deleteSubscription
@@ -736,12 +673,6 @@ paths:
         default:
           $ref: '#/components/responses/Error'  
 components:
-  #### Need some work ####
-  # securitySchemes:
-  #   bearerAuth:
-  #     type: http
-  #     scheme: bearer
-  #     bearerFormat: JWT
   responses:
     BadRequest:
       description: 'Bad Request
@@ -786,7 +717,6 @@ components:
             $ref: '#/components/schemas/Error'
   schemas:
     Build:
-      # type: object
       description: Describes schema for build.
       allOf:
           - $ref: '#/components/schemas/BuildRegister' 
@@ -818,15 +748,6 @@ components:
               - status
               - started_at
               - finished_at
-    # BuildStates:
-    #   type: string
-    #   enum:
-    #     - UNKNOWN
-    #     - QUEUED
-    #     - RUNNING
-    #     - DELETING
-    #     - SUCCEEDED
-    #     - FAILED
     BuildRegister:
       type: object
       description: Describes schema for registering build
@@ -844,6 +765,7 @@ components:
             - $ref: '#/components/schemas/Tag'
           description: "Reference to the `commit` or `tag` which is to be used
            for source code checkout"
+          example: {"branch": "dev", "commit_sha": "4714900" }
       required:
           - images
           - head_commit
@@ -855,7 +777,7 @@ components:
         name:
           type: string
           description: Image repository and tag used to build image.
-          example: akash7778/broker:0.0.1
+          example: akash7778/pubgrade:0.0.1
         location:
           type: string
           description: Location of Dockerfile relative to repository root
@@ -864,25 +786,25 @@ components:
       required:
             - name
     Branch:
-      type: object    # Branch
+      type: object
       description: 'Git branch: Used as reference for git checkout'
       properties:
             branch:
                 type: string
                 description: Name of branch to be used to checkout git
                  repository.
-                example: development
+                example: dev
             commit_sha:
                 type: string
                 description: Git commit sha till where repository needs to be
-                 checkout by broker. Head commit will be used if `commit_sha`
+                 checkout by pubgrade. Head commit will be used if `commit_sha`
                   is not supplied in request.
                 default: <Head-commit>
-                example: 930fd5
+                example: 4714900
       required:
         - branch
     Tag:
-      type: object    # Tag
+      type: object
       description: 'Git Tag: Used as reference for git checkout.'
       properties:
           tag:
@@ -918,7 +840,6 @@ components:
             description: Value to match with type of `head_commit`.
             example: dev
     RepositoryListItem:
-      # type: object
       description: Schema used to show at `GET /repositories` for repositories.
       allOf:
         - $ref: '#/components/schemas/Repository'
@@ -933,12 +854,6 @@ components:
       description: Schema for repository.
       type: object
       properties:
-        ### Still need clarity ###
-        # type:
-        #   type: string
-        #   description: Development type
-        #   example: production
-        ##########################
         url:
           type: string
           description: URL of the git repository.
