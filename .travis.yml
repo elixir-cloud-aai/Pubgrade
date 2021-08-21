@@ -15,7 +15,6 @@ jobs:
       script:
         - flake8
         - coverage run --source broker -m pytest
-        - coveralls
     - <<: *test
       python: 3.7
     - <<: *test
