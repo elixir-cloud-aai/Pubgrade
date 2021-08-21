@@ -453,7 +453,7 @@ class TestBuild:
     def test_build_push_image_using_kaniko_incluster(self):
         os.environ['KUBERNETES_SERVICE_HOST'] = 'Incluster'
         builds.template_file = os.getcwd().split('Broker')[0] + \
-                               'Broker/broker/ga4gh/broker/endpoints/template/template.yaml'
+            'Broker/broker/ga4gh/broker/endpoints/template/template.yaml'
         with self.app.app_context():
             build_push_image_using_kaniko(builds.template_file)
         os.environ['NAMESPACE'] = 'broker'
