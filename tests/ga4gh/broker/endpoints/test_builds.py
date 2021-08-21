@@ -129,7 +129,7 @@ class MockKubeConfigLoader:
 class TestBuild:
     app = Flask(__name__)
 
-    repository_url = "https://github.com/akash2237778/Broker-test"
+    repository_url = "https://github.com/elixir-cloud-aai/drs-filer"
 
     def setup(self):
         self.app.config['FOCA'] = \
@@ -236,11 +236,11 @@ class TestBuild:
     def test_git_clone_and_checkout(self):
         clone_path = git_clone_and_checkout(
             repo_url=self.repository_url,
-            branch="main",
-            commit="8cd58eb",
+            branch="dev",
+            commit="122c34d",
             base_dir=".",
             build_id="build123")
-        assert clone_path == './build123/Broker-test'
+        assert clone_path == './build123/drs-filer'
         shutil.rmtree('./build123')
 
     def test_git_clone_and_checkout_type_error(self):
@@ -257,14 +257,14 @@ class TestBuild:
         with pytest.raises(WrongGitCommand):
             git_clone_and_checkout(
                 repo_url=self.repository_url,
-                branch="main",
-                commit="8cd58eb",
+                branch="dev",
+                commit="122c34d",
                 base_dir=".",
                 build_id="build123")
             git_clone_and_checkout(
                 repo_url=self.repository_url,
-                branch="main",
-                commit="8cd58eb",
+                branch="dev",
+                commit="122c34d",
                 base_dir=".",
                 build_id="build123")
         shutil.rmtree('./build123')
@@ -274,15 +274,15 @@ class TestBuild:
                                'Broker/broker/ga4gh/broker/endpoints/' \
                                'template/template.yaml'
         os.mkdir('build123')
-        os.mkdir('build123/Broker-test')
+        os.mkdir('build123/drs-filer')
         deployment_file_location = create_deployment_YAML(
-            './build123/Broker-test/dockerfile_location',
+            './build123/drs-filer/dockerfile_location',
             'registry_destination',
             'clone_path',
-            './build123/Broker-test/deployment_file',
+            './build123/drs-filer/deployment_file',
             'build_id/config.json',
             'project_access_token')
-        assert deployment_file_location == './build123/Broker-test/' \
+        assert deployment_file_location == './build123/drs-filer/' \
                                            'deployment_file'
         assert os.path.isfile(deployment_file_location)
         shutil.rmtree('./build123')
@@ -293,15 +293,15 @@ class TestBuild:
         ).split('Broker')[0] + 'Broker/broker/ga4gh/' \
                                'broker/endpoints/template/template.yaml'
         os.mkdir('build123')
-        os.mkdir('build123/Broker-test')
+        os.mkdir('build123/drs-filer')
         deployment_file_location = create_deployment_YAML(
-            './build123/Broker-test/dockerfile_location',
+            './build123/drs-filer/dockerfile_location',
             'registry_destination',
             'clone_path',
-            './build123/Broker-test/deployment_file',
+            './build123/drs-filer/deployment_file',
             'build_id/config.json',
             'project_access_token')
-        assert deployment_file_location == './build123/Broker-test/' \
+        assert deployment_file_location == './build123/drs-filer/' \
                                            'deployment_file'
         assert os.path.isfile(deployment_file_location)
         shutil.rmtree('./build123')
@@ -313,13 +313,13 @@ class TestBuild:
                                    'Broker/broker/ga4gh/broker/endpoints' \
                                    '/template/template.yaml'
             deployment_file_location = create_deployment_YAML(
-                './build123/Broker-test/dockerfile_location',
+                './build123/drs-filer/dockerfile_location',
                 'registry_destination',
                 'clone_path',
-                './build123/Broker-test/deployment_file',
+                './build123/drs-filer/deployment_file',
                 'build_id' + '/config.json',
                 'project_access_token')
-            assert deployment_file_location == './build123/Broker-test/' \
+            assert deployment_file_location == './build123/drs-filer/' \
                                                'deployment_file'
             assert os.path.isfile(deployment_file_location)
             shutil.rmtree('./build123')
@@ -337,17 +337,17 @@ class TestBuild:
                                'Broker/broker/ga4gh/broker/endpoints/' \
                                'template/template.yaml'
         os.mkdir('basedir')
-        os.mkdir('basedir/Broker-test')
-        f = open('basedir/Broker-test/Dockerfile', "w")
+        os.mkdir('basedir/drs-filer')
+        f = open('basedir/drs-filer/Dockerfile', "w")
         f.write("test dockerfile")
         f.close()
         create_build(
             repo_url=self.repository_url,
-            branch="main",
-            commit="8cd58eb",
+            branch="dev",
+            commit="122c34d",
             base_dir="basedir",
             build_id="build123",
-            dockerfile_location="basedir/Broker-test/Dockerfile",
+            dockerfile_location="basedir/drs-filer/Dockerfile",
             registry_destination='registry_destination',
             dockerhub_token='dockerhub_token',
             project_access_token='access_token')

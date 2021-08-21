@@ -844,6 +844,7 @@ components:
             - $ref: '#/components/schemas/Tag'
           description: "Reference to the `commit` or `tag` which is to be used
            for source code checkout"
+          example: {"branch": "dev", "commit_sha": "4714900" }
       required:
           - images
           - head_commit
@@ -871,14 +872,14 @@ components:
                 type: string
                 description: Name of branch to be used to checkout git
                  repository.
-                example: development
+                example: dev
             commit_sha:
                 type: string
                 description: Git commit sha till where repository needs to be
                  checkout by broker. Head commit will be used if `commit_sha`
                   is not supplied in request.
                 default: <Head-commit>
-                example: 930fd5
+                example: 4714900
       required:
         - branch
     Tag:

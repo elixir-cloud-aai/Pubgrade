@@ -43,7 +43,7 @@ proposal, question etc.
 
 [contributing]: <https://github.com/elixir-cloud-aai/elixir-cloud-aai/blob/dev/CONTRIBUTING.md>
 
-[diagram]: https://user-images.githubusercontent.com/46739435/120494133-2c17aa00-c3d9-11eb-80b9-b8c03c76e1cb.png
+[diagram]: Broker-Visual.png
 
 [elixir-cloud]: <https://github.com/elixir-cloud-aai/elixir-cloud-aai>
 

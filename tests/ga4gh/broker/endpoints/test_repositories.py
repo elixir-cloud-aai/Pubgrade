@@ -30,7 +30,7 @@ from tests.ga4gh.mock_data import (
 class TestRepository:
     app = Flask(__name__)
 
-    repository_url = "https://github.com/elixir-cloud-aai/Broker-test"
+    repository_url = "https://github.com/elixir-cloud-aai/drs-filer"
 
     def setup(self):
         self.app.config['FOCA'] = \
