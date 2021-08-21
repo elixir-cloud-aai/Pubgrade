@@ -82,8 +82,7 @@ def mocked_request_api(method, url, data, headers):
     return 'successful'
 
 
-def mocked_load_cluster_config(client_configuration=None,
-                               try_refresh_token=True):
+def mocked_load_cluster_config():
     return 'Loaded successfully'
 
 
