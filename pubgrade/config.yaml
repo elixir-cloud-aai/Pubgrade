@@ -8,10 +8,10 @@ server:
     use_reloader: True
 
 db:
-    host: mongodb.broker
+    host: mongodb.pubgrade
     port: 27017
     dbs:
-        brokerStore:
+        pubgradeStore:
             collections:
                 repositories:
                     indexes:
@@ -38,14 +38,13 @@ db:
                           options: 
                             'unique': True
 
-
 api:
     specs:
         - path:
-            - api/broker.yaml
+            - api/pubgrade.yaml
           append: null
           add_operation_fields:
-              x-openapi-router-controller: ga4gh.broker.server
+              x-openapi-router-controller: ga4gh.pubgrade.server
           connexion:
               strict_validation: True
               validate_responses: True
@@ -53,32 +52,40 @@ api:
                   swagger_ui: True
                   serve_spec: True
 
+exceptions:
+     required_members: [['msg'], ['status_code']]
+     status_member: ['status_code']
+     exceptions: pubgrade.errors.exceptions.exceptions
+
+log:
+    version: 1
+    disable_existing_loggers: False
+    formatters:
+        standard:
+            class: logging.Formatter
+            style: "{"
+            format: "[{asctime}: {levelname:<8}] {message} [{name}]"
+    handlers:
+        console:
+            class: logging.StreamHandler
+            level: 20
+            formatter: standard
+            stream: ext://sys.stderr
+    root:
+        level: 10
+        handlers: [console]
 
 # Custom app configuration
 endpoints:
     repository:
         id_charset: [string.ascii_lowercase, string.digits , '.' , '-']
         id_length: 6
-
-exceptions:
-     required_members: [['msg'], ['status_code']]
-     status_member: ['status_code']
-     exceptions: broker.errors.exceptions.exceptions
-
-# log:
-#     version: 1
-#     disable_existing_loggers: False
-#     formatters:
-#         standard:
-#             class: logging.Formatter
-#             style: "{"
-#             format: "[{asctime}: {levelname:<8}] {message} [{name}]"
-#     handlers:
-#         console:
-#             class: logging.StreamHandler
-#             level: 20
-#             formatter: standard
-#             stream: ext://sys.stderr
-#     root:
-#         level: 10
-#         handlers: [console]
+        retries: 3
+    access_token:
+        charset: [ string.ascii_lowercase, string.digits , '.' , '-' ]
+        length: 32
+    subscriptions:
+      admin_user:
+        name: 'Akash'
+        uid: '9fe2c4e93f654fdbb24c02b15259716c'
+        user_access_token: 'c42a6d44e3d0'

@@ -1,27 +1,27 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
- name: broker
+ name: pubgrade
 spec:
  replicas: 1
  selector:
    matchLabels:
-     app: broker
+     app: pubgrade
  template:
    metadata:
      labels:
-       app: broker
+       app: pubgrade
    spec:
-     serviceAccountName: broker
+     serviceAccountName: pubgrade
      automountServiceAccountToken: true
      containers:
-     - name: broker
+     - name: pubgrade
        imagePullPolicy: IfNotPresent
-       image: akash7778/broker:v1.0.0
+       image: akash7778/pubgrade:test_build
        ports:
        - containerPort: 8080
        volumeMounts:
-       - mountPath: /broker_temp_files  # if changed needs to be changed at builds.py
+       - mountPath: /pubgrade_temp_files  # if changed needs to be changed at builds.py
          name: pv-storage
        env:
          - name: NAMESPACE

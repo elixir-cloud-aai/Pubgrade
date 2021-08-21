@@ -1,16 +1,18 @@
-# Broker
+# Pubgrade
 
 [![License][badge-license]][badge-url-license]
+[![Build_status][badge-build-status]][badge-url-build-status]
+[![Coverage Status][coverage-badge-svg]][badge-url-coverage]
 
 ## Synopsis
 
-Broker is a decoupled, publish-subscribe-based continuous integration (CI) and
+Pubgrade is a decoupled, publish-subscribe-based continuous integration (CI) and
 continuous delivery (CD) microservice that allows developers to notify
 deployments of available updates, which can then autonomously decide what to do
-with them. Broker has an optional link
+with them. Pubgrade has an optional link
 with [ELIXIR Cloud Service Registry][elixir-cloud-registry].
 
-![Screenshot from 2021-05-29 15-33-18][diagram]
+![app-schema][diagram]
 
 ## Contributing
 
@@ -39,27 +41,20 @@ of [ELIXIR Cloud & AAI][elixir-cloud]. Follow the link to get in touch with us
 via chat or email. Please mention the name of this service for any inquiry,
 proposal, question etc.
 
-[badge-license]:<https://img.shields.io/badge/license-Apache%202.0-blue.svg>
 
+[badge-build-status]:<https://travis-ci.com/elixir-cloud-aai/Broker.svg?branch=feature_controllers>
+[badge-license]:<https://img.shields.io/badge/license-Apache%202.0-blue.svg>
+[badge-url-build-status]:<https://travis-ci.com/elixir-cloud-aai/Broker>
+[badge-url-coverage]:<https://coveralls.io/github/elixir-cloud-aai/Broker?branch=feature_controllers>
+[coverage-badge-svg]:<https://coveralls.io/repos/github/elixir-cloud-aai/Broker/badge.svg?branch=feature_controllers>
 [contributing]: <https://github.com/elixir-cloud-aai/elixir-cloud-aai/blob/dev/CONTRIBUTING.md>
-
-[diagram]: https://user-images.githubusercontent.com/46739435/120494133-2c17aa00-c3d9-11eb-80b9-b8c03c76e1cb.png
-
+[diagram]: app-schema.svg
 [elixir-cloud]: <https://github.com/elixir-cloud-aai/elixir-cloud-aai>
-
 [elixir-cloud-registry]:<https://cloud-registry.rahtiapp.fi/ga4gh/registry/v1/ui/>
-
 [semver]: <https://semver.org/>
-
 [license-apache]: <https://www.apache.org/licenses/LICENSE-2.0>
-
 [license]: LICENSE
-
 [badge-license]:<https://img.shields.io/badge/license-Apache%202.0-blue.svg>
-
 [badge-url-license]:<http://www.apache.org/licenses/LICENSE-2.0>
-
 [ga4gh]:<https://www.ga4gh.org/>
-
 [coc]: <https://github.com/elixir-cloud-aai/elixir-cloud-aai/blob/dev/CODE_OF_CONDUCT.md>
-

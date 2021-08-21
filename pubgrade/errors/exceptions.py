@@ -13,12 +13,6 @@ from werkzeug.exceptions import (
 )
 
 
-class AccessMethodNotFound(NotFound):
-    """Raised when access method of object with given object and access
-    identifiers was not found."""
-    pass
-
-
 class RepositoryNotFound(NotFound):
     """Raised when object with given repository identifier was not found."""
     pass
@@ -55,7 +49,7 @@ class RequestNotSent(InternalServerError):
     pass
 
 
-class WrongGitCommand(InternalServerError):
+class GitCloningError(InternalServerError):
     """Raised when there is problem while cloning repository."""
     pass
 
@@ -134,7 +128,7 @@ exceptions = {
     },
     OSError: {
         "msg": "Input/Output operation failed while creating deployment file.",
-        "status_code": '400'
+        "status_code": '500'
     },
     DeletePodError: {
         "msg": "Unable to delete pod check deployment name and namespace ENV.",
@@ -148,12 +142,12 @@ exceptions = {
         "msg": "Unable to update deployment.",
         "status_code": '500'
     },
-    WrongGitCommand: {
+    GitCloningError: {
         "msg": "Git repository information is wrong",
         "status_code": '500'
     },
-    # URLNotFound: {
-    #     "msg": "Repository URL not found in the request.",
-    #     "status_request": '400'
-    # }
+    URLNotFound: {
+        "msg": "Repository URL not found in the request.",
+        "status_code": '400'
+    }
 }
