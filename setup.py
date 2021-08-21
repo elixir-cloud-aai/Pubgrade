@@ -16,7 +16,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     license='Apache License 2.0',
-    url='https://github.com/akash2237778/Broker.git',
+    url='https://github.com/elixir-cloud-aai/Broker.git',
     packages=find_packages(),
     keywords=(
         'ga4gh broker elixir DevOps CI-CD api app server openapi '

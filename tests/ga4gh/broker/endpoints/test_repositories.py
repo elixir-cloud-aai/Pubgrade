@@ -30,6 +30,8 @@ from tests.ga4gh.mock_data import (
 class TestRepository:
     app = Flask(__name__)
 
+    repository_url = "https://github.com/elixir-cloud-aai/Broker-test"
+
     def setup(self):
         self.app.config['FOCA'] = \
             Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
@@ -44,7 +46,7 @@ class TestRepository:
     def test_register_repository(self):
         self.setup()
         data = {
-            "url": "https://github.com/akash2237778/Broker-test"
+            "url": self.repository_url
         }
         with self.app.app_context():
             res = register_repository(data=data)
@@ -76,7 +78,7 @@ class TestRepository:
         app.config['FOCA'].db.dbs['brokerStore'].collections['repositories']. \
             client.insert_one = mock_resp
         request_data = {
-            "url": "https://github.com/akash2237778/Broker-test"
+            "url": self.repository_url
         }
         with app.app_context():
             with pytest.raises(InternalServerError):
@@ -130,7 +132,7 @@ class TestRepository:
     def test_modify_repository_info(self):
         self.setup()
         data = {
-            "url": "https://github.com/akash2237778/broker"
+            "url": self.repository_url
         }
         with self.app.app_context():
             res = modify_repository_info(MOCK_REPOSITORIES[1]['id'],
@@ -142,7 +144,7 @@ class TestRepository:
     def test_modify_repository_info_repository_not_found(self):
         self.setup()
         data = {
-            "url": "https://github.com/akash2237778/broker"
+            "url": self.repository_url
         }
         with self.app.app_context():
             with pytest.raises(RepositoryNotFound):
@@ -153,7 +155,7 @@ class TestRepository:
     def test_modify_repository_info_unauthorized(self):
         self.setup()
         data = {
-            "url": "https://github.com/akash2237778/broker"
+            "url": self.repository_url
         }
         with self.app.app_context():
             with pytest.raises(Unauthorized):

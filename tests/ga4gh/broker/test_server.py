@@ -41,6 +41,10 @@ from tests.ga4gh.mock_data import (
     SUBSCRIPTION_PAYLOAD
 )
 
+drs_url = "https://github.com/elixir-cloud-aai/drs-filer.git"
+user_access_token = "c42a6d44e3d0"
+uid = "9fe2c4e93f654fdbb24c02b15259716c"
+
 
 def mocked_request_api(method, url, data, headers):
     return 'successful'
@@ -75,7 +79,7 @@ def test_postRepositories():
         collections['repositories'].client = mongomock.MongoClient(
     ).db.collection
     with app.test_request_context(
-            json={"url": "https://github.com/elixir-cloud-aai/drs-filer.git"}):
+            json={"url": drs_url}):
         res = postRepositories.__wrapped__()
         assert isinstance(res, dict)
 
@@ -109,8 +113,7 @@ def test_putRepositories():
             collections['repositories'].client.insert_one(
             repository).inserted_id
     with app.test_request_context(
-            json={"url": "https://github.com/elixir-cloud-aai/drs-filer.git"
-                         ""}, headers={
+            json={"url": drs_url}, headers={
                 'X-Project-Access-Token': MOCK_REPOSITORIES[1]['access_token'],
                 'Content-Type': 'application/json'
             }):
@@ -308,8 +311,8 @@ def test_postSubscription():
     with app.test_request_context(
             json=SUBSCRIPTION_PAYLOAD,
             headers={
-                'X-User-Access-Token': 'c42a6d44e3d0',
-                'X-User-Id': '9fe2c4e93f654fdbb24c02b15259716c',
+                'X-User-Access-Token': user_access_token,
+                'X-User-Id': uid,
                 'Content-Type': 'application/json'
             }):
         res = postSubscription.__wrapped__()
@@ -328,8 +331,8 @@ def test_getSubscriptions():
         MOCK_USER_DB).inserted_id
     with app.test_request_context(
             headers={
-                'X-User-Access-Token': 'c42a6d44e3d0',
-                'X-User-Id': '9fe2c4e93f654fdbb24c02b15259716c',
+                'X-User-Access-Token': user_access_token,
+                'X-User-Id': uid,
                 'Content-Type': 'application/json'
             }):
         res = getSubscriptions.__wrapped__()
@@ -354,8 +357,8 @@ def test_getSubscriptionInfo():
         MOCK_SUBSCRIPTION_INFO).inserted_id
     with app.test_request_context(
             headers={
-                'X-User-Access-Token': 'c42a6d44e3d0',
-                'X-User-Id': '9fe2c4e93f654fdbb24c02b15259716c',
+                'X-User-Access-Token': user_access_token,
+                'X-User-Id': uid,
                 'Content-Type': 'application/json'
             }):
         res = getSubscriptionInfo.__wrapped__(MOCK_SUBSCRIPTION_INFO['id'])
@@ -380,8 +383,8 @@ def test_deleteSubscription():
         MOCK_SUBSCRIPTION_INFO).inserted_id
     with app.test_request_context(
             headers={
-                'X-User-Access-Token': 'c42a6d44e3d0',
-                'X-User-Id': '9fe2c4e93f654fdbb24c02b15259716c',
+                'X-User-Access-Token': user_access_token,
+                'X-User-Id': uid,
                 'Content-Type': 'application/json'
             }):
         res = deleteSubscription.__wrapped__(MOCK_SUBSCRIPTION_INFO['id'])

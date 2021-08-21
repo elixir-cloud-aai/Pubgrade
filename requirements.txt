@@ -12,3 +12,6 @@ connexion~=2.7.0
 mongomock~=3.19.0
 pytest~=5.4.3
 mock~=4.0.3
+yq~=2.12.2
+kubernetes
+gitpython~=3.1.18

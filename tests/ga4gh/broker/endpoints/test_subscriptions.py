@@ -270,7 +270,8 @@ class TestSubscriptions:
         self.insert_subscription()
         with self.app.app_context():
             notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
-                                 'akash7778/broker', MOCK_BUILD_INFO['id'])
+                                 'elixir-cloud-aai/broker',
+                                 MOCK_BUILD_INFO['id'])
             data = self.app.config['FOCA'].db.dbs['brokerStore']. \
                 collections['subscriptions'].client.find_one(
                 {"id": MOCK_SUBSCRIPTION_INFO['id']})
@@ -284,7 +285,7 @@ class TestSubscriptions:
         self.insert_subscription()
         with self.app.app_context():
             with pytest.raises(SubscriptionNotFound):
-                notify_subscriptions('id', 'akash7778/broker',
+                notify_subscriptions('id', 'elixir-cloud-aai/broker',
                                      MOCK_BUILD_INFO['id'])
 
     @patch('requests.request', mocked_request_api)
@@ -294,7 +295,7 @@ class TestSubscriptions:
         with self.app.app_context():
             with pytest.raises(BuildNotFound):
                 notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
-                                     'akash7778/broker', 'id')
+                                     'elixir-cloud-aai/broker', 'id')
 
     @patch('requests.request', mocked_request_api_timeout_error)
     def test_notify_subscriptions_timeout(self):
@@ -303,7 +304,8 @@ class TestSubscriptions:
         with self.app.app_context():
             with pytest.raises(RequestNotSent):
                 notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
-                                     'akash7778/broker', MOCK_BUILD_INFO['id'])
+                                     'elixir-cloud-aai/broker',
+                                     MOCK_BUILD_INFO['id'])
             data = self.app.config['FOCA'].db.dbs['brokerStore']. \
                 collections['subscriptions'].client.find_one(
                 {"id": MOCK_SUBSCRIPTION_INFO['id']})
@@ -316,7 +318,8 @@ class TestSubscriptions:
         with self.app.app_context():
             with pytest.raises(RequestNotSent):
                 notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
-                                     'akash7778/broker', MOCK_BUILD_INFO['id'])
+                                     'elixir-cloud-aai/broker',
+                                     MOCK_BUILD_INFO['id'])
             data = self.app.config['FOCA'].db.dbs['brokerStore']. \
                 collections['subscriptions'].client.find_one(
                 {"id": MOCK_SUBSCRIPTION_INFO['id']})
@@ -329,7 +332,8 @@ class TestSubscriptions:
         with self.app.app_context():
             with pytest.raises(RequestNotSent):
                 notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
-                                     'akash7778/broker', MOCK_BUILD_INFO['id'])
+                                     'elixir-cloud-aai/broker',
+                                     MOCK_BUILD_INFO['id'])
             data = self.app.config['FOCA'].db.dbs['brokerStore']. \
                 collections['subscriptions'].client.find_one(
                 {"id": MOCK_SUBSCRIPTION_INFO['id']})
@@ -342,7 +346,8 @@ class TestSubscriptions:
         self.insert_subscription()
         with self.app.app_context():
             notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
-                                 'akash7778/broker', MOCK_BUILD_INFO['id'])
+                                 'elixir-cloud-aai/broker',
+                                 MOCK_BUILD_INFO['id'])
             data = self.app.config['FOCA'].db.dbs['brokerStore']. \
                 collections['subscriptions'].client.find_one(
                 {"id": MOCK_SUBSCRIPTION_INFO['id']})
@@ -357,7 +362,8 @@ class TestSubscriptions:
         self.insert_subscription()
         with self.app.app_context():
             notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
-                                 'akash7778/broker', MOCK_BUILD_INFO['id'])
+                                 'elixir-cloud-aai/broker',
+                                 MOCK_BUILD_INFO['id'])
             data = self.app.config['FOCA'].db.dbs['brokerStore']. \
                 collections['subscriptions'].client.find_one(
                 {"id": MOCK_SUBSCRIPTION_INFO['id']})

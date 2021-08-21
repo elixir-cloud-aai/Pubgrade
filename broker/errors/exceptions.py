@@ -55,7 +55,7 @@ class RequestNotSent(InternalServerError):
     pass
 
 
-class WrongGitCommand(GitCommandError):
+class WrongGitCommand(InternalServerError):
     """Raised when there is problem while cloning repository."""
     pass
 
@@ -92,7 +92,7 @@ exceptions = {
         "status_code": '400',
     },
     Unauthorized: {
-        "msg": " The request is unauthorized.",
+        "msg": "The request is unauthorized.",
         "status_code": '401',
     },
     Forbidden: {

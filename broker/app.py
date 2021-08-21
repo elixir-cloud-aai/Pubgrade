@@ -7,6 +7,10 @@ from foca.foca import foca
 
 logger = logging.getLogger(__name__)
 
+uid = "9fe2c4e93f654fdbb24c02b15259716c"
+name = "Akash"
+user_access_token = "c42a6d44e3d0"
+
 
 def test_create_user(app):
     """
@@ -17,12 +21,12 @@ def test_create_user(app):
             current_app.config['FOCA'].db.dbs['brokerStore'].
             collections['users'].client
         )
-        data = db_collection.find({})
-        if data is None:
+        data = db_collection.find({"uid": uid})
+        if data.count() == 0:
             db_collection.insert_one({
-                'uid': '9fe2c4e93f654fdbb24c02b15259716c',
-                'name': 'Akash',
-                'user_access_token': 'c42a6d44e3d0'
+                'uid': uid,
+                'name': name,
+                'user_access_token': user_access_token
             })
 
 

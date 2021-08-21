@@ -7,7 +7,6 @@ import mongomock
 import pytest
 from flask import Flask
 from foca.models.config import Config, MongoConfig
-from git import GitCommandError
 from typing import Any
 
 from kubernetes.client import ApiException
@@ -18,7 +17,7 @@ from broker.errors.exceptions import (
     RepositoryNotFound,
     BuildNotFound,
     CreatePodError,
-    DeletePodError
+    DeletePodError, WrongGitCommand
 )
 from broker.ga4gh.broker.endpoints.builds import (
     register_builds,
@@ -49,7 +48,6 @@ def mocked_create_build(repo_url, branch, commit, base_dir, build_id,
                         dockerfile_location, registry_destination,
                         dockerhub_token,
                         project_access_token):
-    # Need a mock for kubernetes
     return 'working fine'
 
 
@@ -84,7 +82,12 @@ def mocked_request_api(method, url, data, headers):
     return 'successful'
 
 
-def mocked_load_cluster_config():
+def mocked_load_cluster_config(client_configuration=None,
+                               try_refresh_token=True):
+    return 'Loaded successfully'
+
+
+def mocked_load_incluster_config():
     return 'Loaded successfully'
 
 
@@ -104,6 +107,8 @@ def mocked_create_namespaced_pod_error(self, namespace: str, body: Any,
 
 class TestBuild:
     app = Flask(__name__)
+
+    repository_url = "https://github.com/akash2237778/Broker-test"
 
     def setup(self):
         self.app.config['FOCA'] = \
@@ -209,7 +214,7 @@ class TestBuild:
 
     def test_git_clone_and_checkout(self):
         clone_path = git_clone_and_checkout(
-            repo_url="https://github.com/akash2237778/Broker-test",
+            repo_url=self.repository_url,
             branch="main",
             commit="8cd58eb",
             base_dir=".",
@@ -218,9 +223,9 @@ class TestBuild:
         shutil.rmtree('./build123')
 
     def test_git_clone_and_checkout_type_error(self):
-        with pytest.raises(GitCommandError):
+        with pytest.raises(WrongGitCommand):
             git_clone_and_checkout(
-                repo_url="https://github.com/akash2237778/Broker-test",
+                repo_url=self.repository_url,
                 branch="master",
                 commit="8cd58b",
                 base_dir=".",
@@ -228,15 +233,15 @@ class TestBuild:
         shutil.rmtree('./build123')
 
     def test_git_clone_and_checkout_git_command_error(self):
-        with pytest.raises(GitCommandError):
+        with pytest.raises(WrongGitCommand):
             git_clone_and_checkout(
-                repo_url="https://github.com/akash2237778/Broker-test",
+                repo_url=self.repository_url,
                 branch="main",
                 commit="8cd58eb",
                 base_dir=".",
                 build_id="build123")
             git_clone_and_checkout(
-                repo_url="https://github.com/akash2237778/Broker-test",
+                repo_url=self.repository_url,
                 branch="main",
                 commit="8cd58eb",
                 base_dir=".",
@@ -250,11 +255,11 @@ class TestBuild:
         os.mkdir('build123')
         os.mkdir('build123/Broker-test')
         deployment_file_location = create_deployment_YAML(
-            './build123/Broker-test' + '/' + 'dockerfile_location',
+            './build123/Broker-test/dockerfile_location',
             'registry_destination',
             'clone_path',
-            './build123/Broker-test' + '/' + 'deployment_file',
-            'build_id' + '/config.json',
+            './build123/Broker-test/deployment_file',
+            'build_id/config.json',
             'project_access_token')
         assert deployment_file_location == './build123/Broker-test/' \
                                            'deployment_file'
@@ -269,11 +274,11 @@ class TestBuild:
         os.mkdir('build123')
         os.mkdir('build123/Broker-test')
         deployment_file_location = create_deployment_YAML(
-            './build123/Broker-test' + '/' + 'dockerfile_location',
+            './build123/Broker-test/dockerfile_location',
             'registry_destination',
             'clone_path',
-            './build123/Broker-test' + '/' + 'deployment_file',
-            'build_id' + '/config.json',
+            './build123/Broker-test/deployment_file',
+            'build_id/config.json',
             'project_access_token')
         assert deployment_file_location == './build123/Broker-test/' \
                                            'deployment_file'
@@ -287,10 +292,10 @@ class TestBuild:
                                    'Broker/broker/ga4gh/broker/endpoints' \
                                    '/template/template.yaml'
             deployment_file_location = create_deployment_YAML(
-                './build123/Broker-test' + '/' + 'dockerfile_location',
+                './build123/Broker-test/dockerfile_location',
                 'registry_destination',
                 'clone_path',
-                './build123/Broker-test' + '/' + 'deployment_file',
+                './build123/Broker-test/deployment_file',
                 'build_id' + '/config.json',
                 'project_access_token')
             assert deployment_file_location == './build123/Broker-test/' \
@@ -316,7 +321,7 @@ class TestBuild:
         f.write("test dockerfile")
         f.close()
         create_build(
-            repo_url="https://github.com/akash2237778/Broker-test",
+            repo_url=self.repository_url,
             branch="main",
             commit="8cd58eb",
             base_dir="basedir",
@@ -353,6 +358,14 @@ class TestBuild:
                 build_completed(MOCK_REPOSITORY_2['id'], 'build12',
                                 MOCK_REPOSITORY_2['access_token'])
 
+    def test_build_completed_unauthorized(self):
+        self.setup_with_build()
+        with self.app.app_context():
+            with pytest.raises(Unauthorized):
+                build_completed(MOCK_REPOSITORY_2['id'],
+                                MOCK_REPOSITORY_2['build_list'][0],
+                                '123')
+
     def test_build_completed_repository_not_found(self):
         self.setup_with_build()
         with self.app.app_context():
@@ -367,9 +380,7 @@ class TestBuild:
         remove_files('build123', 'pod_name', 'namespace')
         assert not os.path.isdir('build123')
 
-    @patch('kubernetes.config.incluster_config', mocked_load_cluster_config)
-    @patch('kubernetes.config.kube_config', mocked_load_cluster_config)
-    @patch('kubernetes.client.api.core_v1_api.CoreV1Api', mocked_core_v1_api)
+    @patch('kubernetes.config.load_kube_config', mocked_load_cluster_config)
     @patch('kubernetes.client.api.core_v1_api.CoreV1Api.create_namespaced_pod',
            mocked_create_namespaced_pod)
     def test_build_push_image_using_kaniko(self):
@@ -383,9 +394,7 @@ class TestBuild:
             build_push_image_using_kaniko(builds.template_file)
         del os.environ['NAMESPACE']
 
-    @patch('kubernetes.config.incluster_config', mocked_load_cluster_config)
     @patch('kubernetes.config.kube_config', mocked_load_cluster_config)
-    @patch('kubernetes.client.api.core_v1_api.CoreV1Api', mocked_core_v1_api)
     @patch('kubernetes.client.api.core_v1_api.CoreV1Api.create_namespaced_pod',
            mocked_create_namespaced_pod_error)
     def test_build_push_image_using_kaniko_create_pod_error(self):
@@ -410,3 +419,19 @@ class TestBuild:
         with self.app.app_context():
             with pytest.raises(DeletePodError):
                 builds.delete_pod('name', 'namespace')
+
+    @patch('kubernetes.config.load_incluster_config',
+           mocked_load_incluster_config)
+    @patch('kubernetes.client.api.core_v1_api.CoreV1Api.create_namespaced_pod',
+           mocked_create_namespaced_pod)
+    def test_build_push_image_using_kaniko_incluster(self):
+        os.environ['KUBERNETES_SERVICE_HOST'] = 'Incluster'
+        builds.template_file = os.getcwd().split('Broker')[0] + \
+            'Broker/broker/ga4gh/broker/endpoints/template/template.yaml'
+        with self.app.app_context():
+            build_push_image_using_kaniko(builds.template_file)
+        os.environ['NAMESPACE'] = 'broker'
+        with self.app.app_context():
+            build_push_image_using_kaniko(builds.template_file)
+        del os.environ['NAMESPACE']
+        del os.environ['KUBERNETES_SERVICE_HOST']

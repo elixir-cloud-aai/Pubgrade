@@ -5,7 +5,7 @@ import shutil
 
 import yaml
 from flask import (current_app)
-from git import Repo
+from git import Repo, GitCommandError
 from kubernetes import client, config
 from kubernetes.client import ApiException
 from pymongo.errors import DuplicateKeyError
@@ -74,54 +74,58 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
         id_charset = ''.join(sorted(set(id_charset)))
 
     data_from_db = db_collection_repositories.find_one({'id': repository_id})
-    if data_from_db is not None:
-        if data_from_db['access_token'] == access_token:
-            for i in range(retries + 1):
-                logger.debug(
-                    f"Trying to insert/update object: try {i}" +
-                    str(build_data))
-                build_data['id'] = repository_id + generate_id(
-                    charset=id_charset,
-                    length=id_length,
+    if data_from_db is None:
+        logger.error(
+                    f"Could not find repository with given identifier: " +
+                    repository_id
                 )
-                db_collection_repositories.update_one({"id": repository_id},
-                                                      {"$push": {
-                                                       "build_list":
-                                                           build_data['id']}})
-                try:
-                    build_data['finished_at'] = "NULL"
-                    build_data['started_at'] = str(
-                        datetime.datetime.now().isoformat())
-                    build_data['status'] = "QUEUED"
-                    db_collection_builds.insert_one(build_data)
-                    create_build(repo_url=data_from_db['url'],
-                                 branch=build_data['head_commit']['branch'],
-                                 commit=build_data['head_commit'][
-                                     'commit_sha'],
-                                 base_dir=base_dir,
-                                 build_id=build_data['id'],
-                                 dockerfile_location=build_data['images'][0][
-                                     'location'],
-                                 registry_destination=build_data['images'][0][
-                                     'name'],
-                                 # data=data,
-                                 # db_collection_builds=db_collection_builds,
-                                 dockerhub_token=build_data['dockerhub_token'],
-                                 project_access_token=access_token)
-                    break
-                except DuplicateKeyError:
-                    continue
-            else:
-                logger.error(
-                    f"Could not generate unique identifier."
-                    f" Tried {retries + 1} times."
-                )
-                raise InternalServerError
-            return {'id': build_data['id']}
-        else:
-            raise Unauthorized
-    else:
         raise RepositoryNotFound
+    if data_from_db['access_token'] != access_token:
+        raise Unauthorized
+    for i in range(retries + 1):
+        logger.debug(
+            f"Trying to insert/update object: try {i}" +
+            str(build_data))
+        build_data['id'] = repository_id + generate_id(
+            charset=id_charset,
+            length=id_length,
+        )
+        db_collection_repositories.update_one({"id": repository_id},
+                                              {"$push": {
+                                               "build_list":
+                                                   build_data['id']}})
+        try:
+            build_data['finished_at'] = "NULL"
+            build_data['started_at'] = str(
+                datetime.datetime.now().isoformat())
+            build_data['status'] = "QUEUED"
+            db_collection_builds.insert_one(build_data)
+            create_build(repo_url=data_from_db['url'],
+                         branch=build_data['head_commit']['branch'],
+                         commit=build_data['head_commit'][
+                             'commit_sha'],
+                         base_dir=base_dir,
+                         build_id=build_data['id'],
+                         dockerfile_location=build_data['images'][0][
+                             'location'],
+                         registry_destination=build_data['images'][0][
+                             'name'],
+                         # data=data,
+                         # db_collection_builds=db_collection_builds,
+                         dockerhub_token=build_data['dockerhub_token'],
+                         project_access_token=access_token)
+            break
+        except DuplicateKeyError:
+            logger.error(f"DuplicateKeyError ({build_data['id']}): Key "
+                         f"generated is already present.")
+            continue
+    else:
+        logger.error(
+            f"Could not generate unique identifier."
+            f" Tried {retries + 1} times."
+        )
+        raise InternalServerError
+    return {'id': build_data['id']}
 
 
 def get_builds(repository_id: str):
@@ -153,17 +157,16 @@ def get_builds(repository_id: str):
     build_object_list = []
     data_from_db = db_collection_repositories.find_one(
         {'id': repository_id})
-    if data_from_db is not None:
-        try:
-            for build_id in data_from_db['build_list']:
-                build_data = get_build_info(build_id)
-                build_data['id'] = build_id
-                build_object_list.append(build_data)
-        except Exception:
-            raise BuildNotFound
-        return build_object_list
-    else:
+    if data_from_db is None:
         raise RepositoryNotFound
+    try:
+        for build_id in data_from_db['build_list']:
+            build_data = get_build_info(build_id)
+            build_data['id'] = build_id
+            build_object_list.append(build_data)
+    except Exception:
+        raise BuildNotFound
+    return build_object_list
 
 
 def get_build_info(build_id: str):
@@ -226,9 +229,8 @@ def create_build(repo_url, branch, commit, base_dir, build_id,
         - Create dockerhub config file.
         - Create kaniko deployment to build and push image.
     """
-    deployment_file_location = base_dir + '/' + build_id + '/' + build_id + \
-        '.yaml '
-    config_file_location = base_dir + '/' + build_id + '/config.json'
+    deployment_file_location = "%s/%s/%s.yaml" % (base_dir, build_id, build_id)
+    config_file_location = "%s/%s/config.json" % (base_dir, build_id)
     clone_path = git_clone_and_checkout(
         repo_url=repo_url,
         branch=branch,
@@ -238,12 +240,13 @@ def create_build(repo_url, branch, commit, base_dir, build_id,
     )
     # get_commit_list_from_repo_and_verify_commits(
     # clone_path=clone_path, latest_commit_sha=commit, build_id=build_id)
+
     create_deployment_YAML(
-        clone_path + '/' + dockerfile_location,
+        "%s/%s" % (clone_path, dockerfile_location),
         registry_destination,
         clone_path,
         deployment_file_location,
-        build_id + '/config.json',
+        '%s/config.json' % (build_id),
         project_access_token)
     create_dockerhub_config_file(
         dockerhub_token=dockerhub_token,
@@ -271,13 +274,13 @@ def git_clone_and_checkout(repo_url: str, branch: str, commit: str,
     Raises:
         WrongGitCommand: Raised when there is problem while cloning repository.
     """
-    clone_path = base_dir + '/' + build_id + '/' + \
-        repo_url.split('/')[4].split('.')[0]
+    clone_path = "%s/%s/%s" % (base_dir, build_id,
+                               repo_url.split('/')[4].split('.')[0])
     try:
         repo = Repo.clone_from(repo_url, clone_path, branch=branch)
         repo.git.checkout(commit)
         return clone_path
-    except TypeError:
+    except GitCommandError:
         raise WrongGitCommand
 
 
@@ -359,10 +362,10 @@ def create_dockerhub_config_file(dockerhub_token, config_file_location):
     template_config_file = '''{
 "auths": {
 "https://index.docker.io/v1/": {
-"auth": "''' + dockerhub_token + '''"
+"auth": "%s"
         }
     }
-}'''
+}''' % (dockerhub_token)
     f = open(config_file_location, "w")
     f.write(template_config_file)
     f.close()
@@ -402,7 +405,7 @@ def build_push_image_using_kaniko(deployment_file_location: str):
                          "AppsV1Api->create_namespaced_pod: "
                          "%s\n" % e)
             raise CreatePodError
-        print("Deployment created. status='%s'" % resp)
+        logger.info("Deployment created. status='%s'" % resp)
 
 
 def build_completed(repository_id: str, build_id: str,
@@ -442,32 +445,32 @@ def build_completed(repository_id: str, build_id: str,
 
     data_from_db = db_collection_repositories.find_one(
         {'id': repository_id})
-    if data_from_db is not None:
-        if data_from_db['access_token'] == project_access_token:
-            try:
-                data = db_collection_builds.find(
-                    {'id': build_id}, {'_id': False}
-                ).limit(1).next()
-                # del data['id']
-                data['status'] = "SUCCEEDED"
-                data['finished_at'] = str(
-                    datetime.datetime.now().isoformat())
-                db_collection_builds.update_one({"id": data['id']},
-                                                {"$set": data})
-                remove_files('/broker_temp_files/' + build_id, build_id,
-                             'broker')
-                if 'subscription_list' in data_from_db:
-                    subscription_list = data_from_db['subscription_list']
-                    for subscription in subscription_list:
-                        # for image_name in data['images']:
-                        notify_subscriptions(subscription,
-                                             data['images'][0]['name'],
-                                             build_id)
-                return {'id': build_id}
-            except StopIteration:
-                raise BuildNotFound
-    else:
+    if data_from_db is None:
         raise RepositoryNotFound
+    if data_from_db['access_token'] != project_access_token:
+        raise Unauthorized
+    try:
+        data = db_collection_builds.find(
+            {'id': build_id}, {'_id': False}
+        ).limit(1).next()
+        # del data['id']
+        data['status'] = "SUCCEEDED"
+        data['finished_at'] = str(
+            datetime.datetime.now().isoformat())
+        db_collection_builds.update_one({"id": data['id']},
+                                        {"$set": data})
+        remove_files('/broker_temp_files/' + build_id, build_id,
+                     'broker')
+        if 'subscription_list' in data_from_db:
+            subscription_list = data_from_db['subscription_list']
+            for subscription in subscription_list:
+                # for image_name in data['images']:
+                notify_subscriptions(subscription,
+                                     data['images'][0]['name'],
+                                     build_id)
+        return {'id': build_id}
+    except StopIteration:
+        raise BuildNotFound
 
 
 def remove_files(dir_location: str, pod_name: str, namespace: str):

@@ -1,2 +1,3 @@
 pvClaimName: broker-pv
-pathToLocalDir: '/home/akash/Desktop/files/mount' # needs to be changed accordingly
+pathToLocalDir: '/tmp/broker-pv' # needs to be changed accordingly
+imageNotifyCompletion: 'akash7778/notify-completion' # This will be moved to elixir-cloud-aai
