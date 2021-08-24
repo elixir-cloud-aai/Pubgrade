@@ -167,6 +167,32 @@ class TestBuild:
 
     @patch('broker.ga4gh.broker.endpoints.builds.create_build',
            mocked_create_build)
+    def test_register_builds_branch_only(self):
+        self.setup()
+        del MOCK_BUILD_PAYLOAD['head_commit']
+        MOCK_BUILD_PAYLOAD['head_commit'] = {"branch": "sample_branch"}
+        with self.app.app_context():
+            res = register_builds(MOCK_REPOSITORIES[1]['id'],
+                                  MOCK_REPOSITORIES[1]['access_token'],
+                                  MOCK_BUILD_PAYLOAD)
+            assert isinstance(res, dict)
+            assert 'id' in res and res['id'][:6] == MOCK_REPOSITORIES[1]['id']
+
+    @patch('broker.ga4gh.broker.endpoints.builds.create_build',
+           mocked_create_build)
+    def test_register_builds_tag(self):
+        self.setup()
+        del MOCK_BUILD_PAYLOAD['head_commit']
+        MOCK_BUILD_PAYLOAD['head_commit'] = {"tag": "12345"}
+        with self.app.app_context():
+            res = register_builds(MOCK_REPOSITORIES[1]['id'],
+                                  MOCK_REPOSITORIES[1]['access_token'],
+                                  MOCK_BUILD_PAYLOAD)
+            assert isinstance(res, dict)
+            assert 'id' in res and res['id'][:6] == MOCK_REPOSITORIES[1]['id']
+
+    @patch('broker.ga4gh.broker.endpoints.builds.create_build',
+           mocked_create_build)
     def test_register_builds_duplicate_key_error(self):
         self.setup()
         mock_resp = MagicMock(side_effect=DuplicateKeyError(''))
@@ -237,6 +263,16 @@ class TestBuild:
         clone_path = git_clone_and_checkout(
             repo_url=self.repository_url,
             branch="dev",
+            commit="122c34d",
+            base_dir=".",
+            build_id="build123")
+        assert clone_path == './build123/drs-filer'
+        shutil.rmtree('./build123')
+
+    def test_git_clone_and_checkout_without_branch(self):
+        clone_path = git_clone_and_checkout(
+            repo_url=self.repository_url,
+            branch="",
             commit="122c34d",
             base_dir=".",
             build_id="build123")

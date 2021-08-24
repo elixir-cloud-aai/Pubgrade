@@ -100,20 +100,51 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
                 datetime.datetime.now().isoformat())
             build_data['status'] = "QUEUED"
             db_collection_builds.insert_one(build_data)
-            create_build(repo_url=data_from_db['url'],
-                         branch=build_data['head_commit']['branch'],
-                         commit=build_data['head_commit'][
-                             'commit_sha'],
-                         base_dir=base_dir,
-                         build_id=build_data['id'],
-                         dockerfile_location=build_data['images'][0][
-                             'location'],
-                         registry_destination=build_data['images'][0][
-                             'name'],
-                         # data=data,
-                         # db_collection_builds=db_collection_builds,
-                         dockerhub_token=build_data['dockerhub_token'],
-                         project_access_token=access_token)
+            if 'branch' in build_data['head_commit'] and 'commit_sha' in \
+                    build_data['head_commit']:
+                create_build(repo_url=data_from_db['url'],
+                             branch=build_data['head_commit']['branch'],
+                             commit=build_data['head_commit'][
+                                 'commit_sha'],
+                             base_dir=base_dir,
+                             build_id=build_data['id'],
+                             dockerfile_location=build_data['images'][0][
+                                 'location'],
+                             registry_destination=build_data['images'][0][
+                                 'name'],
+                             # data=data,
+                             # db_collection_builds=db_collection_builds,
+                             dockerhub_token=build_data['dockerhub_token'],
+                             project_access_token=access_token)
+            elif 'branch' in build_data['head_commit']:
+                create_build(repo_url=data_from_db['url'],
+                             branch=build_data['head_commit']['branch'],
+                             commit='',
+                             base_dir=base_dir,
+                             build_id=build_data['id'],
+                             dockerfile_location=build_data['images'][0][
+                                 'location'],
+                             registry_destination=build_data['images'][0][
+                                 'name'],
+                             # data=data,
+                             # db_collection_builds=db_collection_builds,
+                             dockerhub_token=build_data['dockerhub_token'],
+                             project_access_token=access_token)
+            elif 'tag' in build_data['head_commit']:
+                create_build(repo_url=data_from_db['url'],
+                             branch='',
+                             commit=build_data['head_commit'][
+                                 'tag'],
+                             base_dir=base_dir,
+                             build_id=build_data['id'],
+                             dockerfile_location=build_data['images'][0][
+                                 'location'],
+                             registry_destination=build_data['images'][0][
+                                 'name'],
+                             # data=data,
+                             # db_collection_builds=db_collection_builds,
+                             dockerhub_token=build_data['dockerhub_token'],
+                             project_access_token=access_token)
             break
         except DuplicateKeyError:
             logger.error(f"DuplicateKeyError ({build_data['id']}): Key "
@@ -277,8 +308,12 @@ def git_clone_and_checkout(repo_url: str, branch: str, commit: str,
     clone_path = "%s/%s/%s" % (base_dir, build_id,
                                repo_url.split('/')[4].split('.')[0])
     try:
-        repo = Repo.clone_from(repo_url, clone_path, branch=branch)
-        repo.git.checkout(commit)
+        if branch != '':
+            repo = Repo.clone_from(repo_url, clone_path, branch=branch)
+        else:
+            repo = Repo.clone_from(repo_url, clone_path)
+        if commit != '':
+            repo.git.checkout(commit)
         return clone_path
     except GitCommandError:
         raise WrongGitCommand

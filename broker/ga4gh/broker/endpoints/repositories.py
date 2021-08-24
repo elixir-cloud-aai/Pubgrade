@@ -90,7 +90,8 @@ def register_repository(data: Dict):
                     f" Tried {retries + 1} times."
                 )
         raise InternalServerError
-    if repository_object is not None and 'url' in repository_object:
+    if repository_object is not None and '_id' in repository_object:
+        del repository_object['_id']
         del repository_object['url']
     logger.info(f"Added object with '{repository_object}'.")
     return repository_object
