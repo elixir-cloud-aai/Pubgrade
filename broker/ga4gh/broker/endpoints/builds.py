@@ -100,51 +100,27 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
                 datetime.datetime.now().isoformat())
             build_data['status'] = "QUEUED"
             db_collection_builds.insert_one(build_data)
-            if 'branch' in build_data['head_commit'] and 'commit_sha' in \
-                    build_data['head_commit']:
-                create_build(repo_url=data_from_db['url'],
-                             branch=build_data['head_commit']['branch'],
-                             commit=build_data['head_commit'][
-                                 'commit_sha'],
-                             base_dir=base_dir,
-                             build_id=build_data['id'],
-                             dockerfile_location=build_data['images'][0][
-                                 'location'],
-                             registry_destination=build_data['images'][0][
-                                 'name'],
-                             # data=data,
-                             # db_collection_builds=db_collection_builds,
-                             dockerhub_token=build_data['dockerhub_token'],
-                             project_access_token=access_token)
-            elif 'branch' in build_data['head_commit']:
-                create_build(repo_url=data_from_db['url'],
-                             branch=build_data['head_commit']['branch'],
-                             commit='',
-                             base_dir=base_dir,
-                             build_id=build_data['id'],
-                             dockerfile_location=build_data['images'][0][
-                                 'location'],
-                             registry_destination=build_data['images'][0][
-                                 'name'],
-                             # data=data,
-                             # db_collection_builds=db_collection_builds,
-                             dockerhub_token=build_data['dockerhub_token'],
-                             project_access_token=access_token)
-            elif 'tag' in build_data['head_commit']:
-                create_build(repo_url=data_from_db['url'],
-                             branch='',
-                             commit=build_data['head_commit'][
-                                 'tag'],
-                             base_dir=base_dir,
-                             build_id=build_data['id'],
-                             dockerfile_location=build_data['images'][0][
-                                 'location'],
-                             registry_destination=build_data['images'][0][
-                                 'name'],
-                             # data=data,
-                             # db_collection_builds=db_collection_builds,
-                             dockerhub_token=build_data['dockerhub_token'],
-                             project_access_token=access_token)
+            branch = ''
+            commit_sha = ''
+            try:
+                branch = build_data['head_commit']['branch']
+                try:
+                    commit_sha = build_data['head_commit']['commit_sha']
+                except KeyError:
+                    commit_sha = ''
+            except KeyError:
+                commit_sha = build_data['head_commit']['tag']
+            create_build(repo_url=data_from_db['url'],
+                         branch=branch,
+                         commit=commit_sha,
+                         base_dir=base_dir,
+                         build_id=build_data['id'],
+                         dockerfile_location=build_data['images'][0][
+                             'location'],
+                         registry_destination=build_data['images'][0][
+                             'name'],
+                         dockerhub_token=build_data['dockerhub_token'],
+                         project_access_token=access_token)
             break
         except DuplicateKeyError:
             logger.error(f"DuplicateKeyError ({build_data['id']}): Key "
