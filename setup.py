@@ -4,11 +4,11 @@ with open('README.md', 'r') as fh:
     long_description = fh.read()
 
 setup(
-    name='broker',
+    name='pubgrade',
     # version=__version__,
     author='ELIXIR Cloud & AAI',
     author_email='akash2237778@gmail.com',
-    description='Broker is a decoupled, publish-subscribe-based continuous '
+    description='Pubgrade is a decoupled, publish-subscribe-based continuous '
                 'integration (CI) and continuous delivery (CD) microservice '
                 'that allows developers to notify deployments of available '
                 'updates, which can then autonomously decide what to do with '
@@ -16,10 +16,10 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     license='Apache License 2.0',
-    url='https://github.com/elixir-cloud-aai/Broker.git',
+    url='https://github.com/elixir-cloud-aai/Pubgrade.git',
     packages=find_packages(),
     keywords=(
-        'ga4gh broker elixir DevOps CI-CD api app server openapi '
+        'ga4gh pubgrade elixir DevOps CI-CD api app server openapi '
         'swagger mongodb python flask docker'
     ),
     classifiers=[

@@ -17,12 +17,12 @@ spec:
         value: 'ACCESS_TOKEN'
       - name: NAMESPACE
         value: 'NAMESPACE'
-      - name: BROKER_URL
-        value: 'BROKER_URL'
-      - name: BROKER_PORT
-        value: 'BROKER_PORT'
+      - name: PUBGRADE_URL
+        value: 'PUBGRADE_URL'
+      - name: PUBGRADE_PORT
+        value: 'PUBGRADE_PORT'
     volumeMounts:
-    - mountPath: /broker_temp_files
+    - mountPath: /pubgrade_temp_files
       name: pv-storage
     - mountPath: /kaniko/.docker/config.json
       name: pv-storage

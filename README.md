@@ -1,13 +1,13 @@
-# Broker
+# Pubgrade
 
 [![License][badge-license]][badge-url-license]
 
 ## Synopsis
 
-Broker is a decoupled, publish-subscribe-based continuous integration (CI) and
+Pubgrade is a decoupled, publish-subscribe-based continuous integration (CI) and
 continuous delivery (CD) microservice that allows developers to notify
 deployments of available updates, which can then autonomously decide what to do
-with them. Broker has an optional link
+with them. Pubgrade has an optional link
 with [ELIXIR Cloud Service Registry][elixir-cloud-registry].
 
 ![Screenshot from 2021-05-29 15-33-18][diagram]
@@ -43,7 +43,7 @@ proposal, question etc.
 
 [contributing]: <https://github.com/elixir-cloud-aai/elixir-cloud-aai/blob/dev/CONTRIBUTING.md>
 
-[diagram]: Broker-Visual.png
+[diagram]: Pubgrade-Visual.png
 
 [elixir-cloud]: <https://github.com/elixir-cloud-aai/elixir-cloud-aai>
 

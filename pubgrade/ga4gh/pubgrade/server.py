@@ -1,22 +1,22 @@
-"""Controllers for broker endpoints"""
+"""Controllers for pubgrade endpoints"""
 
 from flask import request
 from foca.utils.logging import log_traffic
 
-from broker.ga4gh.broker.endpoints.builds import (
+from pubgrade.ga4gh.pubgrade.endpoints.builds import (
     build_completed,
     get_build_info,
     get_builds,
     register_builds
 )
-from broker.ga4gh.broker.endpoints.repositories import (
+from pubgrade.ga4gh.pubgrade.endpoints.repositories import (
     delete_repository,
     get_repositories,
     get_repository_info,
     modify_repository_info,
     register_repository
 )
-from broker.ga4gh.broker.endpoints.subscriptions import (
+from pubgrade.ga4gh.pubgrade.endpoints.subscriptions import (
     delete_subscription,
     get_subscription_info,
     get_subscriptions,

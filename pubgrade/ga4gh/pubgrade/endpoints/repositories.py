@@ -7,7 +7,7 @@ from flask import (current_app)
 from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized
 
-from broker.errors.exceptions import (
+from pubgrade.errors.exceptions import (
     RepositoryNotFound,
     URLNotFound,
     InternalServerError
@@ -53,7 +53,7 @@ def register_repository(data: Dict):
     except KeyError:
         raise URLNotFound
     db_collection = (
-        current_app.config['FOCA'].db.dbs['brokerStore'].
+        current_app.config['FOCA'].db.dbs['pubgradeStore'].
         collections['repositories'].client
     )
     id_length = (
@@ -110,11 +110,11 @@ def get_repositories():
 
     Raises:
         RepositoryNotFound: Raised when there is no registered repository in
-        the broker.
+        the pubgrade.
 
     """
     db_collection = (
-        current_app.config['FOCA'].db.dbs['brokerStore'].
+        current_app.config['FOCA'].db.dbs['pubgradeStore'].
         collections['repositories'].client
     )
 
@@ -178,7 +178,7 @@ def get_repository_info(repo_id: str):
         identifier.
     """
     db_collection = (
-        current_app.config['FOCA'].db.dbs['brokerStore'].
+        current_app.config['FOCA'].db.dbs['pubgradeStore'].
         collections['repositories'].client
     )
     try:
@@ -225,7 +225,7 @@ def modify_repository_info(repo_id: str, access_token: str, data: Dict):
 
     """
     db_collection_repository = (
-        current_app.config['FOCA'].db.dbs['brokerStore'].
+        current_app.config['FOCA'].db.dbs['pubgradeStore'].
         collections['repositories'].client
     )
     data_from_db = db_collection_repository.find_one({'id': repo_id})
@@ -273,7 +273,7 @@ def delete_repository(repo_id: str, access_token: str):
 
     """
     db_collection = (
-        current_app.config['FOCA'].db.dbs['brokerStore'].
+        current_app.config['FOCA'].db.dbs['pubgradeStore'].
         collections['repositories'].client
     )
     # try:

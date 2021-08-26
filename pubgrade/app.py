@@ -18,7 +18,7 @@ def test_create_user(app):
     """
     with app.app.app_context():
         db_collection = (
-            current_app.config['FOCA'].db.dbs['brokerStore'].
+            current_app.config['FOCA'].db.dbs['pubgradeStore'].
             collections['users'].client
         )
         data = db_collection.find({"uid": uid})

@@ -11,8 +11,8 @@ import string
 from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized, InternalServerError
 
-from broker.errors.exceptions import URLNotFound, RepositoryNotFound
-from broker.ga4gh.broker.endpoints.repositories import (
+from pubgrade.errors.exceptions import URLNotFound, RepositoryNotFound
+from pubgrade.ga4gh.pubgrade.endpoints.repositories import (
     register_repository,
     get_repositories,
     generate_id,
@@ -35,11 +35,11 @@ class TestRepository:
     def setup(self):
         self.app.config['FOCA'] = \
             Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-        self.app.config['FOCA'].db.dbs['brokerStore']. \
+        self.app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['repositories'].client = mongomock.MongoClient(
         ).db.collection
         for repository in MOCK_REPOSITORIES:
-            self.app.config['FOCA'].db.dbs['brokerStore']. \
+            self.app.config['FOCA'].db.dbs['pubgradeStore']. \
                 collections['repositories'].client.insert_one(
                 repository).inserted_id
 
@@ -73,9 +73,9 @@ class TestRepository:
                 endpoints=ENDPOINT_CONFIG,
             )
         mock_resp = MagicMock(side_effect=DuplicateKeyError(''))
-        app.config['FOCA'].db.dbs['brokerStore'].collections['repositories']. \
+        app.config['FOCA'].db.dbs['pubgradeStore'].collections['repositories']. \
             client = MagicMock()
-        app.config['FOCA'].db.dbs['brokerStore'].collections['repositories']. \
+        app.config['FOCA'].db.dbs['pubgradeStore'].collections['repositories']. \
             client.insert_one = mock_resp
         request_data = {
             "url": self.repository_url
@@ -87,7 +87,7 @@ class TestRepository:
     def test_get_repositories(self):
         self.app.config['FOCA'] = \
             Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-        self.app.config['FOCA'].db.dbs['brokerStore']. \
+        self.app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['repositories'].client = mongomock.MongoClient(
         ).db.collection
         with self.app.app_context():

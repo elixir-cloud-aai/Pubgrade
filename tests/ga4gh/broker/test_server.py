@@ -11,8 +11,8 @@ try:
 except Exception:
     from mock import patch
 
-from broker.errors.exceptions import RepositoryNotFound
-from broker.ga4gh.broker.server import (
+from pubgrade.errors.exceptions import RepositoryNotFound
+from pubgrade.ga4gh.pubgrade.server import (
     getRepositories,
     postRepositories,
     getRepository,
@@ -54,11 +54,11 @@ def test_getRepositories():
     """Test for getting Repositories."""
     app = Flask(__name__)
     app.config['FOCA'] = Config(db=MongoConfig(**MONGO_CONFIG))
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['repositories'].client = mongomock.MongoClient(
     ).db.collection
     for repository in MOCK_REPOSITORIES:
-        app.config['FOCA'].db.dbs['brokerStore']. \
+        app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['repositories'].client.insert_one(
             repository).inserted_id
     with app.test_request_context():
@@ -75,7 +75,7 @@ def test_postRepositories():
     app = Flask(__name__)
     app.config['FOCA'] = \
         Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['repositories'].client = mongomock.MongoClient(
     ).db.collection
     with app.test_request_context(
@@ -88,11 +88,11 @@ def test_getRepository():
     app = Flask(__name__)
     app.config['FOCA'] = \
         Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['repositories'].client = mongomock.MongoClient(
     ).db.collection
     for repository in MOCK_REPOSITORIES:
-        app.config['FOCA'].db.dbs['brokerStore']. \
+        app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['repositories'].client.insert_one(
             repository).inserted_id
     with app.test_request_context():
@@ -105,11 +105,11 @@ def test_putRepositories():
     app = Flask(__name__)
     app.config['FOCA'] = \
         Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['repositories'].client = mongomock.MongoClient(
     ).db.collection
     for repository in MOCK_REPOSITORIES:
-        app.config['FOCA'].db.dbs['brokerStore']. \
+        app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['repositories'].client.insert_one(
             repository).inserted_id
     with app.test_request_context(
@@ -126,11 +126,11 @@ def test_deleteRepository():
     app = Flask(__name__)
     app.config['FOCA'] = \
         Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['repositories'].client = mongomock.MongoClient(
     ).db.collection
     for repository in MOCK_REPOSITORIES:
-        app.config['FOCA'].db.dbs['brokerStore']. \
+        app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['repositories'].client.insert_one(
             repository).inserted_id
     with app.test_request_context(headers={
@@ -147,11 +147,11 @@ def test_deleteRepository_Not_Found():
         app = Flask(__name__)
         app.config['FOCA'] = \
             Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-        app.config['FOCA'].db.dbs['brokerStore']. \
+        app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['repositories'].client = mongomock.MongoClient(
         ).db.collection
         for repository in MOCK_REPOSITORIES:
-            app.config['FOCA'].db.dbs['brokerStore']. \
+            app.config['FOCA'].db.dbs['pubgradeStore']. \
                 collections['repositories'].client.insert_one(
                 repository).inserted_id
         with app.test_request_context(headers={
@@ -169,20 +169,20 @@ def mocked_create_build(repo_url, branch, commit, base_dir, build_id,
     return 'working fine'
 
 
-@patch('broker.ga4gh.broker.endpoints.builds.create_build',
+@patch('pubgrade.ga4gh.pubgrade.endpoints.builds.create_build',
        mocked_create_build)
 def test_postBuild():
     app = Flask(__name__)
     app.config['FOCA'] = \
         Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['repositories'].client = mongomock.MongoClient(
     ).db.collection
     for repository in MOCK_REPOSITORIES:
-        app.config['FOCA'].db.dbs['brokerStore']. \
+        app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['repositories'].client.insert_one(
             repository).inserted_id
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['builds'].client = mongomock.MongoClient(
     ).db.collection
     with app.test_request_context(
@@ -199,20 +199,20 @@ def test_getBuilds():
     app = Flask(__name__)
     app.config['FOCA'] = \
         Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['repositories'].client = mongomock.MongoClient(
     ).db.collection
     for repository in MOCK_REPOSITORIES:
-        app.config['FOCA'].db.dbs['brokerStore']. \
+        app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['repositories'].client.insert_one(
             repository).inserted_id
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['builds'].client = mongomock.MongoClient(
     ).db.collection
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['builds'].client.insert_one(
         MOCK_BUILD_INFO).inserted_id
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['builds'].client.insert_one(
         MOCK_BUILD_INFO_2).inserted_id
     with app.test_request_context():
@@ -225,17 +225,17 @@ def test_getBuildInfo():
     app = Flask(__name__)
     app.config['FOCA'] = \
         Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['repositories'].client = mongomock.MongoClient(
     ).db.collection
     for repository in MOCK_REPOSITORIES:
-        app.config['FOCA'].db.dbs['brokerStore']. \
+        app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['repositories'].client.insert_one(
             repository).inserted_id
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['builds'].client = mongomock.MongoClient(
     ).db.collection
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['builds'].client.insert_one(
         MOCK_BUILD_INFO).inserted_id
     with app.test_request_context():
@@ -252,29 +252,29 @@ def mock_notify_subscriptions():
     return "notify successful"
 
 
-@patch('broker.ga4gh.broker.endpoints.builds.remove_files', mock_remove_files)
+@patch('pubgrade.ga4gh.pubgrade.endpoints.builds.remove_files', mock_remove_files)
 @patch('requests.request', mocked_request_api)
 def test_updateBuild():
     app = Flask(__name__)
     app.config['FOCA'] = \
         Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['repositories'].client = mongomock.MongoClient(
     ).db.collection
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['subscriptions'].client = mongomock.MongoClient(
     ).db.collection
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['subscriptions'].client.insert_one(
         MOCK_SUBSCRIPTION_INFO).inserted_id
     for repository in MOCK_REPOSITORIES:
-        app.config['FOCA'].db.dbs['brokerStore']. \
+        app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['repositories'].client.insert_one(
             repository).inserted_id
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['builds'].client = mongomock.MongoClient(
     ).db.collection
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['builds'].client.insert_one(
         MOCK_BUILD_INFO).inserted_id
     with app.test_request_context(
@@ -292,20 +292,20 @@ def test_postSubscription():
     app = Flask(__name__)
     app.config['FOCA'] = \
         Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['repositories'].client = mongomock.MongoClient(
     ).db.collection
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['users'].client = mongomock.MongoClient(
     ).db.collection
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['users'].client.insert_one(
         MOCK_USER).inserted_id
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['subscriptions'].client = mongomock.MongoClient(
     ).db.collection
     for repository in MOCK_REPOSITORIES:
-        app.config['FOCA'].db.dbs['brokerStore']. \
+        app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['repositories'].client.insert_one(
             repository).inserted_id
     with app.test_request_context(
@@ -323,10 +323,10 @@ def test_getSubscriptions():
     app = Flask(__name__)
     app.config['FOCA'] = \
         Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['users'].client = mongomock.MongoClient(
     ).db.collection
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['users'].client.insert_one(
         MOCK_USER_DB).inserted_id
     with app.test_request_context(
@@ -343,16 +343,16 @@ def test_getSubscriptionInfo():
     app = Flask(__name__)
     app.config['FOCA'] = \
         Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['users'].client = mongomock.MongoClient(
     ).db.collection
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['users'].client.insert_one(
         MOCK_USER_DB).inserted_id
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['subscriptions'].client = mongomock.MongoClient(
     ).db.collection
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['subscriptions'].client.insert_one(
         MOCK_SUBSCRIPTION_INFO).inserted_id
     with app.test_request_context(
@@ -369,16 +369,16 @@ def test_deleteSubscription():
     app = Flask(__name__)
     app.config['FOCA'] = \
         Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['users'].client = mongomock.MongoClient(
     ).db.collection
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['users'].client.insert_one(
         MOCK_USER_DB).inserted_id
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['subscriptions'].client = mongomock.MongoClient(
     ).db.collection
-    app.config['FOCA'].db.dbs['brokerStore']. \
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
         collections['subscriptions'].client.insert_one(
         MOCK_SUBSCRIPTION_INFO).inserted_id
     with app.test_request_context(

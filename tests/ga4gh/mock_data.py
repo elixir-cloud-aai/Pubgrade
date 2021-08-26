@@ -28,7 +28,7 @@ MONGO_CONFIG = {
     'host': 'mongodb',
     'port': 27017,
     'dbs': {
-        'brokerStore': DB_CONFIG,
+        'pubgradeStore': DB_CONFIG,
     },
 }
 ENDPOINT_CONFIG = {
@@ -44,18 +44,18 @@ ENDPOINT_CONFIG = {
 }
 
 MOCK_REPOSITORY_1 = {
-    "url": "https://github.com/akash2237778/Broker-test",
+    "url": "https://github.com/akash2237778/Pubgrade-test",
     "id": "repo_123",
     "access_token": "access_token"
 }
 MOCK_REPOSITORY_1 = {
-    "url": "https://github.com/akash2237778/Broker-test",
+    "url": "https://github.com/akash2237778/Pubgrade-test",
     "id": "repo12",
     "access_token": "access_token"
 }
 
 MOCK_REPOSITORY_2 = {
-    "url": "https://github.com/akash2237778/Broker-test",
+    "url": "https://github.com/akash2237778/Pubgrade-test",
     "id": "eiic.g",
     "access_token": "g.i.ssstitrti.ccier.tgsactt.iosg",
     "build_list": ["eiic.gngdgrs", "eiic.gnabmns"],

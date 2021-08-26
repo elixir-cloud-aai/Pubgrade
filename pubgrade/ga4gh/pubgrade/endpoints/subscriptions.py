@@ -3,11 +3,11 @@ import logging
 from typing import Dict
 
 import requests
-from broker.errors.exceptions import (
+from pubgrade.errors.exceptions import (
     RepositoryNotFound, UserNotFound, SubscriptionNotFound, BuildNotFound,
     RequestNotSent, InternalServerError
 )
-from broker.ga4gh.broker.endpoints.repositories import generate_id
+from pubgrade.ga4gh.pubgrade.endpoints.repositories import generate_id
 from flask import current_app
 from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized
@@ -28,7 +28,7 @@ def register_subscription(uid: str, user_access_token: str, data: Dict):
 
     Raises:
         RepositoryNotFound: Raised when there is no registered repository in
-        the broker.
+        the pubgrade.
         Unauthorized: Raised when access_token is invalid or not specified
         in request.
         UserNotFound: Raised when there is no user with specified uid.
@@ -50,15 +50,15 @@ def register_subscription(uid: str, user_access_token: str, data: Dict):
     """
     retries = 3
     db_collection_subscriptions = (
-        current_app.config['FOCA'].db.dbs['brokerStore'].
+        current_app.config['FOCA'].db.dbs['pubgradeStore'].
         collections['subscriptions'].client
     )
     db_collection_user = (
-        current_app.config['FOCA'].db.dbs['brokerStore'].
+        current_app.config['FOCA'].db.dbs['pubgradeStore'].
         collections['users'].client
     )
     db_collection_repositories = (
-        current_app.config['FOCA'].db.dbs['brokerStore'].
+        current_app.config['FOCA'].db.dbs['pubgradeStore'].
         collections['repositories'].client
     )
     id_length = (
@@ -135,7 +135,7 @@ def get_subscriptions(uid: str, user_access_token: str):
         - Returns the list.
     """
     db_collection_user = (
-        current_app.config['FOCA'].db.dbs['brokerStore'].
+        current_app.config['FOCA'].db.dbs['pubgradeStore'].
         collections['users'].client
     )
     data_from_db_user = db_collection_user.find_one({'uid': uid})
@@ -184,11 +184,11 @@ def get_subscription_info(uid: str, user_access_token: str,
         - Returns the subscription_object.
     """
     db_collection_user = (
-        current_app.config['FOCA'].db.dbs['brokerStore'].
+        current_app.config['FOCA'].db.dbs['pubgradeStore'].
         collections['users'].client
     )
     db_collection_subscriptions = (
-        current_app.config['FOCA'].db.dbs['brokerStore'].
+        current_app.config['FOCA'].db.dbs['pubgradeStore'].
         collections['subscriptions'].client
     )
     data_from_db_user = db_collection_user.find_one({'uid': uid})
@@ -235,11 +235,11 @@ def delete_subscription(uid: str, user_access_token: str,
         - Returns the delete count.
     """
     db_collection_user = (
-        current_app.config['FOCA'].db.dbs['brokerStore'].
+        current_app.config['FOCA'].db.dbs['pubgradeStore'].
         collections['users'].client
     )
     db_collection_subscriptions = (
-        current_app.config['FOCA'].db.dbs['brokerStore'].
+        current_app.config['FOCA'].db.dbs['pubgradeStore'].
         collections['subscriptions'].client
     )
     data_from_db_user = db_collection_user.find_one({'uid': uid})
@@ -285,11 +285,11 @@ def notify_subscriptions(subscription_id: str, image: str, build_id: str):
 
     """
     db_collection_subscriptions = (
-        current_app.config['FOCA'].db.dbs['brokerStore'].
+        current_app.config['FOCA'].db.dbs['pubgradeStore'].
         collections['subscriptions'].client
     )
     db_collection_builds = (
-        current_app.config['FOCA'].db.dbs['brokerStore'].
+        current_app.config['FOCA'].db.dbs['pubgradeStore'].
         collections['builds'].client
     )
     build_object = db_collection_builds.find_one({'id': build_id})

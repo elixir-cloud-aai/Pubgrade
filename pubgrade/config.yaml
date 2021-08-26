@@ -8,10 +8,10 @@ server:
     use_reloader: True
 
 db:
-    host: mongodb.broker
+    host: mongodb.pubgrade
     port: 27017
     dbs:
-        brokerStore:
+        pubgradeStore:
             collections:
                 repositories:
                     indexes:
@@ -42,10 +42,10 @@ db:
 api:
     specs:
         - path:
-            - api/broker.yaml
+            - api/pubgrade.yaml
           append: null
           add_operation_fields:
-              x-openapi-router-controller: ga4gh.broker.server
+              x-openapi-router-controller: ga4gh.pubgrade.server
           connexion:
               strict_validation: True
               validate_responses: True
@@ -63,7 +63,7 @@ endpoints:
 exceptions:
      required_members: [['msg'], ['status_code']]
      status_member: ['status_code']
-     exceptions: broker.errors.exceptions.exceptions
+     exceptions: pubgrade.errors.exceptions.exceptions
 
 log:
     version: 1

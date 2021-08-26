@@ -11,16 +11,16 @@ from kubernetes.client import ApiException
 from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized
 
-from broker.errors.exceptions import (RepositoryNotFound,
+from pubgrade.errors.exceptions import (RepositoryNotFound,
                                       BuildNotFound, DeletePodError,
                                       CreatePodError, WrongGitCommand,
                                       InternalServerError)
-from broker.ga4gh.broker.endpoints.repositories import generate_id
-from broker.ga4gh.broker.endpoints.subscriptions import notify_subscriptions
+from pubgrade.ga4gh.pubgrade.endpoints.repositories import generate_id
+from pubgrade.ga4gh.pubgrade.endpoints.subscriptions import notify_subscriptions
 
 logger = logging.getLogger(__name__)
 
-template_file = '/app/broker/ga4gh/broker/endpoints/template/template.yaml'
+template_file = '/app/pubgrade/ga4gh/pubgrade/endpoints/template/template.yaml'
 
 
 def register_builds(repository_id: str, access_token: str, build_data: dict):
@@ -53,13 +53,13 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
         - returns build_id.
     """
     retries = 3
-    base_dir = '/broker_temp_files'
+    base_dir = '/pubgrade_temp_files'
     db_collection_builds = (
-        current_app.config['FOCA'].db.dbs['brokerStore'].
+        current_app.config['FOCA'].db.dbs['pubgradeStore'].
         collections['builds'].client
     )
     db_collection_repositories = (
-        current_app.config['FOCA'].db.dbs['brokerStore'].
+        current_app.config['FOCA'].db.dbs['pubgradeStore'].
         collections['repositories'].client
     )
     id_length = (
@@ -152,13 +152,13 @@ def get_builds(repository_id: str):
     Description:
         - Takes repository identifier.
         - Initiate an empty list.
-        - Checks if broker has repository with specified identifier.
+        - Checks if pubgrade has repository with specified identifier.
         - Checks if repository has at least one build to show information.
         - Appends all build information in empty list.
         - Returns list containing builds information.
     """
     db_collection_repositories = (
-        current_app.config['FOCA'].db.dbs['brokerStore'].
+        current_app.config['FOCA'].db.dbs['pubgradeStore'].
         collections['repositories'].client
     )
     build_object_list = []
@@ -196,7 +196,7 @@ def get_build_info(build_id: str):
         - Return build_object.
     """
     db_collection_builds = (
-        current_app.config['FOCA'].db.dbs['brokerStore'].
+        current_app.config['FOCA'].db.dbs['pubgradeStore'].
         collections['builds'].client
     )
     try:
@@ -228,7 +228,7 @@ def create_build(repo_url, branch, commit, base_dir, build_id,
         dockerhub_token: Base 64 encoded USER:PASSWORD to access dockerhub to
         push image `echo -n USER:PASSWD | base64`
         project_access_token: Secret used to verify source, will be used
-        by callback_url to inform broker for build completion.
+        by callback_url to inform pubgrade for build completion.
 
     Description:
         - Clones git repository.
@@ -310,7 +310,7 @@ def create_deployment_YAML(dockerfile_location: str, registry_destination: str,
         config_file_location: Dockerhub config file location, contains
         dockerhub access token.
         project_access_token: Secret used to verify source, will be used
-        by callback_url to inform broker for build completion.
+        by callback_url to inform pubgrade for build completion.
 
     Returns:
         deployment_file_location: Location of kaniko deployment file created.
@@ -349,7 +349,7 @@ def create_deployment_YAML(dockerfile_location: str, registry_destination: str,
         else:
             data['spec']['containers'][0]['env'][2]['value'] = 'default'
         data['spec']['containers'][0]['env'][3]['value'] = \
-            'http://broker-service.broker'  # BROKER_URL
+            'http://pubgrade-service.pubgrade'  # PUBGRADE_URL
         data['spec']['containers'][0]['env'][4]['value'] = '8080'  # PORT
         with open(deployment_file_location, 'w') as yaml_file:
             yaml_file.write(yaml.dump(data, default_flow_style=False))
@@ -438,7 +438,7 @@ def build_completed(repository_id: str, build_id: str,
         not found.
 
     Description:
-        - Checks if repository is registered with broker.
+        - Checks if repository is registered with pubgrade.
         - Verifies project_access_token is valid or not.
         - Checks if build is registered in the repository.
         - Updates values to the mongodb.
@@ -446,11 +446,11 @@ def build_completed(repository_id: str, build_id: str,
         - Returns build identifier.
     """
     db_collection_repositories = (
-        current_app.config['FOCA'].db.dbs['brokerStore'].
+        current_app.config['FOCA'].db.dbs['pubgradeStore'].
         collections['repositories'].client
     )
     db_collection_builds = (
-        current_app.config['FOCA'].db.dbs['brokerStore'].
+        current_app.config['FOCA'].db.dbs['pubgradeStore'].
         collections['builds'].client
     )
 
@@ -470,8 +470,8 @@ def build_completed(repository_id: str, build_id: str,
             datetime.datetime.now().isoformat())
         db_collection_builds.update_one({"id": data['id']},
                                         {"$set": data})
-        remove_files('/broker_temp_files/' + build_id, build_id,
-                     'broker')
+        remove_files('/pubgrade_temp_files/' + build_id, build_id,
+                     'pubgrade')
         if 'subscription_list' in data_from_db:
             subscription_list = data_from_db['subscription_list']
             for subscription in subscription_list:
@@ -545,7 +545,7 @@ def delete_pod(name, namespace):
 #             are_all_verified = verified_commits(previous_commit_sha,
 #                                                 commit_sha_list)
 #         db_collection_builds = (
-#             current_app.config['FOCA'].db.dbs['brokerStore'].
+#             current_app.config['FOCA'].db.dbs['pubgradeStore'].
 #             collections['builds'].client
 #         )
 #         data = db_collection_builds.find(

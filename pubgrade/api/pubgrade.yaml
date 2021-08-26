@@ -1,22 +1,22 @@
 openapi: 3.0.2
 info:
-  title: 'ELIXIR Broker Registry API Specification'
+  title: 'ELIXIR Pubgrade Registry API Specification'
   version: 1.0.0
   description: |
-    Broker leverages the publish-subscribe (pub/sub) pattern to effectively 
+    Pubgrade leverages the publish-subscribe (pub/sub) pattern to effectively 
     decouple continuous integration (CI) from continuous deilivery (CD): 
-    developers can call Broker in their CI pipelines to notify deployments of 
+    developers can call Pubgrade in their CI pipelines to notify deployments of 
     available updates ("publish"), while deployments can listen to update 
     notifications ("subscribe") and trigger specific CD pipelines set up by 
     administrators.
 
-    Broker is particularly useful wherever deployments are managed by different
+    Pubgrade is particularly useful wherever deployments are managed by different
     entities than those managing the underlying code bases, such as in federated
     networks, in which services are deployed at multiple locations by different
     organizations.
   license:
     name: Apache 2.0
-    url: 'https://raw.githubusercontent.com/akash2237778/Broker/main/LICENSE'
+    url: 'https://raw.githubusercontent.com/akash2237778/Pubgrade/main/LICENSE'
   contact:
     name: ELIXIR Cloud & AAI
     url: 'https://github.com/elixir-cloud-aai/elixir-cloud-aai'
@@ -192,7 +192,7 @@ paths:
           $ref: '#/components/responses/Error'
     delete:
       summary: 'Delete repository'
-      description: Delete repository from broker permanently. It removes 
+      description: Delete repository from pubgrade permanently. It removes 
         available builds and discard administrator's subscription for the 
         repository.
       operationId: deleteRepository
@@ -239,7 +239,7 @@ paths:
       summary: 'Register new build for repository.'
       description: Register a new build for already registered repository. 
         Ideally this endpoint is directly called by continuous integration (CI) 
-        pipelines. This endpoint is also responsible to trigger build at broker.
+        pipelines. This endpoint is also responsible to trigger build at pubgrade.
       operationId: postBuild
       tags:
         - builds
@@ -373,8 +373,8 @@ paths:
         default:
           $ref: '#/components/responses/Error'
     put:
-      summary: 'Update build info to broker'
-      description: Used by kaniko pod to update build complete info at broker. 
+      summary: 'Update build info to pubgrade'
+      description: Used by kaniko pod to update build complete info at pubgrade. 
       operationId: updateBuild
       tags:
         - builds
@@ -684,7 +684,7 @@ paths:
           $ref: '#/components/responses/Error'
     delete:
       summary: Delete subscription
-      description: Removes subscription information permanently from broker.
+      description: Removes subscription information permanently from pubgrade.
        Stops sending request at callback_url to notify continuous delivery (CD)
        pipeline.
       operationId: deleteSubscription
@@ -856,7 +856,7 @@ components:
         name:
           type: string
           description: Image repository and tag used to build image.
-          example: akash7778/broker:0.0.1
+          example: akash7778/pubgrade:0.0.1
         location:
           type: string
           description: Location of Dockerfile relative to repository root
@@ -876,7 +876,7 @@ components:
             commit_sha:
                 type: string
                 description: Git commit sha till where repository needs to be
-                 checkout by broker. Head commit will be used if `commit_sha`
+                 checkout by pubgrade. Head commit will be used if `commit_sha`
                   is not supplied in request.
                 default: <Head-commit>
                 example: 4714900
