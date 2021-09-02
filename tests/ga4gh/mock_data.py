@@ -39,7 +39,17 @@ ENDPOINT_CONFIG = {
             ".",
             "-"
         ],
-        "id_length": 6
+        "id_length": 6,
+        "retries": 3
+    },
+    "access_token": {
+        "charset": [
+            "string.ascii_lowercase",
+            "string.digits",
+            ".",
+            "-"
+        ],
+        "length": 32,
     }
 }
 

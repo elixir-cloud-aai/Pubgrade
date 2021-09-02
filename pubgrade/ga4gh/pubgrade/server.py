@@ -12,7 +12,7 @@ from pubgrade.ga4gh.pubgrade.endpoints.builds import (
 from pubgrade.ga4gh.pubgrade.endpoints.repositories import (
     delete_repository,
     get_repositories,
-    get_repository_info,
+    get_repository,
     modify_repository_info,
     register_repository
 )
@@ -57,7 +57,7 @@ def getRepository(id: str):
     Returns:
         Repository Object containing build_list, subscription_list, id, url.
         """
-    return get_repository_info(id)
+    return get_repository(id)
 
 
 @log_traffic
@@ -170,11 +170,6 @@ def getSubscriptions():
          """
     return get_subscriptions(request.headers['X-User-Id'],
                              request.headers['X-User-Access-Token'])
-
-
-# @log_traffic
-# def modifySubscription(subscription_id: str):
-#     return MOCK_SUBSCRIPTION
 
 
 @log_traffic

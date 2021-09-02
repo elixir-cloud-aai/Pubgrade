@@ -17,7 +17,7 @@ from pubgrade.errors.exceptions import (
     RepositoryNotFound,
     BuildNotFound,
     CreatePodError,
-    DeletePodError, WrongGitCommand
+    DeletePodError, GitCloningError
 )
 from pubgrade.ga4gh.pubgrade.endpoints.builds import (
     register_builds,
@@ -196,8 +196,8 @@ class TestBuild:
     def test_register_builds_duplicate_key_error(self):
         self.setup()
         mock_resp = MagicMock(side_effect=DuplicateKeyError(''))
-        self.app.config['FOCA'].db.dbs['pubgradeStore'].collections['builds']. \
-            client.insert_one = mock_resp
+        self.app.config['FOCA'].db.dbs['pubgradeStore'].collections[
+            'builds'].client.insert_one = mock_resp
         with self.app.app_context():
             with pytest.raises(InternalServerError):
                 register_builds(MOCK_REPOSITORIES[1]['id'],
@@ -280,7 +280,7 @@ class TestBuild:
         shutil.rmtree('./build123')
 
     def test_git_clone_and_checkout_type_error(self):
-        with pytest.raises(WrongGitCommand):
+        with pytest.raises(GitCloningError):
             git_clone_and_checkout(
                 repo_url=self.repository_url,
                 branch="master",
@@ -290,7 +290,7 @@ class TestBuild:
         shutil.rmtree('./build123')
 
     def test_git_clone_and_checkout_git_command_error(self):
-        with pytest.raises(WrongGitCommand):
+        with pytest.raises(GitCloningError):
             git_clone_and_checkout(
                 repo_url=self.repository_url,
                 branch="dev",
@@ -308,7 +308,7 @@ class TestBuild:
     def test_create_deployment_yaml(self):
         builds.template_file = os.getcwd().split('Pubgrade')[0] + \
                                'Pubgrade/pubgrade/ga4gh/pubgrade/endpoints/' \
-                               'template/template.yaml'
+                               'kaniko/template.yaml'
         os.mkdir('build123')
         os.mkdir('build123/drs-filer')
         deployment_file_location = create_deployment_YAML(
@@ -327,7 +327,7 @@ class TestBuild:
         os.environ['NAMESPACE'] = 'pubgrade'
         builds.template_file = os.getcwd(
         ).split('Pubgrade')[0] + 'Pubgrade/pubgrade/ga4gh/' \
-                               'pubgrade/endpoints/template/template.yaml'
+            'pubgrade/endpoints/kaniko/template.yaml'
         os.mkdir('build123')
         os.mkdir('build123/drs-filer')
         deployment_file_location = create_deployment_YAML(
@@ -346,8 +346,8 @@ class TestBuild:
     def test_create_deployment_yaml_os_error(self):
         with pytest.raises(OSError):
             builds.template_file = os.getcwd().split('Pubgrade')[0] + \
-                                   'Pubgrade/pubgrade/ga4gh/pubgrade/endpoints' \
-                                   '/template/template.yaml'
+                                   'Pubgrade/pubgrade/ga4gh/pubgrade/' \
+                                   'endpoints/kaniko/template.yaml'
             deployment_file_location = create_deployment_YAML(
                 './build123/drs-filer/dockerfile_location',
                 'registry_destination',
@@ -366,12 +366,13 @@ class TestBuild:
         os.remove('config.json')
 
     @patch(
-        "pubgrade.ga4gh.pubgrade.endpoints.builds.build_push_image_using_kaniko",
+        "pubgrade.ga4gh.pubgrade.endpoints.builds."
+        "build_push_image_using_kaniko",
         mocked_build_push_image_using_kaniko)
     def test_create_build(self):
         builds.template_file = os.getcwd().split('Pubgrade')[0] + \
                                'Pubgrade/pubgrade/ga4gh/pubgrade/endpoints/' \
-                               'template/template.yaml'
+                               'kaniko/template.yaml'
         os.mkdir('basedir')
         os.mkdir('basedir/drs-filer')
         f = open('basedir/drs-filer/Dockerfile', "w")
@@ -443,7 +444,7 @@ class TestBuild:
     def test_build_push_image_using_kaniko(self):
         builds.template_file = os.getcwd().split('Pubgrade')[0] + \
                                'Pubgrade/pubgrade/ga4gh/pubgrade/endpoints/' \
-                               'template/template.yaml'
+                               'kaniko/template.yaml'
         with self.app.app_context():
             build_push_image_using_kaniko(builds.template_file)
         os.environ['NAMESPACE'] = 'pubgrade'
@@ -462,7 +463,7 @@ class TestBuild:
     def test_build_push_image_using_kaniko_create_pod_error(self):
         builds.template_file = os.getcwd().split('Pubgrade')[0] + \
                                'Pubgrade/pubgrade/ga4gh/pubgrade/endpoints/' \
-                               'template/template.yaml'
+                               'kaniko/template.yaml'
         with self.app.app_context():
             with pytest.raises(CreatePodError):
                 build_push_image_using_kaniko(builds.template_file)
@@ -489,7 +490,7 @@ class TestBuild:
     def test_build_push_image_using_kaniko_incluster(self):
         os.environ['KUBERNETES_SERVICE_HOST'] = 'Incluster'
         builds.template_file = os.getcwd().split('Pubgrade')[0] + \
-            'Pubgrade/pubgrade/ga4gh/pubgrade/endpoints/template/template.yaml'
+            'Pubgrade/pubgrade/ga4gh/pubgrade/endpoints/kaniko/template.yaml'
         with self.app.app_context():
             build_push_image_using_kaniko(builds.template_file)
         os.environ['NAMESPACE'] = 'pubgrade'

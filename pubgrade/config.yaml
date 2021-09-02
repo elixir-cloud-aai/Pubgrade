@@ -38,7 +38,6 @@ db:
                           options: 
                             'unique': True
 
-
 api:
     specs:
         - path:
@@ -52,13 +51,6 @@ api:
               options:
                   swagger_ui: True
                   serve_spec: True
-
-
-# Custom app configuration
-endpoints:
-    repository:
-        id_charset: [string.ascii_lowercase, string.digits , '.' , '-']
-        id_length: 6
 
 exceptions:
      required_members: [['msg'], ['status_code']]
@@ -82,3 +74,13 @@ log:
     root:
         level: 10
         handlers: [console]
+
+# Custom app configuration
+endpoints:
+    repository:
+        id_charset: [string.ascii_lowercase, string.digits , '.' , '-']
+        id_length: 6
+        retries: 3
+    access_token:
+        charset: [ string.ascii_lowercase, string.digits , '.' , '-' ]
+        length: 32

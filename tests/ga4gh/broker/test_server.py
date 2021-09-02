@@ -252,7 +252,8 @@ def mock_notify_subscriptions():
     return "notify successful"
 
 
-@patch('pubgrade.ga4gh.pubgrade.endpoints.builds.remove_files', mock_remove_files)
+@patch('pubgrade.ga4gh.pubgrade.endpoints.builds.remove_files',
+       mock_remove_files)
 @patch('requests.request', mocked_request_api)
 def test_updateBuild():
     app = Flask(__name__)

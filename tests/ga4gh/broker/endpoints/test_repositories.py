@@ -16,7 +16,7 @@ from pubgrade.ga4gh.pubgrade.endpoints.repositories import (
     register_repository,
     get_repositories,
     generate_id,
-    get_repository_info,
+    get_repository,
     modify_repository_info,
     delete_repository
 )
@@ -73,10 +73,10 @@ class TestRepository:
                 endpoints=ENDPOINT_CONFIG,
             )
         mock_resp = MagicMock(side_effect=DuplicateKeyError(''))
-        app.config['FOCA'].db.dbs['pubgradeStore'].collections['repositories']. \
-            client = MagicMock()
-        app.config['FOCA'].db.dbs['pubgradeStore'].collections['repositories']. \
-            client.insert_one = mock_resp
+        app.config['FOCA'].db.dbs['pubgradeStore'].collections[
+            'repositories'].client = MagicMock()
+        app.config['FOCA'].db.dbs['pubgradeStore'].collections[
+            'repositories'].client.insert_one = mock_resp
         request_data = {
             "url": self.repository_url
         }
@@ -110,10 +110,10 @@ class TestRepository:
             assert 1 in [c in res for c in charset]
             assert '_' not in res or res[0] != '.' or res[0] != '-'
 
-    def test_get_repository_info(self):
+    def test_get_repository(self):
         self.setup()
         with self.app.app_context():
-            res = get_repository_info(MOCK_REPOSITORIES[1]['id'])
+            res = get_repository(MOCK_REPOSITORIES[1]['id'])
             assert 'subscription_list' not in res
             assert 'access_token' not in res
             assert 'build_list' in res and MOCK_REPOSITORIES[1]['build_list'] \
@@ -123,11 +123,11 @@ class TestRepository:
             assert 'url' in res and MOCK_REPOSITORIES[1]['url'] \
                    == res['url']
 
-    def test_get_repository_info_repository_not_found(self):
+    def test_get_repository_repository_not_found(self):
         self.setup()
         with self.app.app_context():
             with pytest.raises(RepositoryNotFound):
-                get_repository_info('abcd')
+                get_repository('abcd')
 
     def test_modify_repository_info(self):
         self.setup()

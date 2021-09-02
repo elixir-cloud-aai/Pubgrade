@@ -1,7 +1,6 @@
 import logging
 import string
 from random import choice
-from typing import (Dict)
 
 from flask import (current_app)
 from pymongo.errors import DuplicateKeyError
@@ -16,72 +15,69 @@ from pubgrade.errors.exceptions import (
 logger = logging.getLogger(__name__)
 
 
-def register_repository(data: Dict):
-    """Register a new repository.
+def register_repository(data: dict):
+    """Register a new repository object.
 
     Args:
-         data: Dictionary element of request received.
+         data (dict): Request object containing URL of git repository.
 
     Returns:
-        repository_object: Dictionary element of Repository created (
+        repository_object (dict): Dictionary of repository contents (
         identifier and access_token).
-
-    Description:
-        - Takes request data.
-        - Creates a repository object using url in request data.
-        - Generate a unique identifier for the object. (Retries 3 times for
-        generating unique identifier.)
-        - Generates access_token of 32 characters. (access_token will be
-        used later for operations like creating a new build, updating build
-        completion.)
-        - Inserts object in mongodb.
-        - Remove url from the repository_object
-        - Returns id and access_token for the repository_object created.
 
     Raises:
         URLNotFound: Raised when request data does not have url string.
         InternalServerError: Raised when it's unable to create unique
         identifier for the repository_object.
-
-
     """
-    retries = 3
     repository_object = {}
     try:
         repository_object['url'] = data['url']
         # Needs to verify validity of repository url.
     except KeyError:
         raise URLNotFound
+
     db_collection = (
         current_app.config['FOCA'].db.dbs['pubgradeStore'].
         collections['repositories'].client
     )
-    id_length = (
+    retries = current_app.config['FOCA'].endpoints['repository']['retries']
+    id_length: int = (
         current_app.config['FOCA'].endpoints['repository']['id_length']
     )
     id_charset: str = (
         current_app.config['FOCA'].endpoints['repository']['id_charset']
     )
+    access_token_length: int = (
+        current_app.config['FOCA'].endpoints['access_token']['length']
+    )
+    access_token_charset: str = (
+        current_app.config['FOCA'].endpoints['access_token']['charset']
+    )
     try:
         id_charset = eval(id_charset)
     except Exception:
         id_charset = ''.join(sorted(set(id_charset)))
+    try:
+        access_token_charset = eval(access_token_charset)
+    except Exception:
+        access_token_charset = ''.join(sorted(set(id_charset)))
 
-    for i in range(retries + 1):
+    for i in range(retries):
         logger.debug(f"Trying to insert/update object: try {i}")
-
-        repo_id = generate_id(
+        repository_object['id'] = generate_id(
             charset=id_charset,
             length=id_length,
         )
-        access_token = str(generate_id(id_charset, 32))
-        repository_object['id'] = repo_id
-        repository_object['access_token'] = access_token
+        repository_object['access_token'] = str(
+            generate_id(charset=access_token_charset,
+                        length=access_token_length))
         try:
             db_collection.insert_one(repository_object)
             break
         except DuplicateKeyError:
-            logger.error(f"DuplicateKeyError ({repo_id}): Key generated"
+            logger.error(f"DuplicateKeyError ({repository_object['id']}):  "
+                         f"Key generated"
                          f" is already present.")
             continue
     else:
@@ -90,28 +86,23 @@ def register_repository(data: Dict):
                     f" Tried {retries + 1} times."
                 )
         raise InternalServerError
-    if repository_object is not None and '_id' in repository_object:
+
+    if '_id' in repository_object:
         del repository_object['_id']
-        del repository_object['url']
+    del repository_object['url']
     logger.info(f"Added object with '{repository_object}'.")
     return repository_object
 
 
 def get_repositories():
-    """Get available Repositories.
+    """Retrieve available repositories.
 
     Returns:
-        list of repository_objects
-
-    Description:
-        - Fetches all repositories from the mongodb.
-        - Removes subscription_list if present.
-        - Returns list of repository_objects.
+        List of repository objects.
 
     Raises:
         RepositoryNotFound: Raised when there is no registered repository in
         the pubgrade.
-
     """
     db_collection = (
         current_app.config['FOCA'].db.dbs['pubgradeStore'].
@@ -121,11 +112,12 @@ def get_repositories():
     cursor = db_collection.find(
         {}, {'access_token': False, '_id': False}
     )
-    repository_object = list(cursor)
-    for repo in repository_object:
+    repos = list(cursor)
+
+    for repo in repos:
         if 'subscription_list' in repo:
             del repo['subscription_list']
-    return list(repository_object)
+    return list(repos)
 
 
 def generate_id(
@@ -135,8 +127,8 @@ def generate_id(
     """Generate random string based on allowed set of characters.
 
     Args:
-        charset: String of allowed characters.
-        length: Length of returned string.
+        charset (str): String of allowed characters.
+        length (int): Length of returned string.
 
     Returns:
         Random string of specified length and composed of defined set of
@@ -156,22 +148,15 @@ def generate_id(
     return generated_string
 
 
-def get_repository_info(repo_id: str):
-    """Get repository info.
+def get_repository(repo_id: str):
+    """Retrieve repository info.
 
     Args:
-        repo_id: Identifier of repository to be retrieved.
+        repo_id (str): Identifier of repository to be retrieved.
 
     Returns:
-        repository_object: Information of required repository also containing
-        list of available builds.
-
-    Description:
-        - Takes the repository identifier.
-        - Fetches repository object with specified id from mongodb without
-        access_token.
-        - Removes subscription_list if present.
-        - Returns repository object.
+        repository_object (dict): Information of the specified repository also
+        containing list of available builds for the repository.
 
     Raises:
         RepositoryNotFound: Raised when repository is not found with given
@@ -196,17 +181,17 @@ def get_repository_info(repo_id: str):
         raise RepositoryNotFound
 
 
-def modify_repository_info(repo_id: str, access_token: str, data: Dict):
-    """Modify already registered repository.
+def modify_repository_info(repo_id: str, access_token: str, data: dict):
+    """Modify registered repository.
 
     Args:
-        repo_id: Unique identifier for the repository.
-        access_token: Secret used to verify source is authorized.
-        data: Request data containing modified url of the repository.
+        repo_id (str): Unique identifier for the repository.
+        access_token (str): Secret used to verify source is authorized.
+        data (dict): Request data containing modified url of the repository.
 
     Returns:
-        repository_object: Dictionary element of Repository created along with
-        identifier and access_token.
+        repository_object (dict): Dictionary object of created repository
+        containing it's identifier and access_token.
 
     Raises:
         MongoError: Raised when object is unable to replace existing
@@ -215,14 +200,6 @@ def modify_repository_info(repo_id: str, access_token: str, data: Dict):
         in request.
         RepositoryNotFound: Raised when repository is not found with given
         identifier.
-
-    Description:
-        - Takes repository_id, access_token and request data.
-        - Check if repository with specified identifier is available or not.
-        - Verify access_token.
-        - Modify the specified repository using repository collection.
-        - Returns repository_object.
-
     """
     db_collection_repository = (
         current_app.config['FOCA'].db.dbs['pubgradeStore'].
@@ -249,8 +226,8 @@ def delete_repository(repo_id: str, access_token: str):
     """Delete repository.
 
     Args:
-        repo_id: Unique identifier for the repository.
-        access_token: Secret used to verify source is authorized.
+        repo_id (str): Unique identifier for the repository.
+        access_token (str): Secret used to verify source is authorized.
 
     Returns:
         repository delete count. (1 if repository is deleted, 0 if not
@@ -258,25 +235,16 @@ def delete_repository(repo_id: str, access_token: str):
 
     Raises:
         MongoError: Raised when object is unable to replace existing
-        repository_object in mongodb.
+        repository object in mongodb.
         Unauthorized: Raised when access_token is invalid or not specified
         in request.
         RepositoryNotFound: Raised when repository is not found with given
         identifier.
-
-    Description:
-        - Takes repository_id and access_token.
-        - Check if repository with specified identifier is available or not.
-        - Verify access_token.
-        - Delete the specified repository using repository collection.
-        - Returns delete count.
-
     """
     db_collection = (
         current_app.config['FOCA'].db.dbs['pubgradeStore'].
         collections['repositories'].client
     )
-    # try:
     data = db_collection.find_one({'id': repo_id})
     if data is None:
         logger.error('Not Found any repository with id:' + repo_id)

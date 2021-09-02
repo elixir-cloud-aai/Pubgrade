@@ -19,18 +19,19 @@ setup(
     url='https://github.com/elixir-cloud-aai/Pubgrade.git',
     packages=find_packages(),
     keywords=(
-        'ga4gh pubgrade elixir DevOps CI-CD api app server openapi '
-        'swagger mongodb python flask docker'
+        'api app ci-cd devops docker elixir flask ga4gh mongodb openapi '
+        'pubgrade pubsub python server subscription swagger upgrade '
     ),
     classifiers=[
         'License :: OSI Approved :: Apache Software License',
         'Development Status :: 3 - Alpha',
-        'Intended Audience :: Science/Research',
+        'Intended Audience :: Information Technology',
         'Topic :: Scientific/Engineering :: Bio-Informatics',
         'Natural Language :: English',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
     ],
     install_requires=[],
 )

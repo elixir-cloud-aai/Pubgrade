@@ -12,47 +12,38 @@ from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized
 
 from pubgrade.errors.exceptions import (RepositoryNotFound,
-                                      BuildNotFound, DeletePodError,
-                                      CreatePodError, WrongGitCommand,
-                                      InternalServerError)
+                                        BuildNotFound,
+                                        DeletePodError,
+                                        CreatePodError,
+                                        GitCloningError,
+                                        InternalServerError)
 from pubgrade.ga4gh.pubgrade.endpoints.repositories import generate_id
-from pubgrade.ga4gh.pubgrade.endpoints.subscriptions import notify_subscriptions
+from pubgrade.ga4gh.pubgrade.endpoints.subscriptions import  \
+    notify_subscriptions
 
 logger = logging.getLogger(__name__)
 
-template_file = '/app/pubgrade/ga4gh/pubgrade/endpoints/template/template.yaml'
+template_file = '/app/pubgrade/ga4gh/pubgrade/endpoints/kaniko/template.yaml'
 
 
 def register_builds(repository_id: str, access_token: str, build_data: dict):
     """Register new builds for already registered repository.
 
     Args:
-        repository_id: Identifier for repository.
-        access_token: Secret used to verify source of the request to
+        repository_id (str): Identifier for repository.
+        access_token (str): Secret used to verify source of the request to
         initiate new build.
-        build_data: Request data containing build information.
+        build_data (dict): Request data containing build information.
 
     Returns:
-        build_id: Identifier for new registered build.
+        build_id (str): Identifier for new registered build.
 
     Raises:
         Unauthorized: Raised when access_token is invalid or not specified
         in request.
         RepositoryNotFound: Raised when repository is not found with given
         identifier.
-
-    Description:
-        - Takes request build_data (Build information).
-        - Check if repository with specified identifier is available or not.
-        - Verify access_token.
-        - Generate a random string, add it after repository identifier and
-        use it as build identifier. (Retries 3 times for generating unique
-        random string.)
-        - Insert build_data in mongodb.
-        - Call create_build function.
-        - returns build_id.
     """
-    retries = 3
     base_dir = '/pubgrade_temp_files'
     db_collection_builds = (
         current_app.config['FOCA'].db.dbs['pubgradeStore'].
@@ -62,7 +53,8 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
         current_app.config['FOCA'].db.dbs['pubgradeStore'].
         collections['repositories'].client
     )
-    id_length = (
+    retries = current_app.config['FOCA'].endpoints['repository']['retries']
+    id_length: int = (
         current_app.config['FOCA'].endpoints['repository']['id_length']
     )
     id_charset: str = (
@@ -74,6 +66,7 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
         id_charset = ''.join(sorted(set(id_charset)))
 
     data_from_db = db_collection_repositories.find_one({'id': repository_id})
+
     if data_from_db is None:
         logger.error(
                     f"Could not find repository with given identifier: " +
@@ -82,7 +75,7 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
         raise RepositoryNotFound
     if data_from_db['access_token'] != access_token:
         raise Unauthorized
-    for i in range(retries + 1):
+    for i in range(retries):
         logger.debug(
             f"Trying to insert/update object: try {i}" +
             str(build_data))
@@ -136,26 +129,19 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
 
 
 def get_builds(repository_id: str):
-    """Get build information.
+    """Retrieve build information.
 
     Args:
-        repository_id: Repository identifier for retrieving builds information.
+        repository_id (str): Repository identifier for retrieving builds
+        information.
 
     Returns:
-        build_object_list: List containing build information for available
-        builds for the repository.
+        build_object_list (list): List containing build information for
+        available builds for the repository.
 
     Raises:
         BuildNotFound: Raised when object with given build identifier was
         not found.
-
-    Description:
-        - Takes repository identifier.
-        - Initiate an empty list.
-        - Checks if pubgrade has repository with specified identifier.
-        - Checks if repository has at least one build to show information.
-        - Appends all build information in empty list.
-        - Returns list containing builds information.
     """
     db_collection_repositories = (
         current_app.config['FOCA'].db.dbs['pubgradeStore'].
@@ -177,23 +163,19 @@ def get_builds(repository_id: str):
 
 
 def get_build_info(build_id: str):
-    """Gets builds information.
+    """Retrieve build information.
 
     Args:
-        build_id: Build identifier. ( build_id = repository_id + random
+        build_id (str): Build identifier. ( build_id = repository_id + random
         characters, len(build_id)=12 )
 
     Returns:
-        build_object: Dictionary element of Build without DockerHub token.
+        build_object (dict): Dictionary element of Build without DockerHub
+        token.
 
     Raises:
         BuildNotFound: Raised when object with given build identifier was
         not found.
-
-    Description:
-        - Takes the build identifier.
-        - Retrieve build information from mongodb.
-        - Return build_object.
     """
     db_collection_builds = (
         current_app.config['FOCA'].db.dbs['pubgradeStore'].
@@ -210,34 +192,32 @@ def get_build_info(build_id: str):
         raise BuildNotFound
 
 
-def create_build(repo_url, branch, commit, base_dir, build_id,
-                 dockerfile_location, registry_destination, dockerhub_token,
-                 project_access_token):
+def create_build(repo_url: str, branch: str, commit: str, base_dir: str,
+                 build_id: str, dockerfile_location: str,
+                 registry_destination: str, dockerhub_token: str,
+                 project_access_token: str):
     """
     Create build and push to DockerHub.
 
     Args:
-        repo_url: URL of git repository to be cloned.
-        branch: Branch of git repository used for checkout to build image.
-        commit: Commit used for checkout to build image.
-        base_dir: Location of base directory to clone git repository.
-        build_id: Build Identifier.
-        dockerfile_location: Location of dockerfile used for docker build
+        repo_url (str): URL of git repository to be cloned.
+        branch (str): Branch of git repository used for checkout to build
+        image.
+        commit (str): Commit used for checkout to build image.
+        base_dir (str): Location of base directory to clone git repository.
+        build_id (str): Build Identifier.
+        dockerfile_location (str): Location of dockerfile used for docker build
         taking git repository as base.
-        registry_destination: Path of repository to push build image.
-        dockerhub_token: Base 64 encoded USER:PASSWORD to access dockerhub to
-        push image `echo -n USER:PASSWD | base64`
-        project_access_token: Secret used to verify source, will be used
+        registry_destination (str): Path of repository to push build image.
+        dockerhub_token (str): Base 64 encoded USER:PASSWORD to access
+        dockerhub to push image `echo -n USER:PASSWD | base64`
+        project_access_token (str): Secret used to verify source, will be used
         by callback_url to inform pubgrade for build completion.
-
-    Description:
-        - Clones git repository.
-        - Creates kaniko deployment file.
-        - Create dockerhub config file.
-        - Create kaniko deployment to build and push image.
     """
     deployment_file_location = "%s/%s/%s.yaml" % (base_dir, build_id, build_id)
     config_file_location = "%s/%s/config.json" % (base_dir, build_id)
+
+    # Clone project repository.
     clone_path = git_clone_and_checkout(
         repo_url=repo_url,
         branch=branch,
@@ -245,20 +225,23 @@ def create_build(repo_url, branch, commit, base_dir, build_id,
         base_dir=base_dir,
         build_id=build_id
     )
-    # get_commit_list_from_repo_and_verify_commits(
-    # clone_path=clone_path, latest_commit_sha=commit, build_id=build_id)
 
+    # Create kaniko deployment file.
     create_deployment_YAML(
         "%s/%s" % (clone_path, dockerfile_location),
         registry_destination,
         clone_path,
         deployment_file_location,
-        '%s/config.json' % (build_id),
+        '%s/config.json' % build_id,
         project_access_token)
+
+    # Create dockerhub config file
     create_dockerhub_config_file(
         dockerhub_token=dockerhub_token,
         config_file_location=config_file_location
     )
+
+    # Create kaniko deployment to build and publish image.
     build_push_image_using_kaniko(
         deployment_file_location=deployment_file_location
     )
@@ -269,30 +252,36 @@ def git_clone_and_checkout(repo_url: str, branch: str, commit: str,
     """Clone git repository and checkout to specified branch/commit/tag.
 
     Args:
-        repo_url: URL of git repository to be cloned.
-        branch: Branch of git repository used for checkout to build image.
-        commit: Commit used for checkout to build image.
-        base_dir: Location of base directory to clone git repository.
-        build_id: Build Identifier.
+        repo_url (str): URL of git repository to be cloned.
+        branch (str): Branch of git repository used for checkout to build
+        image.
+        commit (str): Commit used for checkout to build image.
+        base_dir (str): Location of base directory to clone git repository.
+        build_id (str): Build Identifier.
 
     Returns:
-        clone_path: Path of the directory where git repository is cloned.
+        clone_path (str): Path of the directory where git repository is cloned.
 
     Raises:
-        WrongGitCommand: Raised when there is problem while cloning repository.
+        GitCloningError: Raised when there is problem while cloning repository.
     """
     clone_path = "%s/%s/%s" % (base_dir, build_id,
                                repo_url.split('/')[4].split('.')[0])
     try:
+        # Check if head commit is branch or tag.
         if branch != '':
+            # If branch is specified.
             repo = Repo.clone_from(repo_url, clone_path, branch=branch)
         else:
+            # If tag is specified.
             repo = Repo.clone_from(repo_url, clone_path)
+        # Checkout only if tag or commit sha is specified, otherwise stay at
+        # HEAD of branch.
         if commit != '':
             repo.git.checkout(commit)
         return clone_path
     except GitCommandError:
-        raise WrongGitCommand
+        raise GitCloningError
 
 
 def create_deployment_YAML(dockerfile_location: str, registry_destination: str,
@@ -301,27 +290,27 @@ def create_deployment_YAML(dockerfile_location: str, registry_destination: str,
                            project_access_token: str):
     """Create kaniko deployment file.
 
+    Use template kaniko deployment file and create a new deployment file with
+    specified values.
+
     Args:
-        dockerfile_location: Location of dockerfile used for docker build
+        dockerfile_location (str): Location of dockerfile used for docker build
         taking git repository as base.
-        registry_destination: Path of repository to push build image.
+        registry_destination (str): Path of repository to push build image.
         build_context: Location of build context.
-        deployment_file_location: Location to create deployment file.
-        config_file_location: Dockerhub config file location, contains
+        deployment_file_location (str): Location to create deployment file.
+        config_file_location (str): Dockerhub config file location, contains
         dockerhub access token.
-        project_access_token: Secret used to verify source, will be used
+        project_access_token (str): Secret used to verify source, will be used
         by callback_url to inform pubgrade for build completion.
 
     Returns:
-        deployment_file_location: Location of kaniko deployment file created.
+        deployment_file_location (str): Location of kaniko deployment file
+        created.
 
     Raises:
         IOError: Raised when Input/Output operation failed while creating
         deployment file.
-
-    Description:
-        - Use template deployment file and create a new deployment file with
-        modified values.
     """
     try:
         build_id = deployment_file_location.split('/')[2]
@@ -358,17 +347,15 @@ def create_deployment_YAML(dockerfile_location: str, registry_destination: str,
         raise OSError
 
 
-def create_dockerhub_config_file(dockerhub_token, config_file_location):
+def create_dockerhub_config_file(dockerhub_token: str,
+                                 config_file_location: str):
     """Create dockerhub config file.
 
     Args:
-        dockerhub_token: Base 64 encoded USER:PASSWORD to access dockerhub to
-        push image `echo -n USER:PASSWD | base64`
-        config_file_location: Location to create Dockerhub config file,
+        dockerhub_token (str): Base 64 encoded USER:PASSWORD to access
+        dockerhub to push image `echo -n USER:PASSWD | base64`
+        config_file_location (str): Location to create Dockerhub config file,
         it contains dockerhub access token.
-
-    Description:
-        - Uses template to create dockerhub config file.
     """
     template_config_file = '''{
 "auths": {
@@ -376,7 +363,7 @@ def create_dockerhub_config_file(dockerhub_token, config_file_location):
 "auth": "%s"
         }
     }
-}''' % (dockerhub_token)
+}''' % dockerhub_token
     f = open(config_file_location, "w")
     f.write(template_config_file)
     f.close()
@@ -386,17 +373,13 @@ def build_push_image_using_kaniko(deployment_file_location: str):
     """Create kaniko deployment. Build and push image.
 
     Args:
-        deployment_file_location: Location of kaniko deployment file.
+        deployment_file_location (str): Location of kaniko deployment file.
 
     Raises:
         CreatePodError: Raised when unable to create deployment.
-
-    Description:
-        - Retrieve values of NAMESPACE and KUBERNETES_SERVICE_HOST from
-        environment variables.
-        - Create namespace pod using kubernetes CoreV1Api from kaniko
-        deployment file.
     """
+    # Retrieve values of NAMESPACE and KUBERNETES_SERVICE_HOST from
+    # environment variables.
     if os.getenv('NAMESPACE'):
         namespace = os.getenv('NAMESPACE')
     else:
@@ -406,6 +389,9 @@ def build_push_image_using_kaniko(deployment_file_location: str):
     else:
         config.load_kube_config()
     v1 = client.CoreV1Api()
+
+    # Create namespaced pod using kubernetes CoreV1Api from kaniko
+    # deployment file.
     with open(deployment_file_location) as f:
         dep = yaml.safe_load(f)
         try:
@@ -424,26 +410,18 @@ def build_completed(repository_id: str, build_id: str,
     """Update build completion.
 
     Args:
-        repository_id: Repository identifier.
-        build_id: Build identifier.
-        project_access_token: Secret to verify source of the request.
+        repository_id (str): Repository identifier.
+        build_id (str): Build identifier.
+        project_access_token (str): Secret to verify source of the request.
 
     Returns:
-        build_id: Build identifier of completed build.
+        build_id (str): Build identifier of completed build.
 
     Raises:
         RepositoryNotFound: Raised when object with given repository
         identifier is not found.
         BuildNotFound: Raised when object with given build identifier was
         not found.
-
-    Description:
-        - Checks if repository is registered with pubgrade.
-        - Verifies project_access_token is valid or not.
-        - Checks if build is registered in the repository.
-        - Updates values to the mongodb.
-        - Notifies all subscriptions registered with the build.
-        - Returns build identifier.
     """
     db_collection_repositories = (
         current_app.config['FOCA'].db.dbs['pubgradeStore'].
@@ -464,7 +442,6 @@ def build_completed(repository_id: str, build_id: str,
         data = db_collection_builds.find(
             {'id': build_id}, {'_id': False}
         ).limit(1).next()
-        # del data['id']
         data['status'] = "SUCCEEDED"
         data['finished_at'] = str(
             datetime.datetime.now().isoformat())
@@ -472,6 +449,8 @@ def build_completed(repository_id: str, build_id: str,
                                         {"$set": data})
         remove_files('/pubgrade_temp_files/' + build_id, build_id,
                      'pubgrade')
+
+        # Notifies available subscriptions registered for the repository.
         if 'subscription_list' in data_from_db:
             subscription_list = data_from_db['subscription_list']
             for subscription in subscription_list:
@@ -488,22 +467,22 @@ def remove_files(dir_location: str, pod_name: str, namespace: str):
     """Removes build directory and kaniko pod.
 
     Args:
-        dir_location: Path of directory containing build files.
-        pod_name: Name of kaniko pod which is completed and needs to be
+        dir_location (str): Path of directory containing build files.
+        pod_name (str): Name of kaniko pod which is completed and needs to be
         deleted.
-        namespace: Namespace of pod.
+        namespace (str): Namespace of pod.
     """
     shutil.rmtree(dir_location)
     delete_pod(pod_name, namespace)
 
 
-def delete_pod(name, namespace):
+def delete_pod(name: str, namespace: str):
     """Delete pod.
 
     Args:
-        name: Name of kaniko pod which is completed and needs to be
+        name (str): Name of kaniko pod which is completed and needs to be
         deleted.
-        namespace: Namespace of pod.
+        namespace (str): Namespace of pod.
 
     Returns:
         Response of CoreV1Api on deleting pod.
@@ -520,61 +499,3 @@ def delete_pod(name, namespace):
                      "AppsV1Api->delete_namespaced_deployment: "
                      "%s\n" % e)
         raise DeletePodError
-
-
-# Needs gpg setup and public key at microservice.
-# def get_commit_list_from_repo_and_verify_commits(clone_path: str,
-#                                                  latest_commit_sha: str,
-#                                                  build_id: str,
-#                                                  previous_commit_sha=None):
-#     current_path = os.getcwd()
-#     os.chdir(clone_path)
-#     are_all_verified = False
-#     p, q = sb.getstatusoutput("git log --oneline")
-#     if p == 0:
-#         commit_list = q.split("\n")
-#         commit_sha_list = []
-#         for i in reversed(commit_list):
-#             if i.split(" ")[0] == latest_commit_sha:
-#                 break
-#             commit_sha_list.append(i.split(" ")[0])
-#         if previous_commit_sha is None:
-#             are_all_verified = verified_commits(commit_sha_list[0],
-#                                                 commit_sha_list)
-#         else:
-#             are_all_verified = verified_commits(previous_commit_sha,
-#                                                 commit_sha_list)
-#         db_collection_builds = (
-#             current_app.config['FOCA'].db.dbs['pubgradeStore'].
-#             collections['builds'].client
-#         )
-#         data = db_collection_builds.find(
-#             {'id': build_id}, {'_id': False}
-#         ).limit(1).next()
-#         data['commits_verified'] = are_all_verified
-#         db_collection_builds.update_one({"id": data['id']},
-#                                         {"$set": data})
-#     else:
-#         print('unable to fetch commit list')
-#     os.chdir(current_path)
-#     return are_all_verified
-#
-#
-# def verified_commits(previous_commit_sha: str, commit_list: list):
-#     verified_commits_list = []
-#     previous_commit_found = False
-#     for i in commit_list:
-#         if previous_commit_sha == i:
-#             previous_commit_found = True
-#             continue
-#         if not previous_commit_found:
-#             continue
-#         # if to_commit == i:
-#         #     break
-#         p, q = sb.getstatusoutput("git verify-commit " + i)
-#         if p == 0:
-#             verified_commits_list.append(i)
-#     if len(verified_commits_list) == 0:
-#         return False
-#     else:
-#         return True
