@@ -69,7 +69,7 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
 
     if data_from_db is None:
         logger.error(
-                    f"Could not find repository with given identifier: " +
+                    "Could not find repository with given identifier: " +
                     repository_id
                 )
         raise RepositoryNotFound

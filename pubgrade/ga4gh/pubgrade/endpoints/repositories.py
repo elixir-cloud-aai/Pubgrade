@@ -175,8 +175,8 @@ def get_repository(repo_id: str):
         return repository_object
     except StopIteration:
         logger.error(
-                    f"Could not find repository with given identifier: " +
-                    repo_id
+                    f"Could not find repository with given identifier:"
+                    f" {repo_id}"
                 )
         raise RepositoryNotFound
 
@@ -208,7 +208,7 @@ def modify_repository_info(repo_id: str, access_token: str, data: dict):
     data_from_db = db_collection_repository.find_one({'id': repo_id})
     if data_from_db is None:
         logger.error(
-                f"Could not find repository with given identifier: " + repo_id
+                f"Could not find repository with given identifier: {repo_id}"
                 )
         raise RepositoryNotFound
     if data_from_db['access_token'] != access_token:
