@@ -4,6 +4,7 @@ dist: bionic
 install:
   - pip install -r requirements.txt
   - pip install flake8
+  - pip install coverage
 language: python
 
 stages:
