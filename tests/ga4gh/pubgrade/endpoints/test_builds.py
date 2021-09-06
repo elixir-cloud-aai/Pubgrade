@@ -324,9 +324,8 @@ class TestBuild:
 
     def test_create_deployment_yaml_if_env_present(self):
         os.environ['NAMESPACE'] = 'pubgrade'
-        builds.template_file = os.getcwd(
-        ).split('Pubgrade')[0] + 'Pubgrade/pubgrade/ga4gh/' \
-            'pubgrade/endpoints/kaniko/template.yaml'
+        builds.template_file = 'pubgrade/ga4gh/pubgrade/endpoints/kaniko' \
+                               '/template.yaml'
         os.mkdir('build123')
         os.mkdir('build123/drs-filer')
         deployment_file_location = create_deployment_YAML(
