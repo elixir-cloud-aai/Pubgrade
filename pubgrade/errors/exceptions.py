@@ -148,6 +148,6 @@ exceptions = {
     },
     URLNotFound: {
         "msg": "Repository URL not found in the request.",
-        "status_request": '400'
+        "status_code": '400'
     }
 }

@@ -84,3 +84,8 @@ endpoints:
     access_token:
         charset: [ string.ascii_lowercase, string.digits , '.' , '-' ]
         length: 32
+    subscriptions:
+      admin_user:
+        name: 'Akash'
+        uid: '9fe2c4e93f654fdbb24c02b15259716c'
+        user_access_token: 'c42a6d44e3d0'

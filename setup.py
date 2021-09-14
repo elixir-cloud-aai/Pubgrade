@@ -8,11 +8,11 @@ setup(
     # version=__version__,
     author='ELIXIR Cloud & AAI',
     author_email='akash2237778@gmail.com',
-    description='Pubgrade is a decoupled, publish-subscribe-based continuous '
-                'integration (CI) and continuous delivery (CD) microservice '
-                'that allows developers to notify deployments of available '
-                'updates, which can then autonomously decide what to do with '
-                'them. ',
+    description=('Pubgrade is a decoupled, publish-subscribe-based continuous '
+                 'integration (CI) and continuous delivery (CD) microservice '
+                 'that allows developers to notify deployments of available '
+                 'updates, which can then autonomously decide what to do with '
+                 'them. '),
     long_description=long_description,
     long_description_content_type="text/markdown",
     license='Apache License 2.0',

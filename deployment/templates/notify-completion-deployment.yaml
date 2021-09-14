@@ -21,3 +21,5 @@ spec:
             env:
               - name: NAMESPACE
                 value: {{ .Release.Namespace }}
+              - name: BROKER_URL
+                value: {{ .Values.pubgrade_URL }}

@@ -2,7 +2,7 @@
 
 [![License][badge-license]][badge-url-license]
 [![Build_status][badge-build-status]][badge-url-build-status]
-[![Coverage][badge-coverage]][badge-url-coverage]
+[![Coverage Status][coverage-badge-svg]][badge-url-coverage]
 
 ## Synopsis
 
@@ -41,9 +41,12 @@ of [ELIXIR Cloud & AAI][elixir-cloud]. Follow the link to get in touch with us
 via chat or email. Please mention the name of this service for any inquiry,
 proposal, question etc.
 
+
+[badge-build-status]:<https://travis-ci.com/elixir-cloud-aai/Broker.svg?branch=feature_controllers>
 [badge-license]:<https://img.shields.io/badge/license-Apache%202.0-blue.svg>
 [badge-url-build-status]:<https://travis-ci.com/elixir-cloud-aai/Broker>
-[badge-url-coverage]:<https://coveralls.io/github/elixir-cloud-aai/Broker>
+[badge-url-coverage]:<https://coveralls.io/github/elixir-cloud-aai/Broker?branch=feature_controllers>
+[coverage-badge-svg]:<https://coveralls.io/repos/github/elixir-cloud-aai/Broker/badge.svg?branch=feature_controllers>
 [contributing]: <https://github.com/elixir-cloud-aai/elixir-cloud-aai/blob/dev/CONTRIBUTING.md>
 [diagram]: app-schema.svg
 [elixir-cloud]: <https://github.com/elixir-cloud-aai/elixir-cloud-aai>
