@@ -1,11 +1,12 @@
 from setuptools import (setup, find_packages)
+from pubgrade import __version__
 
 with open('README.md', 'r') as fh:
     long_description = fh.read()
 
 setup(
     name='pubgrade',
-    # version=__version__,
+    version=__version__,
     author='ELIXIR Cloud & AAI',
     author_email='akash2237778@gmail.com',
     description=('Pubgrade is a decoupled, publish-subscribe-based continuous '

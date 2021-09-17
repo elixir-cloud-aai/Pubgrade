@@ -6,7 +6,7 @@ from pubgrade.errors.exceptions import (
     RepositoryNotFound, UserNotFound, SubscriptionNotFound, BuildNotFound,
     RequestNotSent, InternalServerError
 )
-from pubgrade.ga4gh.pubgrade.endpoints.repositories import generate_id
+from pubgrade.pubgrade.endpoints.repositories import generate_id
 from flask import current_app
 from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized
