@@ -8,7 +8,7 @@ from foca.foca import foca
 logger = logging.getLogger(__name__)
 
 
-def test_create_user(app):
+def create_admin_user(app):
     """
     Function is used to create admin user.
     """
@@ -17,7 +17,8 @@ def test_create_user(app):
             'admin_user']['uid']
         name = current_app.config['FOCA'].endpoints['subscriptions'][
             'admin_user']['name']
-        user_access_token = current_app.config['FOCA'].endpoints['subscriptions'][
+        user_access_token = current_app.config[
+            'FOCA'].endpoints['subscriptions'][
             'admin_user']['user_access_token']
         db_collection = (
             current_app.config['FOCA'].db.dbs['pubgradeStore'].
@@ -34,7 +35,7 @@ def test_create_user(app):
 
 def main():
     app = foca("config.yaml")
-    test_create_user(app)
+    create_admin_user(app)
     app.run(port=app.port)
 
 
