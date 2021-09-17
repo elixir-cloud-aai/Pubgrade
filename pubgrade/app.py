@@ -17,7 +17,8 @@ def test_create_user(app):
             'admin_user']['uid']
         name = current_app.config['FOCA'].endpoints['subscriptions'][
             'admin_user']['name']
-        user_access_token = current_app.config['FOCA'].endpoints['subscriptions'][
+        user_access_token = current_app.config[
+            'FOCA'].endpoints['subscriptions'][
             'admin_user']['user_access_token']
         db_collection = (
             current_app.config['FOCA'].db.dbs['pubgradeStore'].

@@ -22,7 +22,6 @@ from pubgrade.ga4gh.pubgrade.endpoints.subscriptions import (
     get_subscriptions,
     register_subscription,
 )
-from tests.ga4gh.mock_data import MOCK_SUBSCRIPTION
 
 
 @log_traffic
@@ -200,5 +199,4 @@ def deleteSubscription(subscription_id: str):
     if delete_subscription(request.headers['X-User-Id'],
                            request.headers['X-User-Access-Token'],
                            subscription_id) != 0:
-        MOCK_SUBSCRIPTION['subscription_id'] = subscription_id
-        return MOCK_SUBSCRIPTION
+        return {"subscription_id": subscription_id}
