@@ -8,7 +8,7 @@ from foca.foca import foca
 logger = logging.getLogger(__name__)
 
 
-def test_create_user(app):
+def create_admin_user(app):
     """
     Function is used to create admin user.
     """
@@ -35,7 +35,7 @@ def test_create_user(app):
 
 def main():
     app = foca("config.yaml")
-    test_create_user(app)
+    create_admin_user(app)
     app.run(port=app.port)
 
 
