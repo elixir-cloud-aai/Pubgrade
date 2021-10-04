@@ -158,6 +158,9 @@ def get_builds(repository_id: str):
             build_data['id'] = build_id
             build_object_list.append(build_data)
     except Exception:
+        logger.error(
+            "No build found for given repository identifier. {repository_id}"
+            )
         raise BuildNotFound
     return build_object_list
 
