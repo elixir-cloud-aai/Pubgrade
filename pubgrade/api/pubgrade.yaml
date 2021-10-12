@@ -647,7 +647,7 @@ paths:
           required: true
           schema:
             type: string
-          description: Secret used to uniquely identify administrator
+          description: Identifier used to uniquely identify administrator
            and perform their specific tasks.
       responses:
         '200':
@@ -671,7 +671,128 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
         default:
-          $ref: '#/components/responses/Error'  
+          $ref: '#/components/responses/Error'
+  /users:
+    get:
+      summary: List available users.
+      description: List information of available user, accessible by super user only.
+      operationId: getUsers
+      tags:
+        - users
+      parameters:
+        - in: header
+          name: X-Super-User-Access-Token
+          required: true
+          schema:
+            type: string
+          description: Secret used to verify super user and perform their specific tasks.
+        - in: header
+          name: X-Super-User-Id
+          required: true
+          schema:
+            type: string
+          description: Identifier used to uniquely identify super user
+           and perform their specific tasks.
+      responses:
+        '200':
+          description: 'List Information of available users.'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  properties:
+                    name:
+                      type: string
+                      description: Name of registered user
+                      example: 'Akash Saini'
+                    uid:
+                      type: string
+                      description: Identifier used to uniquely identify user.
+                      example: '9fe2c4e93f654fdbb24c02b15259716c'
+                    created_at:
+                      type: string
+                      format: date-time
+                      description: Timestamp when the user is created.
+                      example: '2021-10-07T17:32:28Z'
+                    is_verified:
+                      type: boolean
+                      description: Boolean value of whether the user is verified by super user or not.
+                      example: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        default:
+          $ref: '#/components/responses/Error'
+  /users/register:
+    post:
+      summary: Register new user.
+      description: Register a new system administrator user to use pubgrade.
+      operationId: postUser
+      tags:
+        - users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+                  type: object
+                  properties:
+                    name:
+                        type: string
+                        description: Name of the user to be registered.
+                        example: 'Akash Saini'
+                  required:
+                    - name
+      responses:
+        '200':
+          description: 'Credentials for the user created.'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                    uid:
+                      type: string
+                      description: Identifier used to uniquely identify administrator account.
+                      example: '9fe2c4e93f654fdbb24c02b15259716c'
+                    user_access_token:
+                      type: string
+                      description: Secret used to verify administrator account.
+                      example: 'c42a6d44e3d0'
+  /users/{uid}/verify:
+    post:
+      summary: Verify registered administrator.
+      description: Used by super user to verify registered administrator. Registered administrator must be verified by super user in order to perform further operations at Pubgrade.
+      operationId: verifyUser
+      tags:
+        - users
+      parameters:
+        - in: header
+          name: X-Super-User-Access-Token
+          required: true
+          schema:
+            type: string
+          description: Secret used to verify super user and perform their specific tasks.
+        - in: header
+          name: X-Super-User-Id
+          required: true
+          schema:
+            type: string
+          description: Identifier used to uniquely identify super user
+           and perform their specific tasks.
+      requestedBody:
+      
+
+                      
+          
+
+  
 components:
   responses:
     BadRequest:
