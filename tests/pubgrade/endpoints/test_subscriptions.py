@@ -16,14 +16,14 @@ from pubgrade.errors.exceptions import (
     BuildNotFound,
     RequestNotSent
 )
-from pubgrade.ga4gh.pubgrade.endpoints.subscriptions import (
+from pubgrade.pubgrade.endpoints.subscriptions import (
     register_subscription,
     get_subscriptions,
     get_subscription_info,
     delete_subscription,
     notify_subscriptions
 )
-from tests.ga4gh.mock_data import (
+from tests.mock_data import (
     MONGO_CONFIG,
     ENDPOINT_CONFIG,
     MOCK_REPOSITORIES,
