@@ -17,13 +17,13 @@ from pubgrade.errors.exceptions import (RepositoryNotFound,
                                         CreatePodError,
                                         GitCloningError,
                                         InternalServerError)
-from pubgrade.ga4gh.pubgrade.endpoints.repositories import generate_id
-from pubgrade.ga4gh.pubgrade.endpoints.subscriptions import  \
+from pubgrade.pubgrade.endpoints.repositories import generate_id
+from pubgrade.pubgrade.endpoints.subscriptions import  \
     notify_subscriptions
 
 logger = logging.getLogger(__name__)
 
-template_file = '/app/pubgrade/ga4gh/pubgrade/endpoints/kaniko/template.yaml'
+template_file = '/app/pubgrade/pubgrade/endpoints/kaniko/template.yaml'
 
 
 def register_builds(repository_id: str, access_token: str, build_data: dict):
