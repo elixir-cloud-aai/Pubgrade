@@ -44,7 +44,7 @@ api:
             - api/pubgrade.yaml
           append: null
           add_operation_fields:
-              x-openapi-router-controller: ga4gh.pubgrade.server
+              x-openapi-router-controller: pubgrade.server
           connexion:
               strict_validation: True
               validate_responses: True
@@ -55,7 +55,7 @@ api:
 exceptions:
      required_members: [['msg'], ['status_code']]
      status_member: ['status_code']
-     exceptions: pubgrade.errors.exceptions.exceptions
+     exceptions: errors.exceptions.exceptions
 
 log:
     version: 1

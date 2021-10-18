@@ -12,7 +12,7 @@ from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized, InternalServerError
 
 from pubgrade.errors.exceptions import URLNotFound, RepositoryNotFound
-from pubgrade.ga4gh.pubgrade.endpoints.repositories import (
+from pubgrade.pubgrade.endpoints.repositories import (
     register_repository,
     get_repositories,
     generate_id,
@@ -20,7 +20,7 @@ from pubgrade.ga4gh.pubgrade.endpoints.repositories import (
     modify_repository_info,
     delete_repository
 )
-from tests.ga4gh.mock_data import (
+from tests.mock_data import (
     MONGO_CONFIG,
     ENDPOINT_CONFIG,
     MOCK_REPOSITORIES
