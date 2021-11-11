@@ -766,27 +766,77 @@ paths:
                       description: Secret used to verify administrator account.
                       example: 'c42a6d44e3d0'
   /users/{uid}/verify:
-    post:
-      summary: Verify registered administrator.
-      description: Used by super user to verify registered administrator. Registered administrator must be verified by super user in order to perform further operations at Pubgrade.
-      operationId: verifyUser
-      tags:
-        - users
-      parameters:
-        - in: header
-          name: X-Super-User-Access-Token
-          required: true
-          schema:
-            type: string
-          description: Secret used to verify super user and perform their specific tasks.
-        - in: header
-          name: X-Super-User-Id
-          required: true
-          schema:
-            type: string
-          description: Identifier used to uniquely identify super user
-           and perform their specific tasks.
-      requestedBody:
+     put:
+       summary: Verify registered administrator.
+       description: Used by super user to verify registered administrator. Registered administrator must be verified by super user in order to perform further operations at Pubgrade.
+       operationId: verifyUser
+       tags:
+         - users
+       parameters:
+         - in: header
+           name: X-Super-User-Access-Token
+           required: true
+           schema:
+             type: string
+           description: Secret used to verify super user and perform their specific tasks.
+         - in: header
+           name: X-Super-User-Id
+           required: true
+           schema:
+             type: string
+           description: Identifier used to uniquely identify super user
+            and perform their specific tasks.
+         - in: path
+           name: uid
+           required: true
+           schema:
+             type: string
+           description: Identifier used to uniquely identify administrator account.
+       responses:
+         '200':
+           description: 'Credentials for the user created.'
+           content:
+             application/json:
+               schema:
+                 type: string
+                 example: User verified successfully
+  /users/{uid}/unverify:
+     put:
+       summary: Verify registered administrator.
+       description: Used by super user to verify registered administrator. Registered administrator must be verified by super user in order to perform further operations at Pubgrade.
+       operationId: unverifyUser
+       tags:
+         - users
+       parameters:
+         - in: header
+           name: X-Super-User-Access-Token
+           required: true
+           schema:
+             type: string
+           description: Secret used to verify super user and perform their specific tasks.
+         - in: header
+           name: X-Super-User-Id
+           required: true
+           schema:
+             type: string
+           description: Identifier used to uniquely identify super user
+            and perform their specific tasks.
+         - in: path
+           name: uid
+           required: true
+           schema:
+             type: string
+           description: Identifier used to uniquely identify administrator account.
+       responses:
+         '200':
+           description: 'Credentials for the user created.'
+           content:
+             application/json:
+               schema:
+                 type: string
+                 example: User unverified successfully
+
+
       
 
                       

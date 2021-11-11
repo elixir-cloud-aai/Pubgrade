@@ -3,24 +3,30 @@
 from flask import request
 from foca.utils.logging import log_traffic
 
-from pubgrade.pubgrade.endpoints.builds import (
+from pubgrade.endpoints.builds import (
     build_completed,
     get_build_info,
     get_builds,
     register_builds
 )
-from pubgrade.pubgrade.endpoints.repositories import (
+from pubgrade.endpoints.repositories import (
     delete_repository,
     get_repositories,
     get_repository,
     modify_repository_info,
     register_repository
 )
-from pubgrade.pubgrade.endpoints.subscriptions import (
+from pubgrade.endpoints.subscriptions import (
     delete_subscription,
     get_subscription_info,
     get_subscriptions,
     register_subscription,
+)
+
+from pubgrade.endpoints.users import (
+    register_user,
+    get_users,
+toggle_user_status
 )
 
 
@@ -200,3 +206,32 @@ def deleteSubscription(subscription_id: str):
                            request.headers['X-User-Access-Token'],
                            subscription_id) != 0:
         return {"subscription_id": subscription_id}
+
+
+@log_traffic
+def postUser():
+    """Register User.
+
+    Returns:
+        uid: User Identifier
+        user_access_token: Secret used to verify user
+    """
+    return register_user(request.json)
+
+
+@log_traffic
+def getUsers():
+    return get_users(request.headers['X-Super-User-Id'], request.headers[
+        'X-Super-User-Access-Token'] ,request.json)
+
+
+@log_traffic
+def verifyUser(uid: str):
+    return toggle_user_status(request.headers['X-Super-User-Id'], request.headers[
+        'X-Super-User-Access-Token'], uid, True)
+
+
+@log_traffic
+def unverifyUser(uid: str):
+    return toggle_user_status(request.headers['X-Super-User-Id'], request.headers[
+        'X-Super-User-Access-Token'], uid, False)

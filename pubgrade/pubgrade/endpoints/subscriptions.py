@@ -2,11 +2,11 @@ import datetime
 import logging
 
 import requests
-from pubgrade.errors.exceptions import (
+from errors.exceptions import (
     RepositoryNotFound, UserNotFound, SubscriptionNotFound, BuildNotFound,
-    RequestNotSent, InternalServerError
+    RequestNotSent, InternalServerError, UserNotVerified
 )
-from pubgrade.pubgrade.endpoints.repositories import generate_id
+from pubgrade.endpoints.repositories import generate_id
 from flask import current_app
 from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized
@@ -60,6 +60,8 @@ def register_subscription(uid: str, user_access_token: str, data: dict):
         {'id': data['repository_id']})
     if data_from_db_user is None:
         raise UserNotFound
+    if not data_from_db_user['isVerified']:
+        raise UserNotVerified
     if data_from_db_user['user_access_token'] != user_access_token:
         raise Unauthorized
     if data_from_db_repository is None:
@@ -118,6 +120,8 @@ def get_subscriptions(uid: str, user_access_token: str):
     data_from_db_user = db_collection_user.find_one({'uid': uid})
     if data_from_db_user is None:
         raise UserNotFound
+    if not data_from_db_user['isVerified']:
+        raise UserNotVerified
     if data_from_db_user['user_access_token'] != user_access_token:
         raise Unauthorized
     try:
@@ -161,6 +165,8 @@ def get_subscription_info(uid: str, user_access_token: str,
     data_from_db_user = db_collection_user.find_one({'uid': uid})
     if data_from_db_user is None:
         raise UserNotFound
+    if not data_from_db_user['isVerified']:
+        raise UserNotVerified
     if data_from_db_user['user_access_token'] != user_access_token:
         raise Unauthorized
     subscription_object = db_collection_subscriptions.find_one(
@@ -203,6 +209,8 @@ def delete_subscription(uid: str, user_access_token: str,
     data_from_db_user = db_collection_user.find_one({'uid': uid})
     if data_from_db_user is None:
         raise UserNotFound
+    if not data_from_db_user['isVerified']:
+        raise UserNotVerified
     if data_from_db_user['user_access_token'] != user_access_token:
         raise Unauthorized
     data = db_collection_subscriptions.delete_one(
