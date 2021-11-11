@@ -3,11 +3,17 @@ import logging
 
 import requests
 from pubgrade.errors.exceptions import (
-    RepositoryNotFound, UserNotFound, SubscriptionNotFound, BuildNotFound,
-    RequestNotSent, InternalServerError
+    RepositoryNotFound,
+    UserNotFound,
+    SubscriptionNotFound,
+    BuildNotFound,
+    RequestNotSent,
+    InternalServerError,
+    UserNotVerified
 )
-from pubgrade.pubgrade.endpoints.repositories import generate_id
+from pubgrade.modules.endpoints.repositories import generate_id
 from flask import current_app
+import json
 from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized
 
@@ -60,6 +66,8 @@ def register_subscription(uid: str, user_access_token: str, data: dict):
         {'id': data['repository_id']})
     if data_from_db_user is None:
         raise UserNotFound
+    if not data_from_db_user['isVerified']:
+        raise UserNotVerified
     if data_from_db_user['user_access_token'] != user_access_token:
         raise Unauthorized
     if data_from_db_repository is None:
@@ -118,6 +126,8 @@ def get_subscriptions(uid: str, user_access_token: str):
     data_from_db_user = db_collection_user.find_one({'uid': uid})
     if data_from_db_user is None:
         raise UserNotFound
+    if not data_from_db_user['isVerified']:
+        raise UserNotVerified
     if data_from_db_user['user_access_token'] != user_access_token:
         raise Unauthorized
     try:
@@ -161,6 +171,8 @@ def get_subscription_info(uid: str, user_access_token: str,
     data_from_db_user = db_collection_user.find_one({'uid': uid})
     if data_from_db_user is None:
         raise UserNotFound
+    if not data_from_db_user['isVerified']:
+        raise UserNotVerified
     if data_from_db_user['user_access_token'] != user_access_token:
         raise Unauthorized
     subscription_object = db_collection_subscriptions.find_one(
@@ -203,6 +215,8 @@ def delete_subscription(uid: str, user_access_token: str,
     data_from_db_user = db_collection_user.find_one({'uid': uid})
     if data_from_db_user is None:
         raise UserNotFound
+    if not data_from_db_user['isVerified']:
+        raise UserNotVerified
     if data_from_db_user['user_access_token'] != user_access_token:
         raise Unauthorized
     data = db_collection_subscriptions.delete_one(
@@ -266,12 +280,16 @@ def notify_subscriptions(subscription_id: str, image: str, build_id: str):
                 # deployment) from subscription collection, build payload
                 # and send request.
                 url = subscription_object['callback_url']
-                payload = 'image={"image":"' + image + '"}&uuid='\
-                          + subscription_object['access_token']
-                headers = {'Content-Type': 'application/x-www-form'
-                                           '-urlencoded'}
+                payload = json.dumps({
+                  "image_name": image.split(":")[0],
+                  "tag": image.split(":")[1]
+                })
+                headers = {
+                  'X-Access-Token': subscription_object['access_token'],
+                  'Content-Type': 'application/json'
+                }
                 try:
-                    requests.request("POST", url, headers=headers,
+                    requests.request("PUT", url, headers=headers,
                                      data=payload)
                 except requests.exceptions.Timeout:
                     subscription_object['state'] = 'Inactive'

@@ -37,6 +37,24 @@ Currently supported features:
 }'
 ```
 
+1. Create a user (System administrator).
+
+```bash
+curl --location --request POST 'http://{host_url}:{host_port}/users/register' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "name": "Akash Saini"
+}'
+```
+
+1. Ask pubgrade admin to verify created user. (Only Admin) 
+
+```bash
+curl --location --request PUT 'http://{host_url}:{host_port}/users/<user-id>/verify' \
+--header 'X-Super-User-Access-Token: <Super-User-Access-Token>' \
+--header 'X-Super-User-Id: <Super-User-Id>'
+```
+
 1. Subscribe to `repository`. (Use admin user)
 
 ```bash

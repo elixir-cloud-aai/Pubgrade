@@ -50,6 +50,13 @@ ENDPOINT_CONFIG = {
             "-"
         ],
         "length": 32,
+    },
+    "subscriptions": {
+        "admin_user": {
+            "name": "Akash",
+            "uid": "9fe2c4e93f654fdbb24c02b15259716c",
+            "user_access_token": "c42a6d44e3d0"
+        }
     }
 }
 
@@ -129,12 +136,22 @@ MOCK_SUBSCRIPTION_INFO = {
 MOCK_USER = {
     'uid': '9fe2c4e93f654fdbb24c02b15259716c',
     'user_access_token': 'c42a6d44e3d0',
-    "name": "Akash"
+    'name': 'Akash',
+    'isVerified': True
+}
+
+MOCK_USER_NOT_VERIFIED = {
+    'uid': '9fe2c4e93f65424c02b15259716c',
+    'user_access_token': 'c42a6e3d0',
+    'name': 'Akash',
+    'isVerified': False
 }
 
 MOCK_USER_DB = {
-    "uid": "9fe2c4e93f654fdbb24c02b15259716c", "name": "Akash",
+    "uid": "9fe2c4e93f654fdbb24c02b15259716c",
+    "name": "Akash",
     "user_access_token": "c42a6d44e3d0",
+    'isVerified': True,
     "subscription_list": ["tnglot"]
 }
 SUBSCRIPTION_PAYLOAD = {

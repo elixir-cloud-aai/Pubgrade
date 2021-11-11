@@ -19,7 +19,7 @@ from pubgrade.errors.exceptions import (
     CreatePodError,
     DeletePodError, GitCloningError
 )
-from pubgrade.pubgrade.endpoints.builds import (
+from pubgrade.modules.endpoints.builds import (
     register_builds,
     get_builds,
     get_build_info,
@@ -31,7 +31,7 @@ from pubgrade.pubgrade.endpoints.builds import (
     remove_files,
     build_push_image_using_kaniko
 )
-import pubgrade.pubgrade.endpoints.builds as builds
+import pubgrade.modules.endpoints.builds as builds
 from tests.mock_data import (
     ENDPOINT_CONFIG,
     MONGO_CONFIG,
@@ -154,7 +154,7 @@ class TestBuild:
             collections['builds'].client.insert_one(
             MOCK_BUILD_INFO_2).inserted_id
 
-    @patch('pubgrade.pubgrade.endpoints.builds.create_build',
+    @patch('pubgrade.modules.endpoints.builds.create_build',
            mocked_create_build)
     def test_register_builds(self):
         self.setup()
@@ -165,7 +165,7 @@ class TestBuild:
             assert isinstance(res, dict)
             assert 'id' in res and res['id'][:6] == MOCK_REPOSITORIES[1]['id']
 
-    @patch('pubgrade.pubgrade.endpoints.builds.create_build',
+    @patch('pubgrade.modules.endpoints.builds.create_build',
            mocked_create_build)
     def test_register_builds_branch_only(self):
         self.setup()
@@ -178,7 +178,7 @@ class TestBuild:
             assert isinstance(res, dict)
             assert 'id' in res and res['id'][:6] == MOCK_REPOSITORIES[1]['id']
 
-    @patch('pubgrade.pubgrade.endpoints.builds.create_build',
+    @patch('pubgrade.modules.endpoints.builds.create_build',
            mocked_create_build)
     def test_register_builds_tag(self):
         self.setup()
@@ -191,7 +191,7 @@ class TestBuild:
             assert isinstance(res, dict)
             assert 'id' in res and res['id'][:6] == MOCK_REPOSITORIES[1]['id']
 
-    @patch('pubgrade.pubgrade.endpoints.builds.create_build',
+    @patch('pubgrade.modules.endpoints.builds.create_build',
            mocked_create_build)
     def test_register_builds_duplicate_key_error(self):
         self.setup()
@@ -204,7 +204,7 @@ class TestBuild:
                                 MOCK_REPOSITORIES[1]['access_token'],
                                 MOCK_BUILD_PAYLOAD)
 
-    @patch('pubgrade.pubgrade.endpoints.builds.create_build',
+    @patch('pubgrade.modules.endpoints.builds.create_build',
            mocked_create_build)
     def test_register_builds_unauthorized(self):
         self.setup()
@@ -214,7 +214,7 @@ class TestBuild:
                                 'access_token',
                                 MOCK_BUILD_PAYLOAD)
 
-    @patch('pubgrade.pubgrade.endpoints.builds.create_build',
+    @patch('pubgrade.modules.endpoints.builds.create_build',
            mocked_create_build)
     def test_register_builds_repository_not_found(self):
         self.setup()
@@ -306,7 +306,7 @@ class TestBuild:
         shutil.rmtree('./build123')
 
     def test_create_deployment_yaml(self):
-        builds.template_file = 'pubgrade/pubgrade/endpoints/kaniko' \
+        builds.template_file = 'pubgrade/modules/endpoints/kaniko' \
                                '/template.yaml'
         os.mkdir('build123')
         os.mkdir('build123/drs-filer')
@@ -324,7 +324,7 @@ class TestBuild:
 
     def test_create_deployment_yaml_if_env_present(self):
         os.environ['NAMESPACE'] = 'pubgrade'
-        builds.template_file = 'pubgrade/pubgrade/endpoints/kaniko' \
+        builds.template_file = 'pubgrade/modules/endpoints/kaniko' \
                                '/template.yaml'
         os.mkdir('build123')
         os.mkdir('build123/drs-filer')
@@ -343,7 +343,7 @@ class TestBuild:
 
     def test_create_deployment_yaml_os_error(self):
         with pytest.raises(OSError):
-            builds.template_file = 'pubgrade/pubgrade/endpoints/kaniko' \
+            builds.template_file = 'pubgrade/modules/endpoints/kaniko' \
                                '/template.yaml'
             deployment_file_location = create_deployment_YAML(
                 './build123/drs-filer/dockerfile_location',
@@ -363,11 +363,11 @@ class TestBuild:
         os.remove('config.json')
 
     @patch(
-        "pubgrade.pubgrade.endpoints.builds."
+        "pubgrade.modules.endpoints.builds."
         "build_push_image_using_kaniko",
         mocked_build_push_image_using_kaniko)
     def test_create_build(self):
-        builds.template_file = 'pubgrade/pubgrade/endpoints/kaniko' \
+        builds.template_file = 'pubgrade/modules/endpoints/kaniko' \
                                '/template.yaml'
         os.mkdir('basedir')
         os.mkdir('basedir/drs-filer')
@@ -386,7 +386,7 @@ class TestBuild:
             project_access_token='access_token')
         shutil.rmtree('basedir')
 
-    @patch("pubgrade.pubgrade.endpoints.builds.remove_files",
+    @patch("pubgrade.modules.endpoints.builds.remove_files",
            mocked_remove_files)
     @patch('requests.request', mocked_request_api)
     def test_build_completed(self):
@@ -427,7 +427,7 @@ class TestBuild:
                 build_completed('repo125', MOCK_REPOSITORY_2['build_list'][0],
                                 MOCK_REPOSITORY_2['access_token'])
 
-    @patch("pubgrade.pubgrade.endpoints.builds.delete_pod",
+    @patch("pubgrade.modules.endpoints.builds.delete_pod",
            mocked_delete_pod)
     def test_remove_files(self):
         os.mkdir('build123')
@@ -438,7 +438,7 @@ class TestBuild:
     @patch('kubernetes.client.api.core_v1_api.CoreV1Api.create_namespaced_pod',
            mocked_create_namespaced_pod)
     def test_build_push_image_using_kaniko(self):
-        builds.template_file = 'pubgrade/pubgrade/endpoints/kaniko' \
+        builds.template_file = 'pubgrade/modules/endpoints/kaniko' \
                                '/template.yaml'
         with self.app.app_context():
             build_push_image_using_kaniko(builds.template_file)
@@ -456,7 +456,7 @@ class TestBuild:
     @patch('kubernetes.config.kube_config.KubeConfigLoader',
            MockKubeConfigLoader)
     def test_build_push_image_using_kaniko_create_pod_error(self):
-        builds.template_file = 'pubgrade/pubgrade/endpoints/kaniko' \
+        builds.template_file = 'pubgrade/modules/endpoints/kaniko' \
                                '/template.yaml'
         with self.app.app_context():
             with pytest.raises(CreatePodError):
@@ -483,7 +483,7 @@ class TestBuild:
            mocked_create_namespaced_pod)
     def test_build_push_image_using_kaniko_incluster(self):
         os.environ['KUBERNETES_SERVICE_HOST'] = 'Incluster'
-        builds.template_file = 'pubgrade/pubgrade/endpoints/kaniko' \
+        builds.template_file = 'pubgrade/modules/endpoints/kaniko' \
                                '/template.yaml'
         with self.app.app_context():
             build_push_image_using_kaniko(builds.template_file)

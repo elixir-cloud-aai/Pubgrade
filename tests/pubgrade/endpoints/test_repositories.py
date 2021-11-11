@@ -12,7 +12,7 @@ from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized, InternalServerError
 
 from pubgrade.errors.exceptions import URLNotFound, RepositoryNotFound
-from pubgrade.pubgrade.endpoints.repositories import (
+from pubgrade.modules.endpoints.repositories import (
     register_repository,
     get_repositories,
     generate_id,

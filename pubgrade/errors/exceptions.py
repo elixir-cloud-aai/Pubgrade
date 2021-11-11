@@ -38,6 +38,16 @@ class URLNotFound(BadRequest):
     pass
 
 
+class NameNotFound(BadRequest):
+    """Raised when name for user was not found in request."""
+    pass
+
+
+class UserNotVerified(Unauthorized):
+    """Raised when user with given identifier was not verified."""
+    pass
+
+
 class MongoError(InternalServerError):
     """Raised when Mongo operations raise an Unexpected error."""
     pass
@@ -149,5 +159,13 @@ exceptions = {
     URLNotFound: {
         "msg": "Repository URL not found in the request.",
         "status_code": '400'
+    },
+    NameNotFound: {
+        "msg": "User name not found in the request.",
+        "status_code": '400'
+    },
+    UserNotVerified: {
+        "msg": "User is not verified by the super user.",
+        "status_code": '403'
     }
 }

@@ -14,9 +14,9 @@ from pubgrade.errors.exceptions import (
     UserNotFound,
     SubscriptionNotFound,
     BuildNotFound,
-    RequestNotSent
+    RequestNotSent, UserNotVerified
 )
-from pubgrade.pubgrade.endpoints.subscriptions import (
+from pubgrade.modules.endpoints.subscriptions import (
     register_subscription,
     get_subscriptions,
     get_subscription_info,
@@ -32,7 +32,7 @@ from tests.mock_data import (
     MOCK_USER,
     MOCK_SUBSCRIPTION_INFO,
     SUBSCRIPTION_PAYLOAD,
-    MOCK_USER_DB
+    MOCK_USER_DB, MOCK_USER_NOT_VERIFIED
 )
 
 
@@ -83,6 +83,9 @@ class TestSubscriptions:
         self.app.config['FOCA'].db.dbs['pubgradeStore']. \
             collections['users'].client.insert_one(
             MOCK_USER).inserted_id
+        self.app.config['FOCA'].db.dbs['pubgradeStore']. \
+            collections['users'].client.insert_one(
+            MOCK_USER_NOT_VERIFIED).inserted_id
 
     def insert_subscription(self):
         self.app.config['FOCA'].db.dbs['pubgradeStore']. \
@@ -124,6 +127,15 @@ class TestSubscriptions:
                 SUBSCRIPTION_PAYLOAD['repository_id'] = 'abcd'
                 register_subscription(MOCK_USER['uid'], MOCK_USER[
                     'user_access_token'], SUBSCRIPTION_PAYLOAD)
+
+    def test_register_subscription_user_not_verified(self):
+        self.setup()
+        with self.app.app_context():
+            with pytest.raises(UserNotVerified):
+                register_subscription(MOCK_USER_NOT_VERIFIED['uid'],
+                                      MOCK_USER_NOT_VERIFIED[
+                                          'user_access_token'],
+                                      SUBSCRIPTION_PAYLOAD)
 
     def test_register_subscription_unauthorized(self):
         self.setup()
@@ -199,6 +211,15 @@ class TestSubscriptions:
                 get_subscriptions('uid', MOCK_USER[
                     'user_access_token'])
 
+    def test_get_subscriptions_user_not_verified(self):
+        self.setup()
+        self.insert_subscription()
+        with self.app.app_context():
+            with pytest.raises(UserNotVerified):
+                get_subscriptions(MOCK_USER_NOT_VERIFIED['uid'],
+                                  MOCK_USER_NOT_VERIFIED[
+                                      'user_access_token'])
+
     def test_get_subscription_info(self):
         self.setup()
         self.insert_subscription()
@@ -233,6 +254,16 @@ class TestSubscriptions:
                 get_subscription_info('uid', MOCK_USER[
                     'user_access_token'], MOCK_SUBSCRIPTION_INFO['id'])
 
+    def test_get_subscription_info_user_not_verified(self):
+        self.setup()
+        self.insert_subscription()
+        with self.app.app_context():
+            with pytest.raises(UserNotVerified):
+                get_subscription_info(MOCK_USER_NOT_VERIFIED['uid'],
+                                      MOCK_USER_NOT_VERIFIED[
+                                          'user_access_token'],
+                                      MOCK_SUBSCRIPTION_INFO['id'])
+
     def test_delete_subscription(self):
         self.setup()
         self.insert_subscription()
@@ -264,13 +295,22 @@ class TestSubscriptions:
                 delete_subscription('uid', MOCK_USER[
                     'user_access_token'], MOCK_SUBSCRIPTION_INFO['id'])
 
+    def test_delete_subscription_user_not_verified(self):
+        self.setup()
+        self.insert_subscription()
+        with self.app.app_context():
+            with pytest.raises(UserNotVerified):
+                delete_subscription(MOCK_USER_NOT_VERIFIED['uid'],
+                                    MOCK_USER_NOT_VERIFIED[
+                    'user_access_token'], MOCK_SUBSCRIPTION_INFO['id'])
+
     @patch('requests.request', mocked_request_api)
     def test_notify_subscriptions(self):
         self.setup()
         self.insert_subscription()
         with self.app.app_context():
             notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
-                                 'elixir-cloud-aai/pubgrade',
+                                 'elixir-cloud-aai/pubgrade:0.0.1',
                                  MOCK_BUILD_INFO['id'])
             data = self.app.config['FOCA'].db.dbs['pubgradeStore']. \
                 collections['subscriptions'].client.find_one(
@@ -285,7 +325,7 @@ class TestSubscriptions:
         self.insert_subscription()
         with self.app.app_context():
             with pytest.raises(SubscriptionNotFound):
-                notify_subscriptions('id', 'elixir-cloud-aai/pubgrade',
+                notify_subscriptions('id', 'elixir-cloud-aai/pubgrade:0.0.1',
                                      MOCK_BUILD_INFO['id'])
 
     @patch('requests.request', mocked_request_api)
@@ -295,7 +335,7 @@ class TestSubscriptions:
         with self.app.app_context():
             with pytest.raises(BuildNotFound):
                 notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
-                                     'elixir-cloud-aai/pubgrade', 'id')
+                                     'elixir-cloud-aai/pubgrade:0.0.1', 'id')
 
     @patch('requests.request', mocked_request_api_timeout_error)
     def test_notify_subscriptions_timeout(self):
@@ -304,7 +344,7 @@ class TestSubscriptions:
         with self.app.app_context():
             with pytest.raises(RequestNotSent):
                 notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
-                                     'elixir-cloud-aai/pubgrade',
+                                     'elixir-cloud-aai/pubgrade:0.0.1',
                                      MOCK_BUILD_INFO['id'])
             data = self.app.config['FOCA'].db.dbs['pubgradeStore']. \
                 collections['subscriptions'].client.find_one(
@@ -318,7 +358,7 @@ class TestSubscriptions:
         with self.app.app_context():
             with pytest.raises(RequestNotSent):
                 notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
-                                     'elixir-cloud-aai/pubgrade',
+                                     'elixir-cloud-aai/pubgrade:0.0.1',
                                      MOCK_BUILD_INFO['id'])
             data = self.app.config['FOCA'].db.dbs['pubgradeStore']. \
                 collections['subscriptions'].client.find_one(
@@ -332,7 +372,7 @@ class TestSubscriptions:
         with self.app.app_context():
             with pytest.raises(RequestNotSent):
                 notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
-                                     'elixir-cloud-aai/pubgrade',
+                                     'elixir-cloud-aai/pubgrade:0.0.1',
                                      MOCK_BUILD_INFO['id'])
             data = self.app.config['FOCA'].db.dbs['pubgradeStore']. \
                 collections['subscriptions'].client.find_one(
@@ -346,7 +386,7 @@ class TestSubscriptions:
         self.insert_subscription()
         with self.app.app_context():
             notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
-                                 'elixir-cloud-aai/pubgrade',
+                                 'elixir-cloud-aai/pubgrade:0.0.1',
                                  MOCK_BUILD_INFO['id'])
             data = self.app.config['FOCA'].db.dbs['pubgradeStore']. \
                 collections['subscriptions'].client.find_one(
@@ -362,7 +402,7 @@ class TestSubscriptions:
         self.insert_subscription()
         with self.app.app_context():
             notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
-                                 'elixir-cloud-aai/pubgrade',
+                                 'elixir-cloud-aai/pubgrade:0.0.1',
                                  MOCK_BUILD_INFO['id'])
             data = self.app.config['FOCA'].db.dbs['pubgradeStore']. \
                 collections['subscriptions'].client.find_one(
