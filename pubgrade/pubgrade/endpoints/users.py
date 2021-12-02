@@ -68,7 +68,7 @@ def register_user(data: dict):
             charset=id_charset,
             length=id_length,
         )
-        user_object['access_token'] = str(
+        user_object['user_access_token'] = str(
             generate_id(charset=access_token_charset,
                         length=access_token_length))
         user_object['isVerified'] = False

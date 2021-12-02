@@ -274,12 +274,17 @@ def notify_subscriptions(subscription_id: str, image: str, build_id: str):
                 # deployment) from subscription collection, build payload
                 # and send request.
                 url = subscription_object['callback_url']
-                payload = 'image={"image":"' + image + '"}&uuid='\
-                          + subscription_object['access_token']
-                headers = {'Content-Type': 'application/x-www-form'
-                                           '-urlencoded'}
+                payload = json.dumps({
+                  "image_name": image.split(":")[0],
+                  "tag": image.split(":")[1],
+                  "developer_trust": "veniam culpa"
+                })
+                headers = {
+                  'X-Access-Token': subscription_object['access_token'],
+                  'Content-Type': 'application/json'
+                }
                 try:
-                    requests.request("POST", url, headers=headers,
+                    requests.request("PUT", url, headers=headers,
                                      data=payload)
                 except requests.exceptions.Timeout:
                     subscription_object['state'] = 'Inactive'
