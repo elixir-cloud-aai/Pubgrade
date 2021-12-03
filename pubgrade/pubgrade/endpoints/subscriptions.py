@@ -276,8 +276,7 @@ def notify_subscriptions(subscription_id: str, image: str, build_id: str):
                 url = subscription_object['callback_url']
                 payload = json.dumps({
                   "image_name": image.split(":")[0],
-                  "tag": image.split(":")[1],
-                  "developer_trust": "veniam culpa"
+                  "tag": image.split(":")[1]
                 })
                 headers = {
                   'X-Access-Token': subscription_object['access_token'],
