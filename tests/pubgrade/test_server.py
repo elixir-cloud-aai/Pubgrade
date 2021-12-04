@@ -12,7 +12,7 @@ except Exception:
     from mock import patch
 
 from pubgrade.errors.exceptions import RepositoryNotFound
-from pubgrade.pubgrade.server import (
+from pubgrade.modules.server import (
     getRepositories,
     postRepositories,
     getRepository,
@@ -169,7 +169,7 @@ def mocked_create_build(repo_url, branch, commit, base_dir, build_id,
     return 'working fine'
 
 
-@patch('pubgrade.pubgrade.endpoints.builds.create_build',
+@patch('pubgrade.modules.endpoints.builds.create_build',
        mocked_create_build)
 def test_postBuild():
     app = Flask(__name__)
@@ -252,7 +252,7 @@ def mock_notify_subscriptions():
     return "notify successful"
 
 
-@patch('pubgrade.pubgrade.endpoints.builds.remove_files',
+@patch('pubgrade.modules.endpoints.builds.remove_files',
        mock_remove_files)
 @patch('requests.request', mocked_request_api)
 def test_updateBuild():

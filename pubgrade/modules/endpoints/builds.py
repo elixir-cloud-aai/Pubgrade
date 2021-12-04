@@ -11,14 +11,16 @@ from kubernetes.client import ApiException
 from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized
 
-from errors.exceptions import (RepositoryNotFound,
-                                        BuildNotFound,
-                                        DeletePodError,
-                                        CreatePodError,
-                                        GitCloningError,
-                                        InternalServerError)
-from pubgrade.endpoints.repositories import generate_id
-from pubgrade.endpoints.subscriptions import  \
+from pubgrade.errors.exceptions import (
+    RepositoryNotFound,
+    BuildNotFound,
+    DeletePodError,
+    CreatePodError,
+    GitCloningError,
+    InternalServerError
+)
+from pubgrade.modules.endpoints.repositories import generate_id
+from pubgrade.modules.endpoints.subscriptions import  \
     notify_subscriptions
 
 logger = logging.getLogger(__name__)

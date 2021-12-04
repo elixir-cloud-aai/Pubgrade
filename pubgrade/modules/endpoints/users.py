@@ -1,17 +1,18 @@
-import datetime
 import logging
 
-import requests
-from errors.exceptions import (
-    UserNotFound, SubscriptionNotFound, BuildNotFound,
-    NameNotFound, RequestNotSent, InternalServerError
+from pubgrade.errors.exceptions import (
+    UserNotFound,
+    InternalServerError,
+    URLNotFound
 )
-from pubgrade.endpoints.repositories import generate_id
+from pubgrade.modules.endpoints.repositories import generate_id
 from flask import current_app
 from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized
 
+
 logger = logging.getLogger(__name__)
+
 
 def register_user(data: dict):
     """Register a new user object.
@@ -105,15 +106,16 @@ def get_users(super_user_id: str, super_user_access_token: str, data: dict):
         RepositoryNotFound: Raised when there is no registered repository in
         the pubgrade.
     """
-    # if 'X-Super-User-Id' not in data or 'X-Super-User-Access-Token' not in data:
+    # if 'X-Super-User-Id' not in data or 'X-Super-User-Access-Token' not in
+    # data:
     #     raise BadRequest
 
     if super_user_id != current_app.config['FOCA'].endpoints[
-        'subscriptions']['admin_user']['uid']:
+         'subscriptions']['admin_user']['uid']:
         raise UserNotFound
 
     if super_user_access_token != current_app.config['FOCA'].endpoints[
-        'subscriptions']['admin_user']['user_access_token']:
+         'subscriptions']['admin_user']['user_access_token']:
         raise Unauthorized
 
     db_collection = (
@@ -122,7 +124,7 @@ def get_users(super_user_id: str, super_user_access_token: str, data: dict):
     )
 
     cursor = db_collection.find(
-        {}, {'access_token': False, '_id': False,}
+        {}, {'access_token': False, '_id': False}
     )
     repos = list(cursor)
 
@@ -135,12 +137,12 @@ def get_users(super_user_id: str, super_user_access_token: str, data: dict):
 def toggle_user_status(super_user_id: str, super_user_access_token: str,
                        uid: str, status: bool):
     if super_user_id != \
-            current_app.config['FOCA'].endpoints['subscriptions']['admin_user'][
-                'uid']:
+            current_app.config['FOCA'].endpoints['subscriptions'][
+                'admin_user']['uid']:
         raise UserNotFound
 
     if super_user_access_token != current_app.config['FOCA'].endpoints[
-        'subscriptions']['admin_user']['user_access_token']:
+         'subscriptions']['admin_user']['user_access_token']:
         raise Unauthorized
 
     db_collection_user = (
@@ -161,4 +163,3 @@ def toggle_user_status(super_user_id: str, super_user_access_token: str,
         return "User verified successfully."
     else:
         return "User unverified successfully."
-

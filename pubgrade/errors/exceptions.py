@@ -164,7 +164,7 @@ exceptions = {
         "msg": "User name not found in the request.",
         "status_code": '400'
     },
-    UserNotVerified:{
+    UserNotVerified: {
         "msg": "User is not verified by the super user.",
         "status_code": '403'
     }

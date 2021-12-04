@@ -44,7 +44,7 @@ api:
             - api/pubgrade.yaml
           append: null
           add_operation_fields:
-              x-openapi-router-controller: pubgrade.server
+              x-openapi-router-controller: pubgrade.modules.server
           connexion:
               strict_validation: True
               validate_responses: True

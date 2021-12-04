@@ -6,7 +6,7 @@ from flask import (current_app)
 from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized
 
-from errors.exceptions import (
+from pubgrade.errors.exceptions import (
     RepositoryNotFound,
     URLNotFound,
     InternalServerError

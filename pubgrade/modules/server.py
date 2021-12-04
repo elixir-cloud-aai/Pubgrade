@@ -3,30 +3,30 @@
 from flask import request
 from foca.utils.logging import log_traffic
 
-from pubgrade.endpoints.builds import (
+from pubgrade.modules.endpoints.builds import (
     build_completed,
     get_build_info,
     get_builds,
     register_builds
 )
-from pubgrade.endpoints.repositories import (
+from pubgrade.modules.endpoints.repositories import (
     delete_repository,
     get_repositories,
     get_repository,
     modify_repository_info,
     register_repository
 )
-from pubgrade.endpoints.subscriptions import (
+from pubgrade.modules.endpoints.subscriptions import (
     delete_subscription,
     get_subscription_info,
     get_subscriptions,
     register_subscription,
 )
 
-from pubgrade.endpoints.users import (
+from pubgrade.modules.endpoints.users import (
     register_user,
     get_users,
-toggle_user_status
+    toggle_user_status
 )
 
 
@@ -222,16 +222,18 @@ def postUser():
 @log_traffic
 def getUsers():
     return get_users(request.headers['X-Super-User-Id'], request.headers[
-        'X-Super-User-Access-Token'] ,request.json)
+        'X-Super-User-Access-Token'], request.json)
 
 
 @log_traffic
 def verifyUser(uid: str):
-    return toggle_user_status(request.headers['X-Super-User-Id'], request.headers[
-        'X-Super-User-Access-Token'], uid, True)
+    return toggle_user_status(request.headers['X-Super-User-Id'],
+                              request.headers['X-Super-User-Access-Token'],
+                              uid, True)
 
 
 @log_traffic
 def unverifyUser(uid: str):
-    return toggle_user_status(request.headers['X-Super-User-Id'], request.headers[
-        'X-Super-User-Access-Token'], uid, False)
+    return toggle_user_status(request.headers['X-Super-User-Id'],
+                              request.headers['X-Super-User-Access-Token'],
+                              uid, False)

@@ -16,7 +16,7 @@ from pubgrade.errors.exceptions import (
     BuildNotFound,
     RequestNotSent
 )
-from pubgrade.pubgrade.endpoints.subscriptions import (
+from pubgrade.modules.endpoints.subscriptions import (
     register_subscription,
     get_subscriptions,
     get_subscription_info,
@@ -270,7 +270,7 @@ class TestSubscriptions:
         self.insert_subscription()
         with self.app.app_context():
             notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
-                                 'elixir-cloud-aai/pubgrade',
+                                 'elixir-cloud-aai/pubgrade:0.0.1',
                                  MOCK_BUILD_INFO['id'])
             data = self.app.config['FOCA'].db.dbs['pubgradeStore']. \
                 collections['subscriptions'].client.find_one(
@@ -285,7 +285,7 @@ class TestSubscriptions:
         self.insert_subscription()
         with self.app.app_context():
             with pytest.raises(SubscriptionNotFound):
-                notify_subscriptions('id', 'elixir-cloud-aai/pubgrade',
+                notify_subscriptions('id', 'elixir-cloud-aai/pubgrade:0.0.1',
                                      MOCK_BUILD_INFO['id'])
 
     @patch('requests.request', mocked_request_api)
@@ -295,7 +295,7 @@ class TestSubscriptions:
         with self.app.app_context():
             with pytest.raises(BuildNotFound):
                 notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
-                                     'elixir-cloud-aai/pubgrade', 'id')
+                                     'elixir-cloud-aai/pubgrade:0.0.1', 'id')
 
     @patch('requests.request', mocked_request_api_timeout_error)
     def test_notify_subscriptions_timeout(self):
@@ -304,7 +304,7 @@ class TestSubscriptions:
         with self.app.app_context():
             with pytest.raises(RequestNotSent):
                 notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
-                                     'elixir-cloud-aai/pubgrade',
+                                     'elixir-cloud-aai/pubgrade:0.0.1',
                                      MOCK_BUILD_INFO['id'])
             data = self.app.config['FOCA'].db.dbs['pubgradeStore']. \
                 collections['subscriptions'].client.find_one(
@@ -318,7 +318,7 @@ class TestSubscriptions:
         with self.app.app_context():
             with pytest.raises(RequestNotSent):
                 notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
-                                     'elixir-cloud-aai/pubgrade',
+                                     'elixir-cloud-aai/pubgrade:0.0.1',
                                      MOCK_BUILD_INFO['id'])
             data = self.app.config['FOCA'].db.dbs['pubgradeStore']. \
                 collections['subscriptions'].client.find_one(
@@ -332,7 +332,7 @@ class TestSubscriptions:
         with self.app.app_context():
             with pytest.raises(RequestNotSent):
                 notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
-                                     'elixir-cloud-aai/pubgrade',
+                                     'elixir-cloud-aai/pubgrade:0.0.1',
                                      MOCK_BUILD_INFO['id'])
             data = self.app.config['FOCA'].db.dbs['pubgradeStore']. \
                 collections['subscriptions'].client.find_one(
@@ -346,7 +346,7 @@ class TestSubscriptions:
         self.insert_subscription()
         with self.app.app_context():
             notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
-                                 'elixir-cloud-aai/pubgrade',
+                                 'elixir-cloud-aai/pubgrade:0.0.1',
                                  MOCK_BUILD_INFO['id'])
             data = self.app.config['FOCA'].db.dbs['pubgradeStore']. \
                 collections['subscriptions'].client.find_one(
@@ -362,7 +362,7 @@ class TestSubscriptions:
         self.insert_subscription()
         with self.app.app_context():
             notify_subscriptions(MOCK_SUBSCRIPTION_INFO['id'],
-                                 'elixir-cloud-aai/pubgrade',
+                                 'elixir-cloud-aai/pubgrade:0.0.1',
                                  MOCK_BUILD_INFO['id'])
             data = self.app.config['FOCA'].db.dbs['pubgradeStore']. \
                 collections['subscriptions'].client.find_one(

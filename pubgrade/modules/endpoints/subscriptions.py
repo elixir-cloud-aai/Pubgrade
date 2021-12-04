@@ -2,12 +2,18 @@ import datetime
 import logging
 
 import requests
-from errors.exceptions import (
-    RepositoryNotFound, UserNotFound, SubscriptionNotFound, BuildNotFound,
-    RequestNotSent, InternalServerError, UserNotVerified
+from pubgrade.errors.exceptions import (
+    RepositoryNotFound,
+    UserNotFound,
+    SubscriptionNotFound,
+    BuildNotFound,
+    RequestNotSent,
+    InternalServerError,
+    UserNotVerified
 )
-from pubgrade.endpoints.repositories import generate_id
+from pubgrade.modules.endpoints.repositories import generate_id
 from flask import current_app
+import json
 from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized
 
