@@ -18,7 +18,7 @@ def register_user(data: dict):
     """Register a new user object.
 
     Args:
-         data (dict): Name of the user.
+         data (dict): Contains Name of the user.
 
     Returns:
         user_object (dict): Dictionary of user contents (
@@ -96,7 +96,7 @@ def register_user(data: dict):
     return user_object
 
 
-def get_users(super_user_id: str, super_user_access_token: str, data: dict):
+def get_users(super_user_id: str, super_user_access_token: str):
     """Retrieve available repositories.
 
     Returns:
