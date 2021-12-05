@@ -25,7 +25,7 @@ from pubgrade.modules.server import (
     postSubscription,
     getSubscriptions,
     getSubscriptionInfo,
-    deleteSubscription
+    deleteSubscription, postUser, getUsers, verifyUser, unverifyUser
 )
 
 from tests.mock_data import (
@@ -390,3 +390,96 @@ def test_deleteSubscription():
             }):
         res = deleteSubscription.__wrapped__(MOCK_SUBSCRIPTION_INFO['id'])
         assert isinstance(res, dict)
+
+
+def test_post_user():
+    app = Flask(__name__)
+    app.config['FOCA'] = \
+        Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
+        collections['users'].client = mongomock.MongoClient(
+    ).db.collection
+    with app.test_request_context(
+            json={'name': 'Akash Saini'},
+            headers={
+                'Content-Type': 'application/json'
+            }):
+        res = postUser.__wrapped__()
+        assert isinstance(res, dict)
+        assert 'uid' in res
+        assert 'user_access_token' in res
+        assert 'name' in res
+
+
+def test_get_user():
+    app = Flask(__name__)
+    app.config['FOCA'] = \
+        Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
+        collections['users'].client = mongomock.MongoClient(
+    ).db.collection
+    app.config['FOCA'].db.dbs['pubgradeStore'].collections[
+        'users'].client.insert_one(MOCK_USER_DB)
+    uid_ = app.config['FOCA'].endpoints['subscriptions'][
+        'admin_user']['uid']
+    user_access_token_ = app.config['FOCA'].endpoints[
+        'subscriptions']['admin_user'][
+        'user_access_token']
+    with app.test_request_context(
+            json={},
+            headers={
+                'X-Super-User-Id': uid_,
+                'X-Super-User-Access-Token': user_access_token_,
+                'Content-Type': 'application/json'
+            }):
+        res = getUsers.__wrapped__()
+        assert res[0]['name'] == 'Akash'
+        assert isinstance(res, list)
+
+
+def test_verify_user():
+    app = Flask(__name__)
+    app.config['FOCA'] = \
+        Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
+        collections['users'].client = mongomock.MongoClient(
+    ).db.collection
+    app.config['FOCA'].db.dbs['pubgradeStore'].collections[
+        'users'].client.insert_one(MOCK_USER_DB)
+    uid_ = app.config['FOCA'].endpoints['subscriptions'][
+        'admin_user']['uid']
+    user_access_token_ = app.config['FOCA'].endpoints[
+        'subscriptions']['admin_user'][
+        'user_access_token']
+    with app.test_request_context(
+            json={},
+            headers={
+                'X-Super-User-Id': uid_,
+                'X-Super-User-Access-Token': user_access_token_,
+                'Content-Type': 'application/json'
+            }):
+        verifyUser.__wrapped__(MOCK_USER_DB['uid'])
+
+
+def test_unverify_user():
+    app = Flask(__name__)
+    app.config['FOCA'] = \
+        Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
+    app.config['FOCA'].db.dbs['pubgradeStore']. \
+        collections['users'].client = mongomock.MongoClient(
+    ).db.collection
+    app.config['FOCA'].db.dbs['pubgradeStore'].collections[
+        'users'].client.insert_one(MOCK_USER_DB)
+    uid_ = app.config['FOCA'].endpoints['subscriptions'][
+        'admin_user']['uid']
+    user_access_token_ = app.config['FOCA'].endpoints[
+        'subscriptions']['admin_user'][
+        'user_access_token']
+    with app.test_request_context(
+            json={},
+            headers={
+                'X-Super-User-Id': uid_,
+                'X-Super-User-Access-Token': user_access_token_,
+                'Content-Type': 'application/json'
+            }):
+        unverifyUser.__wrapped__(MOCK_USER_DB['uid'])

@@ -222,7 +222,7 @@ def postUser():
 @log_traffic
 def getUsers():
     return get_users(request.headers['X-Super-User-Id'], request.headers[
-        'X-Super-User-Access-Token'], request.json)
+        'X-Super-User-Access-Token'])
 
 
 @log_traffic
