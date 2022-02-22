@@ -1,4 +1,4 @@
 pvClaimName: pubgrade-pv
-pathToLocalDir: '/tmp/pubgrade-pv' # needs to be changed accordingly
+pathToLocalDir: '/tmp' # needs to be changed accordingly
 imageNotifyCompletion: 'akash7778/notify-completion' # This will be moved to elixir-cloud-aai
 pubgrade_URL: 'http://pubgrade-service.pubgrade'

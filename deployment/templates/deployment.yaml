@@ -16,7 +16,7 @@ spec:
      automountServiceAccountToken: true
      containers:
      - name: pubgrade
-       imagePullPolicy: IfNotPresent
+       imagePullPolicy: Always #IfNotPresent
        image: akash7778/pubgrade:test_build
        ports:
        - containerPort: 8080
@@ -29,6 +29,10 @@ spec:
          - name: PV_NAME
            value: {{ .Values.pvClaimName }}
      volumes:
+      # - name: pv-storage
+      #   awsElasticBlockStore:
+      #     volumeID: "vol-0c54b857fc4207dbe"
+      #     fsType: ext4
        - name: pv-storage
          persistentVolumeClaim:
                claimName: {{ .Values.pvClaimName }}

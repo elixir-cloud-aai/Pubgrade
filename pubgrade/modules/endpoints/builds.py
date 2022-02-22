@@ -2,6 +2,7 @@ import datetime
 import logging
 import os
 import shutil
+import subprocess
 
 import yaml
 from flask import (current_app)
@@ -25,7 +26,7 @@ from pubgrade.modules.endpoints.subscriptions import  \
 
 logger = logging.getLogger(__name__)
 
-template_file = '/app/pubgrade/pubgrade/endpoints/kaniko/template.yaml'
+template_file = '/app/pubgrade/modules/endpoints/kaniko/template.yaml'
 
 
 def register_builds(repository_id: str, access_token: str, build_data: dict):
@@ -233,7 +234,7 @@ def create_build(repo_url: str, branch: str, commit: str, base_dir: str,
 
     # Create kaniko deployment file.
     create_deployment_YAML(
-        "%s/%s" % (clone_path, dockerfile_location),
+        "%s" % (dockerfile_location),
         registry_destination,
         clone_path,
         deployment_file_location,
@@ -284,6 +285,8 @@ def git_clone_and_checkout(repo_url: str, branch: str, commit: str,
         # HEAD of branch.
         if commit != '':
             repo.git.checkout(commit)
+        subprocess.getoutput(['chmod 0777 ' +  clone_path])
+        subprocess.getoutput(['chmod 0777 ' +  clone_path + '/*'])
         return clone_path
     except GitCommandError:
         raise GitCloningError
@@ -326,7 +329,7 @@ def create_deployment_YAML(dockerfile_location: str, registry_destination: str,
             f"--dockerfile={dockerfile_location}",
             f"--destination={registry_destination}",
             f"--context={build_context}",
-            "--cleanup"]
+            "--no-push"]
         data['spec']['containers'][0]['volumeMounts'][1][
             'mountPath'] = '/kaniko/.docker/config.json'
         data['spec']['volumes'][0]['persistentVolumeClaim'][

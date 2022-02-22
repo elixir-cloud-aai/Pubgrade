@@ -5,7 +5,7 @@ from mock_data import (
     MOCK_REPOSITORY_1
 )
 
-base_url = "http://192.168.59.100:30008"
+base_url = "http://pubgrade-service-pubgrade.rahtiapp.fi"
 headers = {
     'Accept': 'application/json',
     'Content-Type': 'application/json'
@@ -28,9 +28,7 @@ def test_get_repositories():
     assert response.status_code == 200
 
 def test_post_repository():
-    """Test `POST /repository` for successfully creating or updating a new
-    repository.
-    """
+    """Test `POST /repository` for successfully creating a new repository."""
     endpoint = "/repositories"
     response = requests.request("POST", base_url + endpoint, headers=headers,
                                 data=payload_objects)
@@ -82,6 +80,6 @@ def test_error_400_post_repository():
 
 def test_error_404_get_repository():
     """Test `GET /repositories/{id}` for response 404 (Resource not found)"""
-    endpoint = "/repositories/12"
+    endpoint = "/repositories/123456"
     response = requests.request("GET", base_url + endpoint, headers=headers)
     assert response.status_code == 404

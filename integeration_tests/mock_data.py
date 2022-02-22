@@ -183,3 +183,11 @@ MOCK_ENDPOINT = {
         "id_length": 1,
     }
 }
+
+SUBSCRIPTION_PAYLOAD_1 = {
+    "repository_id": "respository123",
+    "callback_url": "https://ec2-54-203-145-132.compute-1.amazonaws.com/update",
+    "access_token": "xxxxxxxxxxxx",
+    "type": "tag",
+    "value": "dev"
+}
