@@ -17,9 +17,10 @@ from pubgrade.errors.exceptions import (
     RepositoryNotFound,
     BuildNotFound,
     CreatePodError,
-    DeletePodError, GitCloningError
+    DeletePodError,
+    GitCloningError,
 )
-from pubgrade.pubgrade.endpoints.builds import (
+from pubgrade.modules.endpoints.builds import (
     register_builds,
     get_builds,
     get_build_info,
@@ -29,9 +30,9 @@ from pubgrade.pubgrade.endpoints.builds import (
     create_build,
     build_completed,
     remove_files,
-    build_push_image_using_kaniko
+    build_push_image_using_kaniko,
 )
-import pubgrade.pubgrade.endpoints.builds as builds
+import pubgrade.modules.endpoints.builds as builds
 from tests.mock_data import (
     ENDPOINT_CONFIG,
     MONGO_CONFIG,
@@ -40,15 +41,22 @@ from tests.mock_data import (
     MOCK_BUILD_INFO,
     MOCK_BUILD_INFO_2,
     MOCK_REPOSITORY_2,
-    MOCK_SUBSCRIPTION_INFO
+    MOCK_SUBSCRIPTION_INFO,
 )
 
 
-def mocked_create_build(repo_url, branch, commit, base_dir, build_id,
-                        dockerfile_location, registry_destination,
-                        dockerhub_token,
-                        project_access_token):
-    return 'working fine'
+def mocked_create_build(
+    repo_url,
+    branch,
+    commit,
+    base_dir,
+    build_id,
+    dockerfile_location,
+    registry_destination,
+    dockerhub_token,
+    project_access_token,
+):
+    return "working fine"
 
 
 def mocked_build_push_image_using_kaniko(deployment_file_location):
@@ -59,8 +67,9 @@ def mocked_remove_files(dir_location: str, pod_name: str, namespace: str):
     return "removed"
 
 
-def mocked_notify_subscriptions(subscription_id: str, image: str,
-                                build_id: str):
+def mocked_notify_subscriptions(
+    subscription_id: str, image: str, build_id: str
+):
     return "Notified"
 
 
@@ -68,62 +77,69 @@ def mocked_delete_pod(name, namespace):
     return "Pod deleted."
 
 
-def mocked_delete_namespaced_pod(self, name: str, namespace: str,
-                                 **kwargs: Any):
+def mocked_delete_namespaced_pod(
+    self, name: str, namespace: str, **kwargs: Any
+):
     return "Pod deleted."
 
 
-def mocked_delete_namespaced_pod_error(self, name: str, namespace: str,
-                                       **kwargs: Any):
+def mocked_delete_namespaced_pod_error(
+    self, name: str, namespace: str, **kwargs: Any
+):
     raise ApiException
 
 
 def mocked_request_api(method, url, data, headers):
-    return 'successful'
+    return "successful"
 
 
-def mocked_load_cluster_config(config_file=None, context=None,
-                               client_configuration=None,
-                               persist_config=True):
-    return 'Loaded successfully'
+def mocked_load_cluster_config(
+    config_file=None,
+    context=None,
+    client_configuration=None,
+    persist_config=True,
+):
+    return "Loaded successfully"
 
 
 def mocked_load_incluster_config():
-    return 'Loaded successfully'
+    return "Loaded successfully"
 
 
 def mocked_core_v1_api():
-    return 'v1 API'
+    return "v1 API"
 
 
-def mocked_create_namespaced_pod(self, namespace: str, body: Any,
-                                 **kwargs: Any):
+def mocked_create_namespaced_pod(
+    self, namespace: str, body: Any, **kwargs: Any
+):
     return {"metadata": {"name": "kaniko"}}
 
 
-def mocked_create_namespaced_pod_error(self, namespace: str, body: Any,
-                                       **kwargs: Any):
+def mocked_create_namespaced_pod_error(
+    self, namespace: str, body: Any, **kwargs: Any
+):
     raise ApiException
 
 
 def mocked_load_kube_config(
-        config_file=None, context=None,
-        client_configuration=None,
-        persist_config=True):
-    return 'success'
+    config_file=None,
+    context=None,
+    client_configuration=None,
+    persist_config=True,
+):
+    return "success"
 
 
 def mocked_get_kube_config_loader(
-        filename=None,
-        config_dict=None,
-        persist_config=False,
-        **kwargs):
+    filename=None, config_dict=None, persist_config=False, **kwargs
+):
     return MockKubeConfigLoader
 
 
 class MockKubeConfigLoader:
     def load_and_set(self):
-        return 'success'
+        return "success"
 
 
 class TestBuild:
@@ -132,102 +148,122 @@ class TestBuild:
     repository_url = "https://github.com/elixir-cloud-aai/drs-filer"
 
     def setup(self):
-        self.app.config['FOCA'] = \
-            Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-        self.app.config['FOCA'].db.dbs['pubgradeStore']. \
-            collections['repositories'].client = mongomock.MongoClient(
-        ).db.collection
+        self.app.config["FOCA"] = Config(
+            db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG
+        )
+        self.app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+            "repositories"
+        ].client = mongomock.MongoClient().db.collection
         for repository in MOCK_REPOSITORIES:
-            self.app.config['FOCA'].db.dbs['pubgradeStore']. \
-                collections['repositories'].client.insert_one(
-                repository).inserted_id
-        self.app.config['FOCA'].db.dbs['pubgradeStore']. \
-            collections['builds'].client = mongomock.MongoClient(
-        ).db.collection
+            self.app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+                "repositories"
+            ].client.insert_one(repository)
+        self.app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+            "builds"
+        ].client = mongomock.MongoClient().db.collection
 
     def setup_with_build(self):
         self.setup()
-        self.app.config['FOCA'].db.dbs['pubgradeStore']. \
-            collections['builds'].client.insert_one(
-            MOCK_BUILD_INFO).inserted_id
-        self.app.config['FOCA'].db.dbs['pubgradeStore']. \
-            collections['builds'].client.insert_one(
-            MOCK_BUILD_INFO_2).inserted_id
+        self.app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+            "builds"
+        ].client.insert_one(MOCK_BUILD_INFO)
+        self.app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+            "builds"
+        ].client.insert_one(MOCK_BUILD_INFO_2)
 
-    @patch('pubgrade.pubgrade.endpoints.builds.create_build',
-           mocked_create_build)
+    @patch(
+        "pubgrade.modules.endpoints.builds.create_build", mocked_create_build
+    )
     def test_register_builds(self):
         self.setup()
         with self.app.app_context():
-            res = register_builds(MOCK_REPOSITORIES[1]['id'],
-                                  MOCK_REPOSITORIES[1]['access_token'],
-                                  MOCK_BUILD_PAYLOAD)
+            res = register_builds(
+                MOCK_REPOSITORIES[1]["id"],
+                MOCK_REPOSITORIES[1]["access_token"],
+                MOCK_BUILD_PAYLOAD,
+            )
             assert isinstance(res, dict)
-            assert 'id' in res and res['id'][:6] == MOCK_REPOSITORIES[1]['id']
+            assert "id" in res and res["id"][:6] == MOCK_REPOSITORIES[1]["id"]
 
-    @patch('pubgrade.pubgrade.endpoints.builds.create_build',
-           mocked_create_build)
+    @patch(
+        "pubgrade.modules.endpoints.builds.create_build", mocked_create_build
+    )
     def test_register_builds_branch_only(self):
         self.setup()
-        del MOCK_BUILD_PAYLOAD['head_commit']
-        MOCK_BUILD_PAYLOAD['head_commit'] = {"branch": "sample_branch"}
+        del MOCK_BUILD_PAYLOAD["head_commit"]
+        MOCK_BUILD_PAYLOAD["head_commit"] = {"branch": "sample_branch"}
         with self.app.app_context():
-            res = register_builds(MOCK_REPOSITORIES[1]['id'],
-                                  MOCK_REPOSITORIES[1]['access_token'],
-                                  MOCK_BUILD_PAYLOAD)
+            res = register_builds(
+                MOCK_REPOSITORIES[1]["id"],
+                MOCK_REPOSITORIES[1]["access_token"],
+                MOCK_BUILD_PAYLOAD,
+            )
             assert isinstance(res, dict)
-            assert 'id' in res and res['id'][:6] == MOCK_REPOSITORIES[1]['id']
+            assert "id" in res and res["id"][:6] == MOCK_REPOSITORIES[1]["id"]
 
-    @patch('pubgrade.pubgrade.endpoints.builds.create_build',
-           mocked_create_build)
+    @patch(
+        "pubgrade.modules.endpoints.builds.create_build", mocked_create_build
+    )
     def test_register_builds_tag(self):
         self.setup()
-        del MOCK_BUILD_PAYLOAD['head_commit']
-        MOCK_BUILD_PAYLOAD['head_commit'] = {"tag": "12345"}
+        del MOCK_BUILD_PAYLOAD["head_commit"]
+        MOCK_BUILD_PAYLOAD["head_commit"] = {"tag": "12345"}
         with self.app.app_context():
-            res = register_builds(MOCK_REPOSITORIES[1]['id'],
-                                  MOCK_REPOSITORIES[1]['access_token'],
-                                  MOCK_BUILD_PAYLOAD)
+            res = register_builds(
+                MOCK_REPOSITORIES[1]["id"],
+                MOCK_REPOSITORIES[1]["access_token"],
+                MOCK_BUILD_PAYLOAD,
+            )
             assert isinstance(res, dict)
-            assert 'id' in res and res['id'][:6] == MOCK_REPOSITORIES[1]['id']
+            assert "id" in res and res["id"][:6] == MOCK_REPOSITORIES[1]["id"]
 
-    @patch('pubgrade.pubgrade.endpoints.builds.create_build',
-           mocked_create_build)
+    @patch(
+        "pubgrade.modules.endpoints.builds.create_build", mocked_create_build
+    )
     def test_register_builds_duplicate_key_error(self):
         self.setup()
-        mock_resp = MagicMock(side_effect=DuplicateKeyError(''))
-        self.app.config['FOCA'].db.dbs['pubgradeStore'].collections[
-            'builds'].client.insert_one = mock_resp
+        mock_resp = MagicMock(side_effect=DuplicateKeyError(""))
+        self.app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+            "builds"
+        ].client.insert_one = mock_resp
         with self.app.app_context():
             with pytest.raises(InternalServerError):
-                register_builds(MOCK_REPOSITORIES[1]['id'],
-                                MOCK_REPOSITORIES[1]['access_token'],
-                                MOCK_BUILD_PAYLOAD)
+                register_builds(
+                    MOCK_REPOSITORIES[1]["id"],
+                    MOCK_REPOSITORIES[1]["access_token"],
+                    MOCK_BUILD_PAYLOAD,
+                )
 
-    @patch('pubgrade.pubgrade.endpoints.builds.create_build',
-           mocked_create_build)
+    @patch(
+        "pubgrade.modules.endpoints.builds.create_build", mocked_create_build
+    )
     def test_register_builds_unauthorized(self):
         self.setup()
         with self.app.app_context():
             with pytest.raises(Unauthorized):
-                register_builds(MOCK_REPOSITORIES[1]['id'],
-                                'access_token',
-                                MOCK_BUILD_PAYLOAD)
+                register_builds(
+                    MOCK_REPOSITORIES[1]["id"],
+                    "access_token",
+                    MOCK_BUILD_PAYLOAD,
+                )
 
-    @patch('pubgrade.pubgrade.endpoints.builds.create_build',
-           mocked_create_build)
+    @patch(
+        "pubgrade.modules.endpoints.builds.create_build", mocked_create_build
+    )
     def test_register_builds_repository_not_found(self):
         self.setup()
         with self.app.app_context():
             with pytest.raises(RepositoryNotFound):
-                register_builds('id',
-                                MOCK_REPOSITORIES[1]['access_token'],
-                                MOCK_BUILD_PAYLOAD)
+                register_builds(
+                    "id",
+                    MOCK_REPOSITORIES[1]["access_token"],
+                    MOCK_BUILD_PAYLOAD,
+                )
 
     def test_get_builds(self):
         self.setup_with_build()
         with self.app.app_context():
-            res = get_builds(MOCK_REPOSITORIES[1]['id'])
+            res = get_builds(MOCK_REPOSITORIES[1]["id"])
             assert isinstance(res, list)
             assert len(res) == 2
 
@@ -235,29 +271,29 @@ class TestBuild:
         self.setup()
         with self.app.app_context():
             with pytest.raises(BuildNotFound):
-                get_builds(MOCK_REPOSITORIES[1]['id'])
+                get_builds(MOCK_REPOSITORIES[1]["id"])
 
     def test_get_builds_repository_not_found(self):
         self.setup()
         with self.app.app_context():
             with pytest.raises(RepositoryNotFound):
-                get_builds('abcd')
+                get_builds("abcd")
 
     def test_get_build_info(self):
         self.setup_with_build()
         with self.app.app_context():
-            res = get_build_info(MOCK_BUILD_INFO['id'])
+            res = get_build_info(MOCK_BUILD_INFO["id"])
             assert isinstance(res, dict)
-            assert 'finished_at' in res
-            assert 'head_commit' in res
-            assert 'started_at' in res
-            assert 'branch' in res['head_commit']
+            assert "finished_at" in res
+            assert "head_commit" in res
+            assert "started_at" in res
+            assert "branch" in res["head_commit"]
 
     def test_get_build_info_build_not_found(self):
         self.setup_with_build()
         with self.app.app_context():
             with pytest.raises(BuildNotFound):
-                get_build_info('abcd')
+                get_build_info("abcd")
 
     def test_git_clone_and_checkout(self):
         clone_path = git_clone_and_checkout(
@@ -265,9 +301,10 @@ class TestBuild:
             branch="dev",
             commit="122c34d",
             base_dir=".",
-            build_id="build123")
-        assert clone_path == './build123/drs-filer'
-        shutil.rmtree('./build123')
+            build_id="build123",
+        )
+        assert clone_path == "./build123/drs-filer"
+        shutil.rmtree("./build123")
 
     def test_git_clone_and_checkout_without_branch(self):
         clone_path = git_clone_and_checkout(
@@ -275,9 +312,10 @@ class TestBuild:
             branch="",
             commit="122c34d",
             base_dir=".",
-            build_id="build123")
-        assert clone_path == './build123/drs-filer'
-        shutil.rmtree('./build123')
+            build_id="build123",
+        )
+        assert clone_path == "./build123/drs-filer"
+        shutil.rmtree("./build123")
 
     def test_git_clone_and_checkout_type_error(self):
         with pytest.raises(GitCloningError):
@@ -286,8 +324,9 @@ class TestBuild:
                 branch="master",
                 commit="8cd58b",
                 base_dir=".",
-                build_id="build123")
-        shutil.rmtree('./build123')
+                build_id="build123",
+            )
+        shutil.rmtree("./build123")
 
     def test_git_clone_and_checkout_git_command_error(self):
         with pytest.raises(GitCloningError):
@@ -296,82 +335,97 @@ class TestBuild:
                 branch="dev",
                 commit="122c34d",
                 base_dir=".",
-                build_id="build123")
+                build_id="build123",
+            )
             git_clone_and_checkout(
                 repo_url=self.repository_url,
                 branch="dev",
                 commit="122c34d",
                 base_dir=".",
-                build_id="build123")
-        shutil.rmtree('./build123')
+                build_id="build123",
+            )
+        shutil.rmtree("./build123")
 
     def test_create_deployment_yaml(self):
-        builds.template_file = 'pubgrade/pubgrade/endpoints/kaniko' \
-                               '/template.yaml'
-        os.mkdir('build123')
-        os.mkdir('build123/drs-filer')
+        builds.template_file = (
+            "pubgrade/modules/endpoints/kaniko" "/template.yaml"
+        )
+        os.mkdir("build123")
+        os.mkdir("build123/drs-filer")
         deployment_file_location = create_deployment_YAML(
-            './build123/drs-filer/dockerfile_location',
-            'registry_destination',
-            'clone_path',
-            './build123/drs-filer/deployment_file',
-            'build_id/config.json',
-            'project_access_token')
-        assert deployment_file_location == './build123/drs-filer/' \
-                                           'deployment_file'
+            "./build123/drs-filer/dockerfile_location",
+            "registry_destination",
+            "clone_path",
+            "./build123/drs-filer/deployment_file",
+            "build_id/config.json",
+            "project_access_token",
+        )
+        assert (
+            deployment_file_location == "./build123/drs-filer/"
+            "deployment_file"
+        )
         assert os.path.isfile(deployment_file_location)
-        shutil.rmtree('./build123')
+        shutil.rmtree("./build123")
 
     def test_create_deployment_yaml_if_env_present(self):
-        os.environ['NAMESPACE'] = 'pubgrade'
-        builds.template_file = 'pubgrade/pubgrade/endpoints/kaniko' \
-                               '/template.yaml'
-        os.mkdir('build123')
-        os.mkdir('build123/drs-filer')
+        os.environ["NAMESPACE"] = "pubgrade"
+        builds.template_file = (
+            "pubgrade/modules/endpoints/kaniko" "/template.yaml"
+        )
+        os.mkdir("build123")
+        os.mkdir("build123/drs-filer")
         deployment_file_location = create_deployment_YAML(
-            './build123/drs-filer/dockerfile_location',
-            'registry_destination',
-            'clone_path',
-            './build123/drs-filer/deployment_file',
-            'build_id/config.json',
-            'project_access_token')
-        assert deployment_file_location == './build123/drs-filer/' \
-                                           'deployment_file'
+            "./build123/drs-filer/dockerfile_location",
+            "registry_destination",
+            "clone_path",
+            "./build123/drs-filer/deployment_file",
+            "build_id/config.json",
+            "project_access_token",
+        )
+        assert (
+            deployment_file_location == "./build123/drs-filer/"
+            "deployment_file"
+        )
         assert os.path.isfile(deployment_file_location)
-        shutil.rmtree('./build123')
-        del os.environ['NAMESPACE']
+        shutil.rmtree("./build123")
+        del os.environ["NAMESPACE"]
 
     def test_create_deployment_yaml_os_error(self):
         with pytest.raises(OSError):
-            builds.template_file = 'pubgrade/pubgrade/endpoints/kaniko' \
-                               '/template.yaml'
+            builds.template_file = (
+                "pubgrade/modules/endpoints/kaniko" "/template.yaml"
+            )
             deployment_file_location = create_deployment_YAML(
-                './build123/drs-filer/dockerfile_location',
-                'registry_destination',
-                'clone_path',
-                './build123/drs-filer/deployment_file',
-                'build_id' + '/config.json',
-                'project_access_token')
-            assert deployment_file_location == './build123/drs-filer/' \
-                                               'deployment_file'
+                "./build123/drs-filer/dockerfile_location",
+                "registry_destination",
+                "clone_path",
+                "./build123/drs-filer/deployment_file",
+                "build_id" + "/config.json",
+                "project_access_token",
+            )
+            assert (
+                deployment_file_location == "./build123/drs-filer/"
+                "deployment_file"
+            )
             assert os.path.isfile(deployment_file_location)
-            shutil.rmtree('./build123')
+            shutil.rmtree("./build123")
 
     def test_create_dockerhub_config_file(self):
-        create_dockerhub_config_file('token', 'config.json')
-        assert os.path.isfile('config.json')
-        os.remove('config.json')
+        create_dockerhub_config_file("token", "config.json")
+        assert os.path.isfile("config.json")
+        os.remove("config.json")
 
     @patch(
-        "pubgrade.pubgrade.endpoints.builds."
-        "build_push_image_using_kaniko",
-        mocked_build_push_image_using_kaniko)
+        "pubgrade.modules.endpoints.builds." "build_push_image_using_kaniko",
+        mocked_build_push_image_using_kaniko,
+    )
     def test_create_build(self):
-        builds.template_file = 'pubgrade/pubgrade/endpoints/kaniko' \
-                               '/template.yaml'
-        os.mkdir('basedir')
-        os.mkdir('basedir/drs-filer')
-        f = open('basedir/drs-filer/Dockerfile', "w")
+        builds.template_file = (
+            "pubgrade/modules/endpoints/kaniko" "/template.yaml"
+        )
+        os.mkdir("basedir")
+        os.mkdir("basedir/drs-filer")
+        f = open("basedir/drs-filer/Dockerfile", "w")
         f.write("test dockerfile")
         f.close()
         create_build(
@@ -381,114 +435,149 @@ class TestBuild:
             base_dir="basedir",
             build_id="build123",
             dockerfile_location="basedir/drs-filer/Dockerfile",
-            registry_destination='registry_destination',
-            dockerhub_token='dockerhub_token',
-            project_access_token='access_token')
-        shutil.rmtree('basedir')
+            registry_destination="registry_destination",
+            dockerhub_token="dockerhub_token",
+            project_access_token="access_token",
+        )
+        shutil.rmtree("basedir")
 
-    @patch("pubgrade.pubgrade.endpoints.builds.remove_files",
-           mocked_remove_files)
-    @patch('requests.request', mocked_request_api)
+    @patch(
+        "pubgrade.modules.endpoints.builds.remove_files", mocked_remove_files
+    )
+    @patch("requests.request", mocked_request_api)
     def test_build_completed(self):
         self.setup_with_build()
-        self.app.config['FOCA'].db.dbs['pubgradeStore']. \
-            collections['subscriptions'].client = mongomock.MongoClient(
-        ).db.collection
-        self.app.config['FOCA'].db.dbs['pubgradeStore']. \
-            collections['subscriptions'].client.insert_one(
-            MOCK_SUBSCRIPTION_INFO).inserted_id
+        self.app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+            "subscriptions"
+        ].client = mongomock.MongoClient().db.collection
+        self.app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+            "subscriptions"
+        ].client.insert_one(MOCK_SUBSCRIPTION_INFO)
         with self.app.app_context():
-            res = build_completed(MOCK_REPOSITORY_2['id'], MOCK_REPOSITORY_2[
-                'build_list'][0], MOCK_REPOSITORY_2['access_token'])
-            data = self.app.config['FOCA'].db.dbs['pubgradeStore']. \
-                collections['builds'].client.find_one(res)
-            assert data['status'] == 'SUCCEEDED'
-            assert res['id'] == MOCK_REPOSITORY_2['build_list'][0]
+            res = build_completed(
+                MOCK_REPOSITORY_2["id"],
+                MOCK_REPOSITORY_2["build_list"][0],
+                MOCK_REPOSITORY_2["access_token"],
+            )
+            data = (
+                self.app.config["FOCA"]
+                .db.dbs["pubgradeStore"]
+                .collections["builds"]
+                .client.find_one(res)
+            )
+            assert data["status"] == "SUCCEEDED"
+            assert res["id"] == MOCK_REPOSITORY_2["build_list"][0]
 
     def test_build_completed_build_not_found(self):
         self.setup_with_build()
         with self.app.app_context():
             with pytest.raises(BuildNotFound):
-                build_completed(MOCK_REPOSITORY_2['id'], 'build12',
-                                MOCK_REPOSITORY_2['access_token'])
+                build_completed(
+                    MOCK_REPOSITORY_2["id"],
+                    "build12",
+                    MOCK_REPOSITORY_2["access_token"],
+                )
 
     def test_build_completed_unauthorized(self):
         self.setup_with_build()
         with self.app.app_context():
             with pytest.raises(Unauthorized):
-                build_completed(MOCK_REPOSITORY_2['id'],
-                                MOCK_REPOSITORY_2['build_list'][0],
-                                '123')
+                build_completed(
+                    MOCK_REPOSITORY_2["id"],
+                    MOCK_REPOSITORY_2["build_list"][0],
+                    "123",
+                )
 
     def test_build_completed_repository_not_found(self):
         self.setup_with_build()
         with self.app.app_context():
             with pytest.raises(RepositoryNotFound):
-                build_completed('repo125', MOCK_REPOSITORY_2['build_list'][0],
-                                MOCK_REPOSITORY_2['access_token'])
+                build_completed(
+                    "repo125",
+                    MOCK_REPOSITORY_2["build_list"][0],
+                    MOCK_REPOSITORY_2["access_token"],
+                )
 
-    @patch("pubgrade.pubgrade.endpoints.builds.delete_pod",
-           mocked_delete_pod)
+    @patch("pubgrade.modules.endpoints.builds.delete_pod", mocked_delete_pod)
     def test_remove_files(self):
-        os.mkdir('build123')
-        remove_files('build123', 'pod_name', 'namespace')
-        assert not os.path.isdir('build123')
+        os.mkdir("build123")
+        remove_files("build123", "pod_name", "namespace")
+        assert not os.path.isdir("build123")
 
-    @patch('kubernetes.config.load_kube_config', mocked_load_cluster_config)
-    @patch('kubernetes.client.api.core_v1_api.CoreV1Api.create_namespaced_pod',
-           mocked_create_namespaced_pod)
+    @patch("kubernetes.config.load_kube_config", mocked_load_cluster_config)
+    @patch(
+        "kubernetes.client.api.core_v1_api.CoreV1Api.create_namespaced_pod",
+        mocked_create_namespaced_pod,
+    )
     def test_build_push_image_using_kaniko(self):
-        builds.template_file = 'pubgrade/pubgrade/endpoints/kaniko' \
-                               '/template.yaml'
+        builds.template_file = (
+            "pubgrade/modules/endpoints/kaniko" "/template.yaml"
+        )
         with self.app.app_context():
             build_push_image_using_kaniko(builds.template_file)
-        os.environ['NAMESPACE'] = 'pubgrade'
+        os.environ["NAMESPACE"] = "pubgrade"
         with self.app.app_context():
             build_push_image_using_kaniko(builds.template_file)
-        del os.environ['NAMESPACE']
+        del os.environ["NAMESPACE"]
 
-    @patch('kubernetes.config.kube_config.load_kube_config',
-           mocked_load_kube_config)
-    @patch('kubernetes.client.api.core_v1_api.CoreV1Api.create_namespaced_pod',
-           mocked_create_namespaced_pod_error)
-    @patch('kubernetes.config.kube_config._get_kube_config_loader',
-           mocked_get_kube_config_loader)
-    @patch('kubernetes.config.kube_config.KubeConfigLoader',
-           MockKubeConfigLoader)
+    @patch(
+        "kubernetes.config.kube_config.load_kube_config",
+        mocked_load_kube_config,
+    )
+    @patch(
+        "kubernetes.client.api.core_v1_api.CoreV1Api.create_namespaced_pod",
+        mocked_create_namespaced_pod_error,
+    )
+    @patch(
+        "kubernetes.config.kube_config._get_kube_config_loader",
+        mocked_get_kube_config_loader,
+    )
+    @patch(
+        "kubernetes.config.kube_config.KubeConfigLoader", MockKubeConfigLoader
+    )
     def test_build_push_image_using_kaniko_create_pod_error(self):
-        builds.template_file = 'pubgrade/pubgrade/endpoints/kaniko' \
-                               '/template.yaml'
+        builds.template_file = (
+            "pubgrade/modules/endpoints/kaniko" "/template.yaml"
+        )
         with self.app.app_context():
             with pytest.raises(CreatePodError):
                 build_push_image_using_kaniko(builds.template_file)
 
-    @patch('kubernetes.client.api.core_v1_api.CoreV1Api', mocked_core_v1_api)
-    @patch('kubernetes.client.api.core_v1_api.CoreV1Api'
-           '.delete_namespaced_pod', mocked_delete_namespaced_pod)
+    @patch("kubernetes.client.api.core_v1_api.CoreV1Api", mocked_core_v1_api)
+    @patch(
+        "kubernetes.client.api.core_v1_api.CoreV1Api" ".delete_namespaced_pod",
+        mocked_delete_namespaced_pod,
+    )
     def test_delete_pod(self):
         with self.app.app_context():
-            builds.delete_pod('name', 'namespace')
+            builds.delete_pod("name", "namespace")
 
-    @patch('kubernetes.client.api.core_v1_api.CoreV1Api', mocked_core_v1_api)
-    @patch('kubernetes.client.api.core_v1_api.CoreV1Api'
-           '.delete_namespaced_pod', mocked_delete_namespaced_pod_error)
+    @patch("kubernetes.client.api.core_v1_api.CoreV1Api", mocked_core_v1_api)
+    @patch(
+        "kubernetes.client.api.core_v1_api.CoreV1Api" ".delete_namespaced_pod",
+        mocked_delete_namespaced_pod_error,
+    )
     def test_delete_pod_api_error(self):
         with self.app.app_context():
             with pytest.raises(DeletePodError):
-                builds.delete_pod('name', 'namespace')
+                builds.delete_pod("name", "namespace")
 
-    @patch('kubernetes.config.load_incluster_config',
-           mocked_load_incluster_config)
-    @patch('kubernetes.client.api.core_v1_api.CoreV1Api.create_namespaced_pod',
-           mocked_create_namespaced_pod)
+    @patch(
+        "kubernetes.config.load_incluster_config", mocked_load_incluster_config
+    )
+    @patch(
+        "kubernetes.client.api.core_v1_api.CoreV1Api.create_namespaced_pod",
+        mocked_create_namespaced_pod,
+    )
     def test_build_push_image_using_kaniko_incluster(self):
-        os.environ['KUBERNETES_SERVICE_HOST'] = 'Incluster'
-        builds.template_file = 'pubgrade/pubgrade/endpoints/kaniko' \
-                               '/template.yaml'
+        os.environ["KUBERNETES_SERVICE_HOST"] = "Incluster"
+        builds.template_file = (
+            "pubgrade/modules/endpoints/kaniko" "/template.yaml"
+        )
         with self.app.app_context():
             build_push_image_using_kaniko(builds.template_file)
-        os.environ['NAMESPACE'] = 'pubgrade'
+        os.environ["NAMESPACE"] = "pubgrade"
         with self.app.app_context():
             build_push_image_using_kaniko(builds.template_file)
-        del os.environ['NAMESPACE']
-        del os.environ['KUBERNETES_SERVICE_HOST']
+        del os.environ["NAMESPACE"]
+        del os.environ["KUBERNETES_SERVICE_HOST"]
