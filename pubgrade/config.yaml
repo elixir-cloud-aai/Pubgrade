@@ -37,6 +37,12 @@ db:
                               uid: 1
                           options: 
                             'unique': True
+                admin_users:
+                    indexes:
+                        - keys:
+                              uid: 1
+                          options: 
+                            'unique': True
 
 api:
     specs:
@@ -44,7 +50,7 @@ api:
             - api/pubgrade.yaml
           append: null
           add_operation_fields:
-              x-openapi-router-controller: pubgrade.server
+              x-openapi-router-controller: pubgrade.modules.server
           connexion:
               strict_validation: True
               validate_responses: True
@@ -55,7 +61,7 @@ api:
 exceptions:
      required_members: [['msg'], ['status_code']]
      status_member: ['status_code']
-     exceptions: errors.exceptions.exceptions
+     exceptions: pubgrade.errors.exceptions.exceptions
 
 log:
     version: 1
@@ -85,7 +91,12 @@ endpoints:
         charset: [ string.ascii_lowercase, string.digits , '.' , '-' ]
         length: 32
     subscriptions:
-      admin_user:
-        name: 'Akash'
-        uid: '9fe2c4e93f654fdbb24c02b15259716c'
-        user_access_token: 'c42a6d44e3d0'
+      admin_users:
+        - user_1:
+            name: 'Akash'
+            uid: 'akash.saini'
+            user_access_token: 'c42a6d44e3d0'
+        - user_2:
+            name: 'Alvaro'
+            uid: 'alvaro.gonzalez'
+            user_access_token: 'c42fhg44e3d0'
