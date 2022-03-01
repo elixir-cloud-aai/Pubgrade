@@ -6,11 +6,7 @@
 
 ## Description
 
-**Pubgrade** (**Pub**lish-Up**grade**) is a decoupled, publish-subscribe-based
-continuous integration (CI) and continuous delivery (CD) service that allows
-developers to notify deployments of available updates. These can can then
-autonomously decide what to do with them. Pubgrade has an optional link with
-the [ELIXIR Cloud Service Registry][elixir-cloud-registry].
+**Pubgrade** (**Pub**lish-Up**grade**) is a decoupled, publish-subscribe-based continuous integration (CI) and continuous delivery (CD) microservice that allows developers to notify deployments of available updates, which can then autonomously decide what to do with them. Pubgrade has an optional link with [ELIXIR Cloud Service Registry][elixir-cloud-registry].
 
 Currently supported features:
 
@@ -147,6 +143,7 @@ proposal, question etc.
 [badge-url-coverage]: https://coveralls.io/github/elixir-cloud-aai/Broker?branch=feature_controllers
 [coverage-badge-svg]: https://coveralls.io/repos/github/elixir-cloud-aai/Broker/badge.svg?branch=feature_controllers
 [contributing]: https://github.com/elixir-cloud-aai/elixir-cloud-aai/blob/dev/CONTRIBUTING.md
+[app-schema]: images/app-schema-animation.gif
 [elixir-cloud]: https://github.com/elixir-cloud-aai/elixir-cloud-aai
 [elixir-cloud-registry]: https://cloud-registry.rahtiapp.fi/ga4gh/registry/v1/ui/
 [helm-install]: https://helm.sh/docs/intro/install/
