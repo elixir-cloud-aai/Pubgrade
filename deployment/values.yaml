@@ -1,4 +1,21 @@
-pvClaimName: pubgrade-pv
-pathToLocalDir: '/tmp/pubgrade-pv' # needs to be changed accordingly
 imageNotifyCompletion: 'akash7778/notify-completion' # This will be moved to elixir-cloud-aai
 pubgrade_URL: 'http://pubgrade-service.pubgrade'
+
+#Persistent volumes and claims
+volumes:
+  Pubgrade:
+    # In case you are working with minikube or another single-worker solution
+    # you can add a peristent volume from a local directory. For fully-distributed
+    #clusters you should use a StorageClass already existing in your cluster, so set this to false.
+    deployLocalPv: false
+    pathToLocalDir: '/tmp/pubgrade-pv' # needs to be changed accordingly
+    name: pubgrade-pvc
+    storageClass: manual
+    size: 2Gi
+  mongodb:
+    deployLocalPv: false
+    pathToLocalDir: '/tmp/mongo-pv' # needs to be changed accordingly
+
+    name: mongo-pvc
+    storageClass: manual
+    size: 2Gi

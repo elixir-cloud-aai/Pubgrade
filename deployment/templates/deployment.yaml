@@ -22,13 +22,13 @@ spec:
        - containerPort: 8080
        volumeMounts:
        - mountPath: /pubgrade_temp_files  # if changed needs to be changed at builds.py
-         name: pv-storage
+         name: pubgrade-storage
        env:
          - name: NAMESPACE
            value: {{ .Release.Namespace }}
          - name: PV_NAME
            value: {{ .Values.pvClaimName }}
      volumes:
-       - name: pv-storage
+       - name: pubgrade-storage
          persistentVolumeClaim:
-               claimName: {{ .Values.pvClaimName }}
+               claimName: {{ .Values.volumes.Pubgrade.name }}

@@ -1,0 +1,28 @@
+{{ if .Values.volumes.mongodb.deployLocalPv }}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+ name: mongo-pv
+ labels:
+   type: local
+spec:
+ storageClassName: {{ .Values.volumes.mongodb.storageClass }}
+ capacity:
+   storage: 2Gi
+ accessModes:
+   - ReadWriteOnce
+ hostPath:
+   path: {{ .Values.pathToLocalDir }}
+{{ end }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+ name: {{ .Values.volumes.mongodb.name }}
+spec:
+ storageClassName: {{ .Values.volumes.mongodb.storageClass }}
+ accessModes:
+   - ReadWriteOnce
+ resources:
+   requests:
+     storage: {{ .Values.volumes.mongodb.size }}
