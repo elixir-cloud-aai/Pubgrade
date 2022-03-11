@@ -8,7 +8,7 @@ metadata:
 spec:
  storageClassName: {{ .Values.volumes.mongodb.storageClass }}
  capacity:
-   storage: 2Gi
+   storage: {{ .Values.volumes.mongodb.size }}
  accessModes:
    - ReadWriteOnce
  hostPath:

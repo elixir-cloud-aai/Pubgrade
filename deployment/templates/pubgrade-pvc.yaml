@@ -8,7 +8,7 @@ metadata:
 spec:
  storageClassName: {{ .Values.volumes.Pubgrade.storageClass }}
  capacity:
-   storage: 2Gi
+   storage: {{ .Values.volumes.Pubgrade.size }}
  accessModes:
    - ReadWriteOnce
  hostPath:

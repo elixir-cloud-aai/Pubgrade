@@ -19,3 +19,4 @@ volumes:
     name: mongo-pvc
     storageClass: manual
     size: 2Gi
+    
