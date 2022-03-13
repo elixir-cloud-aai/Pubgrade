@@ -37,16 +37,16 @@ def register_user(data: dict):
 
     db_collection = (
         current_app.config["FOCA"]
-        .db.dbs["pubgradeStore"]
-        .collections["users"]
-        .client
+            .db.dbs["pubgradeStore"]
+            .collections["users"]
+            .client
     )
-    retries = current_app.config["FOCA"].endpoints["repository"]["retries"]
-    id_length: int = current_app.config["FOCA"].endpoints["repository"][
-        "id_length"
+    retries = current_app.config["FOCA"].endpoints["user"]["retries"]
+    id_length: int = current_app.config["FOCA"].endpoints["user"][
+        "uid_length"
     ]
-    id_charset: str = current_app.config["FOCA"].endpoints["repository"][
-        "id_charset"
+    id_charset: str = current_app.config["FOCA"].endpoints["user"][
+        "uid_charset"
     ]
     access_token_length: int = current_app.config["FOCA"].endpoints[
         "access_token"
@@ -99,6 +99,50 @@ def register_user(data: dict):
     return user_object
 
 
+def delete_user(uid: str, user_access_token: str):
+    """Delete User object.
+
+    Args:
+        uid (str): Unique identifier for user.
+        user_access_token (str): Secret to verify user.
+
+    Returns:
+        "User deleted successfully."
+
+    Raises:
+        RepositoryNotFound: Raised when there is no registered repository in
+        the pubgrade.
+        Unauthorized: Raised when access_token is invalid or not specified
+        in request.
+        UserNotFound: Raised when there is no user with specified uid.
+    """
+    db_collection_subscriptions = (
+        current_app.config["FOCA"]
+            .db.dbs["pubgradeStore"]
+            .collections["subscriptions"]
+            .client
+    )
+    db_collection_user = (
+        current_app.config["FOCA"]
+            .db.dbs["pubgradeStore"]
+            .collections["users"]
+            .client
+    )
+    data_from_db_user = db_collection_user.find_one({"uid": uid})
+    if data_from_db_user is None:
+        raise UserNotFound
+    if data_from_db_user["user_access_token"] != user_access_token:
+        raise Unauthorized
+
+    try:
+        for subscription_id in data_from_db_user["subscription_list"]:
+            db_collection_subscriptions.delete_one({"id": subscription_id})
+    except KeyError:
+        logger.info(f"No subcriptions found for user: {uid}")
+    db_collection_user.delete_one({"uid": uid})
+    return "User deleted successfully."
+
+
 def get_users(admin_user_id: str, admin_user_access_token: str):
     """Get available users.
 
@@ -116,9 +160,9 @@ def get_users(admin_user_id: str, admin_user_access_token: str):
     """
     db_collection_admin_users = (
         current_app.config["FOCA"]
-        .db.dbs["pubgradeStore"]
-        .collections["admin_users"]
-        .client
+            .db.dbs["pubgradeStore"]
+            .collections["admin_users"]
+            .client
     )
     data_from_db = db_collection_admin_users.find_one({"uid": admin_user_id})
     if data_from_db is None:
@@ -128,9 +172,9 @@ def get_users(admin_user_id: str, admin_user_access_token: str):
 
     db_collection = (
         current_app.config["FOCA"]
-        .db.dbs["pubgradeStore"]
-        .collections["users"]
-        .client
+            .db.dbs["pubgradeStore"]
+            .collections["users"]
+            .client
     )
 
     users = db_collection.find(
@@ -141,7 +185,8 @@ def get_users(admin_user_id: str, admin_user_access_token: str):
 
 
 def toggle_user_status(
-    admin_user_id: str, admin_user_access_token: str, uid: str, is_verify: bool
+        admin_user_id: str, admin_user_access_token: str, uid: str,
+        is_verify: bool
 ):
     """Verify/Unverify user status.
 
@@ -161,9 +206,9 @@ def toggle_user_status(
     """
     db_collection_admin_users = (
         current_app.config["FOCA"]
-        .db.dbs["pubgradeStore"]
-        .collections["admin_users"]
-        .client
+            .db.dbs["pubgradeStore"]
+            .collections["admin_users"]
+            .client
     )
     data_from_db = db_collection_admin_users.find_one({"uid": admin_user_id})
     if data_from_db is None:
@@ -173,9 +218,9 @@ def toggle_user_status(
 
     db_collection_user = (
         current_app.config["FOCA"]
-        .db.dbs["pubgradeStore"]
-        .collections["users"]
-        .client
+            .db.dbs["pubgradeStore"]
+            .collections["users"]
+            .client
     )
     data_from_db = db_collection_user.find_one({"uid": uid})
     if data_from_db is None:

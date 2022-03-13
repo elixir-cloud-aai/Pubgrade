@@ -29,7 +29,7 @@ from pubgrade.modules.server import (
     postUser,
     getUsers,
     verifyUser,
-    unverifyUser,
+    unverifyUser, deleteUser,
 )
 
 from tests.mock_data import (
@@ -446,6 +446,35 @@ def test_post_user():
         assert "uid" in res
         assert "user_access_token" in res
         assert "name" in res
+
+
+def test_deleteUser():
+    app = Flask(__name__)
+    app.config["FOCA"] = Config(
+        db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG
+    )
+    app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+        "users"
+    ].client = mongomock.MongoClient().db.collection
+    app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+        "users"
+    ].client.insert_one(MOCK_USER_DB)
+    app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+        "subscriptions"
+    ].client = mongomock.MongoClient().db.collection
+    app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+        "subscriptions"
+    ].client.insert_one(MOCK_SUBSCRIPTION_INFO)
+    with app.test_request_context(
+        headers={
+            "X-User-Access-Token": user_access_token,
+            "X-User-Id": uid,
+            "Content-Type": "application/json",
+        },
+    ):
+        res = deleteUser.__wrapped__()
+        assert res == "User deleted successfully."
+
 
 
 def test_get_user():
