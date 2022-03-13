@@ -45,6 +45,11 @@ ENDPOINT_CONFIG = {
 =======
 >>>>>>> feat: User management with admin user
     },
+    "user": {
+        "uid_charset": ["string.ascii_lowercase", "string.digits", ".", "-"],
+        "uid_length": 6,
+        "retries": 3,
+    },
     "access_token": {
         "charset": ["string.ascii_lowercase", "string.digits", ".", "-"],
         "length": 32,
