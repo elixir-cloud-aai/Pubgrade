@@ -87,16 +87,18 @@ endpoints:
         id_charset: [string.ascii_lowercase, string.digits , '.' , '-']
         id_length: 6
         retries: 3
+    user:
+        uid_charset: [string.ascii_lowercase, string.digits , '.' , '-']
+        uid_length: 6
+        retries: 3
     access_token:
         charset: [ string.ascii_lowercase, string.digits , '.' , '-' ]
         length: 32
     subscriptions:
       admin_users:
-        - user_1:
-            name: 'Akash'
-            uid: 'akash.saini'
-            user_access_token: 'c42a6d44e3d0'
-        - user_2:
-            name: 'Alvaro'
-            uid: 'alvaro.gonzalez'
-            user_access_token: 'c42fhg44e3d0'
+        - name: 'Akash'
+          uid: 'akash.saini'
+          user_access_token: 'c42a6d44e3d0'
+        - name: 'Alvaro'
+          uid: 'alvaro.gonzalez'
+          user_access_token: 'c42fhg44e3d0'

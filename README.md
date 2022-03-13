@@ -15,7 +15,7 @@ Currently supported features:
 - Register subscriptions.
 - Notify subscriptions on build updates.
 
-![app-schema][anim-schema]
+![app-schema](images/app-schema-animation.gif)
 
 ## Installation
 
@@ -143,7 +143,6 @@ proposal, question etc.
 [badge-url-coverage]: https://coveralls.io/github/elixir-cloud-aai/Broker?branch=feature_controllers
 [coverage-badge-svg]: https://coveralls.io/repos/github/elixir-cloud-aai/Broker/badge.svg?branch=feature_controllers
 [contributing]: https://github.com/elixir-cloud-aai/elixir-cloud-aai/blob/dev/CONTRIBUTING.md
-[app-schema]: images/app-schema-animation.gif
 [elixir-cloud]: https://github.com/elixir-cloud-aai/elixir-cloud-aai
 [elixir-cloud-registry]: https://cloud-registry.rahtiapp.fi/ga4gh/registry/v1/ui/
 [helm-install]: https://helm.sh/docs/intro/install/

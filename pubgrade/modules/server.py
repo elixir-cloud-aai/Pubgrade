@@ -26,7 +26,7 @@ from pubgrade.modules.endpoints.subscriptions import (
 from pubgrade.modules.endpoints.users import (
     register_user,
     get_users,
-    toggle_user_status,
+    toggle_user_status, delete_user,
 )
 
 
@@ -229,6 +229,18 @@ def postUser():
         identifier and access_token).
     """
     return register_user(request.json)
+
+@log_traffic
+def deleteUser():
+    """Delete User.
+
+    Returns:
+        "User deleted successfully."
+    """
+    return delete_user(
+        request.headers["X-User-Id"],
+        request.headers["X-User-Access-Token"],
+    )
 
 
 @log_traffic
