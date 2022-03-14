@@ -22,8 +22,9 @@ spec:
           name: db-container
         volumeMounts:
           - mountPath: /data/db
-            name: mongo-storage
+            name: mongodb-storage
       volumes:
-       - name: mongo-storage
-         emptyDir: {} # wright now its empty dir later this would be PV
+       - name: mongodb-storage
+         persistentVolumeClaim:
+               claimName: {{ .Values.volumes.mongodb.name }}
  

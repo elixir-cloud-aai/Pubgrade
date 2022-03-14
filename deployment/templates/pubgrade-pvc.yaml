@@ -1,26 +1,28 @@
+{{ if .Values.volumes.Pubgrade.deployLocalPv }}
 apiVersion: v1
 kind: PersistentVolume
 metadata:
- name: pv-volume
+ name: pubgrade-pv
  labels:
    type: local
 spec:
- storageClassName: manual
+ storageClassName: {{ .Values.volumes.Pubgrade.storageClass }}
  capacity:
-   storage: 2Gi
+   storage: {{ .Values.volumes.Pubgrade.size }}
  accessModes:
    - ReadWriteOnce
  hostPath:
    path: {{ .Values.pathToLocalDir }}
+{{ end }}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
- name: {{ .Values.pvClaimName }}
+ name: {{ .Values.volumes.Pubgrade.name }}
 spec:
- storageClassName: manual
+ storageClassName: {{ .Values.volumes.Pubgrade.storageClass }}
  accessModes:
    - ReadWriteOnce
  resources:
    requests:
-     storage: 2Gi
+     storage: {{ .Values.volumes.Pubgrade.size }}
