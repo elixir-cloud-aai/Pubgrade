@@ -1,6 +1,13 @@
 imageNotifyCompletion: 'akash7778/notify-completion' # This will be moved to elixir-cloud-aai
 pubgrade_URL: 'http://pubgrade-service.pubgrade'
 
+ingress:
+  enabled: true
+  url: 'your.url.without.http.com'
+  https:
+    enabled: true
+    issuer: letsencrypt-prod
+
 #Persistent volumes and claims
 volumes:
   Pubgrade:
