@@ -26,7 +26,8 @@ from pubgrade.modules.endpoints.subscriptions import (
 from pubgrade.modules.endpoints.users import (
     register_user,
     get_users,
-    toggle_user_status, delete_user,
+    toggle_user_status,
+    delete_user,
 )
 
 
@@ -229,6 +230,7 @@ def postUser():
         identifier and access_token).
     """
     return register_user(request.json)
+
 
 @log_traffic
 def deleteUser():

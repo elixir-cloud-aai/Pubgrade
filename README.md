@@ -19,7 +19,7 @@ Currently supported features:
 - Register subscriptions.
 - Notify subscriptions on build updates.
 
-![app-schema](images/app-schema-animation.gif)
+![app-schema][anim-schema]
 
 ## Installation
 
@@ -141,11 +141,13 @@ of [ELIXIR Cloud & AAI][elixir-cloud]. Follow the link to get in touch with us
 via chat or email. Please mention the name of this service for any inquiry,
 proposal, question etc.
 
-[badge-build-status]: https://travis-ci.com/elixir-cloud-aai/Broker.svg?branch=feature_controllers
+[anim-schema]: images/app-schema-animation.gif
+[badge-build-status]: https://travis-ci.com/elixir-cloud-aai/Pubgrade.svg?branch=dev
+[badge-coverage]: https://coveralls.io/repos/github/elixir-cloud-aai/Pubgrade/badge.svg?branch=dev
 [badge-license]: https://img.shields.io/badge/license-Apache%202.0-blue.svg
-[badge-url-build-status]: https://travis-ci.com/elixir-cloud-aai/Broker
-[badge-url-coverage]: https://coveralls.io/github/elixir-cloud-aai/Broker?branch=feature_controllers
-[coverage-badge-svg]: https://coveralls.io/repos/github/elixir-cloud-aai/Broker/badge.svg?branch=feature_controllers
+[badge-url-build-status]: https://travis-ci.com/elixir-cloud-aai/Pubgrade
+[badge-url-coverage]: https://coveralls.io/github/elixir-cloud-aai/Pubgrade?branch=dev
+[coverage-badge-svg]: https://coveralls.io/repos/github/elixir-cloud-aai/Pubgrade/badge.svg?branch=dev
 [contributing]: https://github.com/elixir-cloud-aai/elixir-cloud-aai/blob/dev/CONTRIBUTING.md
 [elixir-cloud]: https://github.com/elixir-cloud-aai/elixir-cloud-aai
 [elixir-cloud-registry]: https://cloud-registry.rahtiapp.fi/ga4gh/registry/v1/ui/

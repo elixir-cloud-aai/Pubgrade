@@ -155,7 +155,9 @@ class TestBuild:
         self.app.config["FOCA"].db.dbs["pubgradeStore"].collections[
             "repositories"
         ].client = mongomock.MongoClient().db.collection
-        self.id_length = self.app.config["FOCA"].endpoints["repository"]["id_length"]
+        self.id_length = self.app.config["FOCA"].endpoints["repository"][
+            "id_length"
+        ]
         for repository in MOCK_REPOSITORIES:
             self.app.config["FOCA"].db.dbs["pubgradeStore"].collections[
                 "repositories"
@@ -186,7 +188,10 @@ class TestBuild:
             )
             assert isinstance(res, dict)
             # assert if build_id's 0 to `id_length` characters are same as repository id. (build = repo_id + random characters)
-            assert "id" in res and res["id"][:self.id_length] == MOCK_REPOSITORIES[1]["id"]
+            assert (
+                "id" in res
+                and res["id"][: self.id_length] == MOCK_REPOSITORIES[1]["id"]
+            )
 
     @patch(
         "pubgrade.modules.endpoints.builds.create_build", mocked_create_build
@@ -203,7 +208,10 @@ class TestBuild:
             )
             assert isinstance(res, dict)
             # assert if build_id's 0 to `id_length` characters are same as repository id. (build = repo_id + random characters)
-            assert "id" in res and res["id"][:self.id_length] == MOCK_REPOSITORIES[1]["id"]
+            assert (
+                "id" in res
+                and res["id"][: self.id_length] == MOCK_REPOSITORIES[1]["id"]
+            )
 
     @patch(
         "pubgrade.modules.endpoints.builds.create_build", mocked_create_build
@@ -220,7 +228,10 @@ class TestBuild:
             )
             assert isinstance(res, dict)
             # assert if build_id's 0 to `id_length` characters are same as repository id. (build = repo_id + random characters)
-            assert "id" in res and res["id"][:self.id_length] == MOCK_REPOSITORIES[1]["id"]
+            assert (
+                "id" in res
+                and res["id"][: self.id_length] == MOCK_REPOSITORIES[1]["id"]
+            )
 
     @patch(
         "pubgrade.modules.endpoints.builds.create_build", mocked_create_build
