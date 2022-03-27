@@ -29,7 +29,8 @@ from pubgrade.modules.server import (
     postUser,
     getUsers,
     verifyUser,
-    unverifyUser, deleteUser,
+    unverifyUser,
+    deleteUser,
 )
 
 from tests.mock_data import (
@@ -474,7 +475,6 @@ def test_deleteUser():
     ):
         res = deleteUser.__wrapped__()
         assert res == "User deleted successfully."
-
 
 
 def test_get_user():

@@ -37,14 +37,12 @@ def register_user(data: dict):
 
     db_collection = (
         current_app.config["FOCA"]
-            .db.dbs["pubgradeStore"]
-            .collections["users"]
-            .client
+        .db.dbs["pubgradeStore"]
+        .collections["users"]
+        .client
     )
     retries = current_app.config["FOCA"].endpoints["user"]["retries"]
-    id_length: int = current_app.config["FOCA"].endpoints["user"][
-        "uid_length"
-    ]
+    id_length: int = current_app.config["FOCA"].endpoints["user"]["uid_length"]
     id_charset: str = current_app.config["FOCA"].endpoints["user"][
         "uid_charset"
     ]
@@ -120,15 +118,15 @@ def delete_user(uid: str, user_access_token: str):
     """
     db_collection_subscriptions = (
         current_app.config["FOCA"]
-            .db.dbs["pubgradeStore"]
-            .collections["subscriptions"]
-            .client
+        .db.dbs["pubgradeStore"]
+        .collections["subscriptions"]
+        .client
     )
     db_collection_user = (
         current_app.config["FOCA"]
-            .db.dbs["pubgradeStore"]
-            .collections["users"]
-            .client
+        .db.dbs["pubgradeStore"]
+        .collections["users"]
+        .client
     )
     data_from_db_user = db_collection_user.find_one({"uid": uid})
     if data_from_db_user is None:
@@ -162,9 +160,9 @@ def get_users(admin_user_id: str, admin_user_access_token: str):
     """
     db_collection_admin_users = (
         current_app.config["FOCA"]
-            .db.dbs["pubgradeStore"]
-            .collections["admin_users"]
-            .client
+        .db.dbs["pubgradeStore"]
+        .collections["admin_users"]
+        .client
     )
     data_from_db = db_collection_admin_users.find_one({"uid": admin_user_id})
     if data_from_db is None:
@@ -174,9 +172,9 @@ def get_users(admin_user_id: str, admin_user_access_token: str):
 
     db_collection = (
         current_app.config["FOCA"]
-            .db.dbs["pubgradeStore"]
-            .collections["users"]
-            .client
+        .db.dbs["pubgradeStore"]
+        .collections["users"]
+        .client
     )
     # Get all user objects from database with `user_access_token`, `_id` and `subscription_list` omitted.
     users = db_collection.find(
@@ -187,8 +185,7 @@ def get_users(admin_user_id: str, admin_user_access_token: str):
 
 
 def toggle_user_status(
-        admin_user_id: str, admin_user_access_token: str, uid: str,
-        is_verify: bool
+    admin_user_id: str, admin_user_access_token: str, uid: str, is_verify: bool
 ):
     """Verify/Unverify user status.
 
@@ -208,9 +205,9 @@ def toggle_user_status(
     """
     db_collection_admin_users = (
         current_app.config["FOCA"]
-            .db.dbs["pubgradeStore"]
-            .collections["admin_users"]
-            .client
+        .db.dbs["pubgradeStore"]
+        .collections["admin_users"]
+        .client
     )
     data_from_db = db_collection_admin_users.find_one({"uid": admin_user_id})
     if data_from_db is None:
@@ -220,9 +217,9 @@ def toggle_user_status(
 
     db_collection_user = (
         current_app.config["FOCA"]
-            .db.dbs["pubgradeStore"]
-            .collections["users"]
-            .client
+        .db.dbs["pubgradeStore"]
+        .collections["users"]
+        .client
     )
     data_from_db = db_collection_user.find_one({"uid": uid})
     if data_from_db is None:

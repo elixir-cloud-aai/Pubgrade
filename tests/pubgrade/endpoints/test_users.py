@@ -12,13 +12,16 @@ from pubgrade.errors.exceptions import UserNotFound, NameNotFound
 from pubgrade.modules.endpoints.users import (
     register_user,
     get_users,
-    toggle_user_status, delete_user,
+    toggle_user_status,
+    delete_user,
 )
 from tests.mock_data import (
     MONGO_CONFIG,
     ENDPOINT_CONFIG,
     MOCK_USER_DB,
-    MOCK_ADMIN_USER_1, MOCK_SUBSCRIPTION_INFO, MOCK_USER,
+    MOCK_ADMIN_USER_1,
+    MOCK_SUBSCRIPTION_INFO,
+    MOCK_USER,
 )
 
 
@@ -85,8 +88,8 @@ class TestUsers:
         ].client.insert_one(MOCK_SUBSCRIPTION_INFO)
         with self.app.app_context():
             response = delete_user(
-                uid= MOCK_USER["uid"],
-                user_access_token=MOCK_USER["user_access_token"]
+                uid=MOCK_USER["uid"],
+                user_access_token=MOCK_USER["user_access_token"],
             )
             assert response == "User deleted successfully."
 
@@ -101,8 +104,8 @@ class TestUsers:
         with self.app.app_context():
             with pytest.raises(UserNotFound):
                 delete_user(
-                    uid= "wrong_uid",
-                    user_access_token=MOCK_USER["user_access_token"]
+                    uid="wrong_uid",
+                    user_access_token=MOCK_USER["user_access_token"],
                 )
 
     def test_delete_user_unauthorized(self):
@@ -117,7 +120,7 @@ class TestUsers:
             with pytest.raises(Unauthorized):
                 delete_user(
                     uid=MOCK_USER["uid"],
-                    user_access_token="wrong_access_token"
+                    user_access_token="wrong_access_token",
                 )
 
     def test_delete_key_error(self):
@@ -133,7 +136,7 @@ class TestUsers:
         with self.app.app_context():
             response = delete_user(
                 uid=MOCK_USER["uid"],
-                user_access_token=MOCK_USER["user_access_token"]
+                user_access_token=MOCK_USER["user_access_token"],
             )
             assert response == "User deleted successfully."
 
