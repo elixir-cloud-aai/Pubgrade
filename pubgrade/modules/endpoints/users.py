@@ -54,10 +54,12 @@ def register_user(data: dict):
     access_token_charset: str = current_app.config["FOCA"].endpoints[
         "access_token"
     ]["charset"]
+    # Try to evaluate python expression and if any exception occurs, use `set` to create charset.
     try:
         id_charset = eval(id_charset)
     except Exception:
         id_charset = "".join(sorted(set(id_charset)))
+    # Try to evaluate python expression and if any exception occurs, use `set` to create charset.
     try:
         access_token_charset = eval(access_token_charset)
     except Exception:
@@ -176,7 +178,7 @@ def get_users(admin_user_id: str, admin_user_access_token: str):
             .collections["users"]
             .client
     )
-
+    # Get all user objects from database with `user_access_token`, `_id` and `subscription_list` omitted.
     users = db_collection.find(
         {},
         {"user_access_token": False, "_id": False, "subscription_list": False},
