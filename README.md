@@ -6,7 +6,11 @@
 
 ## Description
 
-**Pubgrade** (**Pub**lish-Up**grade**) is a decoupled, publish-subscribe-based continuous integration (CI) and continuous delivery (CD) microservice that allows developers to notify deployments of available updates, which can then autonomously decide what to do with them. Pubgrade has an optional link with [ELIXIR Cloud Service Registry][elixir-cloud-registry].
+**Pubgrade** (**Pub**lish-Up**grade**) is a decoupled, publish-subscribe-based
+continuous integration (CI) and continuous delivery (CD) service that allows
+developers to notify deployments of available updates. These can can then
+autonomously decide what to do with them. Pubgrade has an optional link with
+the [ELIXIR Cloud Service Registry][elixir-cloud-registry].
 
 Currently supported features:
 
