@@ -21,14 +21,27 @@ spec:
        ports:
        - containerPort: 8080
        volumeMounts:
-       - mountPath: /pubgrade_temp_files  # if changed needs to be changed at builds.py
+       - mountPath: {{ .Values.volumes.Pubgrade.pathToMountedDir }}
          name: pubgrade-storage
        env:
          - name: NAMESPACE
            value: {{ .Release.Namespace }}
          - name: PV_NAME
-           value: {{ .Values.pvClaimName }}
+           value: {{ .Values.volumes.Pubgrade.name }}
+         - name: BASE_DIR
+           value: {{ .Values.volumes.Pubgrade.pathToMountedDir }}
      volumes:
        - name: pubgrade-storage
          persistentVolumeClaim:
                claimName: {{ .Values.volumes.Pubgrade.name }}
+     initContainers:
+        - name: take-data-dir-ownership
+          image: alpine:3
+          command:
+          - chown
+          - -R
+          - 1000:1000
+          - {{ .Values.volumes.Pubgrade.pathToMountedDir }}
+          volumeMounts:
+          - name: pubgrade-storage
+            mountPath: {{ .Values.volumes.Pubgrade.pathToMountedDir }}
