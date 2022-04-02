@@ -24,7 +24,7 @@ from pubgrade.pubgrade.endpoints.subscriptions import  \
 logger = logging.getLogger(__name__)
 
 template_file = '/app/pubgrade/pubgrade/endpoints/kaniko/template.yaml'
-
+BASE_DIR = os.getenv("BASE_DIR")
 
 def register_builds(repository_id: str, access_token: str, build_data: dict):
     """Register new builds for already registered repository.
@@ -44,7 +44,6 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
         RepositoryNotFound: Raised when repository is not found with given
         identifier.
     """
-    base_dir = '/pubgrade_temp_files'
     db_collection_builds = (
         current_app.config['FOCA'].db.dbs['pubgradeStore'].
         collections['builds'].client
@@ -106,7 +105,7 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
             create_build(repo_url=data_from_db['url'],
                          branch=branch,
                          commit=commit_sha,
-                         base_dir=base_dir,
+                         BASE_DIR=BASE_DIR,
                          build_id=build_data['id'],
                          dockerfile_location=build_data['images'][0][
                              'location'],
@@ -195,7 +194,7 @@ def get_build_info(build_id: str):
         raise BuildNotFound
 
 
-def create_build(repo_url: str, branch: str, commit: str, base_dir: str,
+def create_build(repo_url: str, branch: str, commit: str, BASE_DIR: str,
                  build_id: str, dockerfile_location: str,
                  registry_destination: str, dockerhub_token: str,
                  project_access_token: str):
@@ -207,7 +206,7 @@ def create_build(repo_url: str, branch: str, commit: str, base_dir: str,
         branch (str): Branch of git repository used for checkout to build
         image.
         commit (str): Commit used for checkout to build image.
-        base_dir (str): Location of base directory to clone git repository.
+        BASE_DIR (str): Location of base directory to clone git repository.
         build_id (str): Build Identifier.
         dockerfile_location (str): Location of dockerfile used for docker build
         taking git repository as base.
@@ -217,15 +216,15 @@ def create_build(repo_url: str, branch: str, commit: str, base_dir: str,
         project_access_token (str): Secret used to verify source, will be used
         by callback_url to inform pubgrade for build completion.
     """
-    deployment_file_location = "%s/%s/%s.yaml" % (base_dir, build_id, build_id)
-    config_file_location = "%s/%s/config.json" % (base_dir, build_id)
+    deployment_file_location = "%s/%s/%s.yaml" % (BASE_DIR, build_id, build_id)
+    config_file_location = "%s/%s/config.json" % (BASE_DIR, build_id)
 
     # Clone project repository.
     clone_path = git_clone_and_checkout(
         repo_url=repo_url,
         branch=branch,
         commit=commit,
-        base_dir=base_dir,
+        BASE_DIR=BASE_DIR,
         build_id=build_id
     )
 
@@ -251,7 +250,7 @@ def create_build(repo_url: str, branch: str, commit: str, base_dir: str,
 
 
 def git_clone_and_checkout(repo_url: str, branch: str, commit: str,
-                           base_dir: str, build_id: str):
+                           BASE_DIR: str, build_id: str):
     """Clone git repository and checkout to specified branch/commit/tag.
 
     Args:
@@ -259,7 +258,7 @@ def git_clone_and_checkout(repo_url: str, branch: str, commit: str,
         branch (str): Branch of git repository used for checkout to build
         image.
         commit (str): Commit used for checkout to build image.
-        base_dir (str): Location of base directory to clone git repository.
+        BASE_DIR (str): Location of base directory to clone git repository.
         build_id (str): Build Identifier.
 
     Returns:
@@ -268,7 +267,7 @@ def git_clone_and_checkout(repo_url: str, branch: str, commit: str,
     Raises:
         GitCloningError: Raised when there is problem while cloning repository.
     """
-    clone_path = "%s/%s/%s" % (base_dir, build_id,
+    clone_path = "%s/%s/%s" % (BASE_DIR, build_id,
                                repo_url.split('/')[4].split('.')[0])
     try:
         # Check if head commit is branch or tag.
@@ -450,8 +449,7 @@ def build_completed(repository_id: str, build_id: str,
             datetime.datetime.now().isoformat())
         db_collection_builds.update_one({"id": data['id']},
                                         {"$set": data})
-        remove_files('/pubgrade_temp_files/' + build_id, build_id,
-                     'pubgrade')
+        remove_files(BASE_DIR +"/" + build_id, build_id, "pubgrade")
 
         # Notifies available subscriptions registered for the repository.
         if 'subscription_list' in data_from_db:
