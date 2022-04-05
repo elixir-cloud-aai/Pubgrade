@@ -1,4 +1,5 @@
 import logging
+import re
 
 from pubgrade.errors.exceptions import (
     UserNotFound,
@@ -31,7 +32,7 @@ def register_user(data: dict):
     user_object = {}
 
     try:
-        user_object["name"] = data["name"]
+        user_object["name"] = sanitise_text(data["name"])
     except KeyError:
         raise NameNotFound
 
@@ -240,3 +241,16 @@ def toggle_user_status(
         return "User verified successfully."
     else:
         return "User unverified successfully."
+
+
+def sanitise_text(text: str):
+    """Sanitise input text.
+
+    Args:
+        text: input text.
+
+    Returns:
+        Sanitised text
+
+    """
+    return re.sub('[\W_]+', '', text)
