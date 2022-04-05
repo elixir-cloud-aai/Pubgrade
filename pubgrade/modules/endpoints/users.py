@@ -52,12 +52,19 @@ def register_user(data: dict):
     access_token_charset: str = current_app.config["FOCA"].endpoints[
         "access_token"
     ]["charset"]
-    # Try to evaluate python expression and if any exception occurs, use `set` to create charset.
+    # First try to evaluate python expression like string.ascii_lowercase',
+    # 'string.digits' but if any exception occurs (i.e. due to list or character
+    # set) then create character set using `set` (remove duplicate characters)
+    # and simply `join` it.
     try:
+        # Works for 'string.digits', "string.ascii_lowercase" or "[ '.' , '-',
+        # string.ascii_lowercase, string.digits]" etc.
         id_charset = eval(id_charset)
     except Exception:
+        # Works for 'abcd', string.digits, string.ascii_lowercase or [ '.' ,
+        # '-', string.ascii_lowercase, string.digits] etc.
         id_charset = "".join(sorted(set(id_charset)))
-    # Try to evaluate python expression and if any exception occurs, use `set` to create charset.
+    # Same as above.
     try:
         access_token_charset = eval(access_token_charset)
     except Exception:
