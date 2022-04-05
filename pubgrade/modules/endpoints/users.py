@@ -1,5 +1,4 @@
 import logging
-import re
 
 from pubgrade.errors.exceptions import (
     UserNotFound,
@@ -253,4 +252,4 @@ def sanitise_text(text: str):
         Sanitised text
 
     """
-    return re.sub('[\W_]+', '', text)
+    return ''.join(e for e in text if e.isalnum() or e.isspace())

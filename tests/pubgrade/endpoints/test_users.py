@@ -14,6 +14,7 @@ from pubgrade.modules.endpoints.users import (
     get_users,
     toggle_user_status,
     delete_user,
+    sanitise_text
 )
 from tests.mock_data import (
     MONGO_CONFIG,
@@ -53,7 +54,7 @@ class TestUsers:
             assert "uid" in response
             assert "user_access_token" in response
             assert "name" in response
-            assert name == response["name"]
+            assert sanitise_text(name) == response["name"]
 
     def test_register_user_keyerror(self):
         self.setup()
