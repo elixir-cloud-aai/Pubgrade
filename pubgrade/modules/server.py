@@ -3,24 +3,31 @@
 from flask import request
 from foca.utils.logging import log_traffic
 
-from pubgrade.pubgrade.endpoints.builds import (
+from pubgrade.modules.endpoints.builds import (
     build_completed,
     get_build_info,
     get_builds,
-    register_builds
+    register_builds,
 )
-from pubgrade.pubgrade.endpoints.repositories import (
+from pubgrade.modules.endpoints.repositories import (
     delete_repository,
     get_repositories,
     get_repository,
     modify_repository_info,
-    register_repository
+    register_repository,
 )
-from pubgrade.pubgrade.endpoints.subscriptions import (
+from pubgrade.modules.endpoints.subscriptions import (
     delete_subscription,
     get_subscription_info,
     get_subscriptions,
     register_subscription,
+)
+
+from pubgrade.modules.endpoints.users import (
+    register_user,
+    get_users,
+    toggle_user_status,
+    delete_user,
 )
 
 
@@ -55,7 +62,7 @@ def getRepository(id: str):
 
     Returns:
         Repository Object containing build_list, subscription_list, id, url.
-        """
+    """
     return get_repository(id)
 
 
@@ -71,9 +78,9 @@ def putRepositories(id: str):
         access_token: Secret to be used to identify the source when
         accessing repository operations next time
     """
-    return modify_repository_info(id,
-                                  request.headers['X-Project-Access-Token'],
-                                  request.json)
+    return modify_repository_info(
+        id, request.headers["X-Project-Access-Token"], request.json
+    )
 
 
 @log_traffic
@@ -87,7 +94,7 @@ def deleteRepository(id: str):
         "message": "Repository deleted successfully"
 
     """
-    if delete_repository(id, request.headers['X-Project-Access-Token']) != 0:
+    if delete_repository(id, request.headers["X-Project-Access-Token"]) != 0:
         return {"message": "Repository deleted successfully"}
 
 
@@ -101,8 +108,9 @@ def postBuild(id: str):
     Returns:
         build_id: Identifier of Build created.
     """
-    return register_builds(id, request.headers['X-Project-Access-Token'],
-                           request.json)
+    return register_builds(
+        id, request.headers["X-Project-Access-Token"], request.json
+    )
 
 
 @log_traffic
@@ -143,8 +151,9 @@ def updateBuild(id: str, build_id: str):
     Returns:
         build_id: Identifier of Build updated.
     """
-    return build_completed(id,
-                           build_id, request.headers['X-Project-Access-Token'])
+    return build_completed(
+        id, build_id, request.headers["X-Project-Access-Token"]
+    )
 
 
 @log_traffic
@@ -155,20 +164,23 @@ def postSubscription():
         subscription_id: Identifier of subscription created.
     """
     # test_create_user()
-    return register_subscription(request.headers['X-User-Id'],
-                                 request.headers['X-User-Access-Token'],
-                                 request.json)
+    return register_subscription(
+        request.headers["X-User-Id"],
+        request.headers["X-User-Access-Token"],
+        request.json,
+    )
 
 
 @log_traffic
 def getSubscriptions():
     """Get all registered subscriptions for the user.
 
-     Returns:
-         An array of registered subscription_id's.
-         """
-    return get_subscriptions(request.headers['X-User-Id'],
-                             request.headers['X-User-Access-Token'])
+    Returns:
+        An array of registered subscription_id's.
+    """
+    return get_subscriptions(
+        request.headers["X-User-Id"], request.headers["X-User-Access-Token"]
+    )
 
 
 @log_traffic
@@ -180,10 +192,12 @@ def getSubscriptionInfo(subscription_id: str):
 
     Returns:
         Subscription Information (JSON object)
-        """
-    return get_subscription_info(request.headers['X-User-Id'],
-                                 request.headers['X-User-Access-Token'],
-                                 subscription_id)
+    """
+    return get_subscription_info(
+        request.headers["X-User-Id"],
+        request.headers["X-User-Access-Token"],
+        subscription_id,
+    )
 
 
 @log_traffic
@@ -196,7 +210,85 @@ def deleteSubscription(subscription_id: str):
     Returns:
         subscription_id for deleted subscription.
     """
-    if delete_subscription(request.headers['X-User-Id'],
-                           request.headers['X-User-Access-Token'],
-                           subscription_id) != 0:
+    if (
+        delete_subscription(
+            request.headers["X-User-Id"],
+            request.headers["X-User-Access-Token"],
+            subscription_id,
+        )
+        != 0
+    ):
         return {"subscription_id": subscription_id}
+
+
+@log_traffic
+def postUser():
+    """Register user.
+
+    Returns:
+        user_object (dict): Dictionary of user contents (
+        identifier and access_token).
+    """
+    return register_user(request.json)
+
+
+@log_traffic
+def deleteUser():
+    """Delete User.
+
+    Returns:
+        "User deleted successfully."
+    """
+    return delete_user(
+        request.headers["X-User-Id"],
+        request.headers["X-User-Access-Token"],
+    )
+
+
+@log_traffic
+def getUsers():
+    """Get available users.
+
+    Returns:
+        List of available users.
+    """
+    return get_users(
+        request.headers["X-Super-User-Id"],
+        request.headers["X-Super-User-Access-Token"],
+    )
+
+
+@log_traffic
+def verifyUser(uid: str):
+    """Verify user status.
+
+    Args:
+        uid: Unique identifier for user.
+
+    Returns:
+        "User verified successfully."
+    """
+    return toggle_user_status(
+        request.headers["X-Super-User-Id"],
+        request.headers["X-Super-User-Access-Token"],
+        uid,
+        True,
+    )
+
+
+@log_traffic
+def unverifyUser(uid: str):
+    """Verify user status.
+
+    Args:
+        uid: Unique identifier for user.
+
+    Returns:
+        "User unverified successfully."
+    """
+    return toggle_user_status(
+        request.headers["X-Super-User-Id"],
+        request.headers["X-Super-User-Access-Token"],
+        uid,
+        False,
+    )
