@@ -25,7 +25,8 @@ from pubgrade.modules.endpoints.subscriptions import notify_subscriptions
 logger = logging.getLogger(__name__)
 
 template_file = '/app/pubgrade/pubgrade/endpoints/kaniko/template.yaml'
-BASE_DIR = os.getenv("BASE_DIR")
+BASE_DIR = os.getenv("BASE_DIR", "/pubgrade_temp_files" )
+
 
 def register_builds(repository_id: str, access_token: str, build_data: dict):
     """Register new builds for already registered repository.
@@ -108,7 +109,7 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
                 repo_url=data_from_db["url"],
                 branch=branch,
                 commit=commit_sha,
-                base_dir=base_dir,
+                base_dir=BASE_DIR,
                 build_id=build_data["id"],
                 dockerfile_location=build_data["images"][0]["location"],
                 registry_destination=build_data["images"][0]["name"],
@@ -232,15 +233,15 @@ def create_build(
         project_access_token (str): Secret used to verify source, will be used
         by callback_url to inform pubgrade for build completion.
     """
-    deployment_file_location = "%s/%s/%s.yaml" % (BASE_DIR, build_id, build_id)
-    config_file_location = "%s/%s/config.json" % (BASE_DIR, build_id)
+    deployment_file_location = "%s/%s/%s.yaml" % (base_dir, build_id, build_id)
+    config_file_location = "%s/%s/config.json" % (base_dir, build_id)
 
     # Clone project repository.
     clone_path = git_clone_and_checkout(
         repo_url=repo_url,
         branch=branch,
         commit=commit,
-        base_dir=BASE_DIR,
+        base_dir=base_dir,
         build_id=build_id
     )
 
