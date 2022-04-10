@@ -252,4 +252,4 @@ def sanitise_text(text: str):
         Sanitised text
 
     """
-    return ''.join(e for e in text if e.isalnum() or e.isspace())
+    return "".join(e for e in text if e.isalnum() or e.isspace())

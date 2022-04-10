@@ -24,8 +24,8 @@ from pubgrade.modules.endpoints.subscriptions import notify_subscriptions
 
 logger = logging.getLogger(__name__)
 
-template_file = '/app/pubgrade/pubgrade/endpoints/kaniko/template.yaml'
-BASE_DIR = os.getenv("BASE_DIR", "/pubgrade_temp_files" )
+template_file = "/app/pubgrade/pubgrade/endpoints/kaniko/template.yaml"
+BASE_DIR = os.getenv("BASE_DIR", "/pubgrade_temp_files")
 
 
 def register_builds(repository_id: str, access_token: str, build_data: dict):
@@ -242,7 +242,7 @@ def create_build(
         branch=branch,
         commit=commit,
         base_dir=base_dir,
-        build_id=build_id
+        build_id=build_id,
     )
 
     # Create kaniko deployment file.
@@ -484,15 +484,15 @@ def build_completed(
     if data_from_db["access_token"] != project_access_token:
         raise Unauthorized
     try:
-        data = db_collection_builds.find(
-            {'id': build_id}, {'_id': False}
-        ).limit(1).next()
-        data['status'] = "SUCCEEDED"
-        data['finished_at'] = str(
-            datetime.datetime.now().isoformat())
-        db_collection_builds.update_one({"id": data['id']},
-                                        {"$set": data})
-        remove_files(BASE_DIR +"/" + build_id, build_id, "pubgrade")
+        data = (
+            db_collection_builds.find({"id": build_id}, {"_id": False})
+            .limit(1)
+            .next()
+        )
+        data["status"] = "SUCCEEDED"
+        data["finished_at"] = str(datetime.datetime.now().isoformat())
+        db_collection_builds.update_one({"id": data["id"]}, {"$set": data})
+        remove_files(BASE_DIR + "/" + build_id, build_id, "pubgrade")
 
         # Notifies available subscriptions registered for the repository.
         if "subscription_list" in data_from_db:
