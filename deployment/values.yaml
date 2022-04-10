@@ -15,7 +15,7 @@ volumes:
     # you can add a peristent volume from a local directory. For fully-distributed
     #clusters you should use a StorageClass already existing in your cluster, so set this to false.
     deployLocalPv: true
-    pathToMountedDir: /pubgrade_temp_files
+    pathToMountedDir: /tmp/pubgrade_temp_files
     pathToLocalDir: /tmp/pubgrade-pv
     name: pubgrade-pvc
     storageClass: manual

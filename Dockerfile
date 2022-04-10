@@ -23,7 +23,7 @@ RUN cd /app \
   && pip install -r requirements.txt
 
 
-RUN mkdir /pubgrade_temp_files
+RUN mkdir /tmp/pubgrade_temp_files
 
 USER 1000
 

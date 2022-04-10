@@ -25,7 +25,7 @@ from pubgrade.modules.endpoints.subscriptions import notify_subscriptions
 logger = logging.getLogger(__name__)
 
 template_file = "/app/pubgrade/pubgrade/endpoints/kaniko/template.yaml"
-BASE_DIR = os.getenv("BASE_DIR", "/pubgrade_temp_files")
+BASE_DIR = os.getenv("BASE_DIR", "/tmp/pubgrade_temp_files")
 
 
 def register_builds(repository_id: str, access_token: str, build_data: dict):

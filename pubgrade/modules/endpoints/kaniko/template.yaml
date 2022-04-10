@@ -22,7 +22,7 @@ spec:
       - name: PUBGRADE_PORT
         value: 'PUBGRADE_PORT'
     volumeMounts:
-    - mountPath: /pubgrade_temp_files
+    - mountPath: /tmp/pubgrade_temp_files
       name: pv-storage
     - mountPath: /kaniko/.docker/config.json
       name: pv-storage
