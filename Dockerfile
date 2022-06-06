@@ -11,14 +11,20 @@ LABEL software.license="https://spdx.org/licenses/Apache-2.0"
 LABEL maintainer="akash2237778@gmail.com"
 LABEL maintainer.organisation="ELIXIR Cloud & AAI"
 
+RUN groupadd -r pubgrade --gid 1000 && useradd -d /home/pubgrade -ms /bin/bash -r -g pubgrade pubgrade --uid 1000
 
 ## Copy remaining app files
-COPY ./ /app
+COPY --chown=1000:1000 ./ /app
 
 ## Install app
 RUN cd /app \
   && python setup.py develop \
   && chmod g+w /app/pubgrade/api/ \
   && pip install -r requirements.txt
+
+
+RUN mkdir /pubgrade_temp_files
+
+USER 1000
 
 CMD ["bash", "-c", "cd /app/pubgrade; python app.py"]

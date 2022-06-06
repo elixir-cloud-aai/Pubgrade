@@ -24,8 +24,10 @@ from pubgrade.modules.endpoints.subscriptions import notify_subscriptions
 
 logger = logging.getLogger(__name__)
 
-template_file = "/app/pubgrade/pubgrade/endpoints/kaniko/template.yaml"
-
+template_file = '/app/pubgrade/pubgrade/endpoints/kaniko/template.yaml'
+BASE_DIR = os.getenv("BASE_DIR")
+if BASE_DIR is None:
+    BASE_DIR = '/pubgrade_temp_files'
 
 def register_builds(repository_id: str, access_token: str, build_data: dict):
     """Register new builds for already registered repository.
@@ -45,7 +47,6 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
         RepositoryNotFound: Raised when repository is not found with given
         identifier.
     """
-    base_dir = "/pubgrade_temp_files"
     db_collection_builds = (
         current_app.config["FOCA"]
         .db.dbs["pubgradeStore"]
@@ -109,7 +110,7 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
                 repo_url=data_from_db["url"],
                 branch=branch,
                 commit=commit_sha,
-                base_dir=base_dir,
+                base_dir=BASE_DIR,
                 build_id=build_data["id"],
                 dockerfile_location=build_data["images"][0]["location"],
                 registry_destination=build_data["images"][0]["name"],
@@ -484,15 +485,15 @@ def build_completed(
     if data_from_db["access_token"] != project_access_token:
         raise Unauthorized
     try:
-        data = (
-            db_collection_builds.find({"id": build_id}, {"_id": False})
-            .limit(1)
-            .next()
-        )
-        data["status"] = "SUCCEEDED"
-        data["finished_at"] = str(datetime.datetime.now().isoformat())
-        db_collection_builds.update_one({"id": data["id"]}, {"$set": data})
-        remove_files("/pubgrade_temp_files/" + build_id, build_id, "pubgrade")
+        data = db_collection_builds.find(
+            {'id': build_id}, {'_id': False}
+        ).limit(1).next()
+        data['status'] = "SUCCEEDED"
+        data['finished_at'] = str(
+            datetime.datetime.now().isoformat())
+        db_collection_builds.update_one({"id": data['id']},
+                                        {"$set": data})
+        remove_files(BASE_DIR +"/" + build_id, build_id, "pubgrade")
 
         # Notifies available subscriptions registered for the repository.
         if "subscription_list" in data_from_db:
