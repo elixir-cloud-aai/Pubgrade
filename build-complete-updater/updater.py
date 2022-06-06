@@ -25,19 +25,23 @@ if os.getenv("BROKER_PORT"):
     BROKER_PORT = os.getenv("BROKER_PORT")
 
 
+def get_env(env, name):
+    for var in env:
+        if var.name == name:
+            return var.value
+
 while True:
     v1 = client.CoreV1Api()
     pods = v1.list_namespaced_pod(namespace=NAMESPACE, watch=False)
     for pod in pods.items:
         if pod.spec.containers[0].env is not None:
             if pod.status.phase == "Succeeded":
+                build_name = get_env(pod.spec.containers[0].env, "BUILDNAME")
+                access_token = get_env(pod.spec.containers[0].env, "ACCESSTOKEN")
                 if (
-                    "BUILDNAME" == pod.spec.containers[0].env[0].name
-                    and "ACCESSTOKEN" == pod.spec.containers[0].env[1].name
+                    build_name is not None and access_token is not None
                 ):
-                    build_name = pod.spec.containers[0].env[0].value
                     repo_id = build_name[:BUILD_ID_LENGTH]
-                    access_token = pod.spec.containers[0].env[1].value
                     url = "{}:{}/repositories/{}/builds/{}".format(
                         BROKER_URL, BROKER_PORT, repo_id, build_name
                     )
