@@ -15,10 +15,10 @@ RUN groupadd -r pubgrade --gid 1000 && useradd -d /home/pubgrade -ms /bin/bash -
 
 COPY --chown=1000:1000 ./ /app
 
-RUN cd /app \
+RUN cd /app/build-complete-updater \
   && pip install -r requirements.txt
 
 
 USER 1000
 
-CMD [ "python", "/app/updater.py" ]
+CMD [ "python", "/app/build-complete-updater/updater.py" ]
