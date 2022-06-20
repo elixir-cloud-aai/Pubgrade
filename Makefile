@@ -20,9 +20,12 @@ test: ## Runs unit tests and shows coverage.
 	coverage run --source pubgrade -m pytest
 	coverage report -m
 
-install-pubgrade: build ## Install application on cluster using helm.
-	kubectl create namespace $(APP_NAME)
+install-pubgrade: # build ## Install pubgrade on cluster using helm.
+	kubectl create namespace $(APP_NAME) --dry-run=client -o yaml | kubectl apply -f -
 	sed -i 's#akash7778/pubgrade:test_build#$(IMAGE_NAME_PUBGRADE)#g' deployment/values.yaml
 	sed -i 's#akash7778/notify-completion#$(IMAGE_NAME_UPDATER)#g' deployment/values.yaml
-	helm install deployment/ $(APP_NAME) -n $(APP_NAME)
+	helm upgrade --install $(APP_NAME) deployment/ -n $(APP_NAME)
 
+uninstall-pubgrade: ## Uninstall pubgrade.
+	helm delete $(APP_NAME) -n $(APP_NAME)
+	kubectl delete namespace $(APP_NAME)
