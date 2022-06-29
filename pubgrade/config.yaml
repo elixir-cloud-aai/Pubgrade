@@ -8,7 +8,7 @@ server:
     use_reloader: True
 
 db:
-    host: pubgrade-mongodb
+    host: mongodb-pubgrade
     port: 27017
     dbs:
         pubgradeStore:
