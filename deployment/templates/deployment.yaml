@@ -17,12 +17,16 @@ spec:
      containers:
      - name: pubgrade
        imagePullPolicy: IfNotPresent
-       image: akash7778/pubgrade:test_build
+       image: cerit.io/matej_hrachovec/pub_fix:debu
        ports:
        - containerPort: 8080
        volumeMounts:
        - mountPath: {{ .Values.volumes.Pubgrade.pathToMountedDir }}
          name: pubgrade-storage
+       - name: certconf
+         mountPath: /etc/ssl/certs/cert.pem
+         subPath: cert.pem
+         readOnly: false
        env:
          - name: NAMESPACE
            value: {{ .Release.Namespace }}
@@ -30,10 +34,17 @@ spec:
            value: {{ .Values.volumes.Pubgrade.name }}
          - name: BASE_DIR
            value: {{ .Values.volumes.Pubgrade.pathToMountedDir }}
+       securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
      volumes:
+       - name: certconf
+         configMap:
+               name: certconf
        - name: pubgrade-storage
          persistentVolumeClaim:
                claimName: {{ .Values.volumes.Pubgrade.name }}
+    #{{- if .Values.volumes.Pubgrade.deployLocalPv }}
      initContainers:
         - name: take-data-dir-ownership
           image: alpine:3
@@ -45,3 +56,4 @@ spec:
           volumeMounts:
           - name: pubgrade-storage
             mountPath: {{ .Values.volumes.Pubgrade.pathToMountedDir }}
+    #{{end}}

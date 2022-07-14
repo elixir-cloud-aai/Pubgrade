@@ -1,12 +1,11 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: pubgrade-service
+  name: {{ .Release.Name }}-service
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
-    app: pubgrade
+    app: {{ .Release.Name }}
   ports:
     - port: 8080
       targetPort: 8080
-      nodePort: 30008
