@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+ name: pubgrade
+spec:
+ replicas: 1
+ selector:
+   matchLabels:
+     app: pubgrade
+ template:
+   metadata:
+     labels:
+       app: pubgrade
+   spec:
+     serviceAccountName: pubgrade
+     automountServiceAccountToken: true
+     containers:
+     - name: pubgrade
+       imagePullPolicy: IfNotPresent
+       image: cerit.io/matej_hrachovec/pub_fix:debu
+       ports:
+       - containerPort: 8080
+       volumeMounts:
+       - mountPath: {{ .Values.volumes.Pubgrade.pathToMountedDir }}
+         name: pubgrade-storage
+       - name: certconf
+         mountPath: /etc/ssl/certs/cert.pem
+         subPath: cert.pem
+         readOnly: false
+       env:
+         - name: NAMESPACE
+           value: {{ .Release.Namespace }}
+         - name: PV_NAME
+           value: {{ .Values.volumes.Pubgrade.name }}
+         - name: BASE_DIR
+           value: {{ .Values.volumes.Pubgrade.pathToMountedDir }}
+       securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
+     volumes:
+       - name: certconf
+         configMap:
+               name: certconf
+       - name: pubgrade-storage
+         persistentVolumeClaim:
+               claimName: {{ .Values.volumes.Pubgrade.name }}
+    #{{- if .Values.volumes.Pubgrade.deployLocalPv }}
+     initContainers:
+        - name: take-data-dir-ownership
+          image: alpine:3
+          command:
+          - chown
+          - -R
+          - 1000:1000
+          - {{ .Values.volumes.Pubgrade.pathToMountedDir }}
+          volumeMounts:
+          - name: pubgrade-storage
+            mountPath: {{ .Values.volumes.Pubgrade.pathToMountedDir }}
+    #{{end}}

@@ -1,0 +1,127 @@
+imageNotifyCompletion: 'akash7778/notify-completion' # This will be moved to elixir-cloud-aai
+pubgrade_URL: 'http://pubgrade-service.pubgrade'
+
+ingress:
+  enabled: true
+  url: 'pupgrade.dyn.cloud.e-infra.cz'
+  https:
+    enabled: true
+    issuer: letsencrypt-prod
+name: mongodb
+#Persistent volumes and claims
+volumes:
+  Pubgrade:
+    # In case you are working with minikube or another single-worker solution
+    # you can add a peristent volume from a local directory. For fully-distributed
+    #clusters you should use a StorageClass already existing in your cluster, so set this to false.
+    deployLocalPv: false
+    pathToMountedDir: /tmp/pubgrade_temp_files
+    pathToLocalDir: /tmp/pubgrade-pv
+    name: pvc-pubgrade
+    storageClass: nfs-csi
+    size: 2Gi
+  mongodb:
+    deployLocalPv: false
+    pathToLocalDir: /tmp/mongo-pv
+    name: pvc-mongo
+    storageClass: nfs-csi
+    size: 2Gi
+
+config:
+  db:
+    host: mongodb-pubgrade
+    port: 27017
+    dbs:
+        pubgradeStore:
+            collections:
+                repositories:
+                    indexes:
+                        - keys:
+                              id: 1
+                          options: 
+                            'unique': True
+                builds:
+                    indexes:
+                        - keys:
+                              id: 1
+                          options: 
+                            'unique': True
+                subscriptions:
+                    indexes:
+                        - keys:
+                              id: 1
+                          options: 
+                            'unique': True
+                users:
+                    indexes:
+                        - keys:
+                              uid: 1
+                          options: 
+                            'unique': True
+                admin_users:
+                    indexes:
+                        - keys:
+                              uid: 1
+                          options: 
+                            'unique': True
+  server:
+    host: '0.0.0.0'
+    port: 8080
+    debug: True
+    environment: development
+    testing: True
+    use_reloader: True
+  api:
+    specs:
+        - path:
+            - api/pubgrade.yaml
+          append: null
+          add_operation_fields:
+              x-openapi-router-controller: pubgrade.modules.server
+          connexion:
+              strict_validation: True
+              validate_responses: True
+              options:
+                  swagger_ui: True
+                  serve_spec: True
+  exceptions:
+     required_members: [['msg'], ['status_code']]
+     status_member: ['status_code']
+     exceptions: pubgrade.errors.exceptions.exceptions
+  log:
+    version: 1
+    disable_existing_loggers: False
+    formatters:
+        standard:
+            class: logging.Formatter
+            style: "{"
+            format: "[{asctime}: {levelname:<8}] {message} [{name}]"
+    handlers:
+        console:
+            class: logging.StreamHandler
+            level: 20
+            formatter: standard
+            stream: ext://sys.stderr
+    root:
+        level: 10
+        handlers: [console]
+  endpoints:
+    repository:
+        id_charset: [string.ascii_lowercase, string.digits , '.' , '-']
+        id_length: 6
+        retries: 3
+    user:
+        uid_charset: [string.ascii_lowercase, string.digits , '.' , '-']
+        uid_length: 6
+        retries: 3
+    access_token:
+        charset: [ string.ascii_lowercase, string.digits , '.' , '-' ]
+        length: 32
+    subscriptions:
+      admin_users:
+        - name: 'Akash'
+          uid: 'akash.saini'
+          user_access_token: 'c42a6d44e3d0'
+        - name: 'Alvaro'
+          uid: 'alvaro.gonzalez'
+          user_access_token: 'c42fhg44e3d0'

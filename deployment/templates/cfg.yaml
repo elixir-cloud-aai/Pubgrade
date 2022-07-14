@@ -1,0 +1,8 @@
+apiVersion: v1
+data:
+  config.yaml: |
+    {{.Values.config}}
+
+kind: ConfigMap
+metadata:
+  name: certconf

@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb
+  labels:
+    app: db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: db
+  template:
+    metadata:
+      labels:
+        app: db
+    spec:
+      containers:
+      - name: mongodb
+        image: mongo:3.6
+        securityContext:
+           runAsUser: 1000
+           runAsGroup: 1000
+        ports:
+        - containerPort: 27017
+          name: db-container
+        volumeMounts:
+          - mountPath: /data/db
+            name: mongodb-storage
+      volumes:
+       - name: mongodb-storage
+         persistentVolumeClaim:
+               claimName: {{ .Values.volumes.mongodb.name }}
+ 
