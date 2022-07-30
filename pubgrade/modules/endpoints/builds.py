@@ -24,7 +24,7 @@ from pubgrade.modules.endpoints.subscriptions import notify_subscriptions
 
 logger = logging.getLogger(__name__)
 
-template_file = '/app/pubgrade/pubgrade/endpoints/kaniko/template.yaml'
+template_file = '/app/pubgrade/modules/endpoints/kaniko/template.yaml'
 BASE_DIR = os.getenv("BASE_DIR")
 if BASE_DIR is None:
     BASE_DIR = '/pubgrade_temp_files'
