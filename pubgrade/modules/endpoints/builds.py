@@ -24,7 +24,7 @@ from pubgrade.modules.endpoints.subscriptions import notify_subscriptions
 
 logger = logging.getLogger(__name__)
 
-template_file = '/app/pubgrade/pubgrade/endpoints/kaniko/template.yaml'
+template_file = '/app/pubgrade/modules/endpoints/kaniko/template.yaml'
 BASE_DIR = os.getenv("BASE_DIR")
 if BASE_DIR is None:
     BASE_DIR = '/pubgrade_temp_files'
@@ -375,7 +375,7 @@ def create_deployment_YAML(
             data["spec"]["containers"][0]["env"][2]["value"] = "default"
         data["spec"]["containers"][0]["env"][3][
             "value"
-        ] = "http://pubgrade-service.pubgrade"  # PUBGRADE_URL
+        ] = "http://pubgrade-service.pubgrade-ns"  # PUBGRADE_URL
         data["spec"]["containers"][0]["env"][4]["value"] = "8080"  # PORT
         with open(deployment_file_location, "w") as yaml_file:
             yaml_file.write(yaml.dump(data, default_flow_style=False))

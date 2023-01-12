@@ -23,7 +23,7 @@ RUN cd /app \
   && pip install -r requirements.txt
 
 
-RUN mkdir /pubgrade_temp_files
+RUN mkdir /pubgrade_temp_files && chown -R 1000 /pubgrade_temp_files
 
 USER 1000
 
