@@ -14,10 +14,12 @@ spec:
    spec:
      serviceAccountName: pubgrade
      automountServiceAccountToken: true
+     securityContext:
+        runAsUser: 1000
      containers:
      - name: pubgrade
-       imagePullPolicy: IfNotPresent
-       image: akash7778/pubgrade:test_build
+       imagePullPolicy: Always
+       image: akash7778/pubgrade:test_build_1
        ports:
        - containerPort: 8080
        volumeMounts:
@@ -38,10 +40,7 @@ spec:
         - name: take-data-dir-ownership
           image: alpine:3
           command:
-          - chown
-          - -R
-          - 1000:1000
-          - {{ .Values.volumes.Pubgrade.pathToMountedDir }}
+          - ls
           volumeMounts:
           - name: pubgrade-storage
             mountPath: {{ .Values.volumes.Pubgrade.pathToMountedDir }}
