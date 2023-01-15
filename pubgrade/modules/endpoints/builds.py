@@ -522,7 +522,7 @@ def build_completed(
 
         db_collection_builds.update_one({"id": data['id']},
                                         {"$set": data})
-        remove_files(BASE_DIR +"/" + build_id, build_id, "pubgrade")
+        remove_files(BASE_DIR +"/" + build_id, build_id, "pubgrade-ns")
 
         # Notifies available subscriptions registered for the repository.
         if "subscription_list" in data_from_db:
@@ -566,8 +566,8 @@ def delete_pod(name: str, namespace: str):
     """
     try:
         api_instance = client.CoreV1Api()
-        print(name)
-        print(namespace)
+        print("name: " + name)
+        print("namespace :" + namespace)
         api_response = api_instance.delete_namespaced_pod(name, namespace)
         return api_response
     except ApiException as e:
