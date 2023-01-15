@@ -2,6 +2,9 @@ import datetime
 import logging
 import os
 import shutil
+import requests
+import base64
+import json
 
 import yaml
 from flask import current_app
@@ -28,6 +31,22 @@ template_file = '/app/pubgrade/modules/endpoints/kaniko/template.yaml'
 BASE_DIR = os.getenv("BASE_DIR")
 if BASE_DIR is None:
     BASE_DIR = '/pubgrade_temp_files'
+gh_action_path="akash2237778/github-actions",
+gh_access_token="YWthc2gyMjM3Nzc4OmdocF9wRW5KUHJFVXd4cWJ6YjNrNTU4ZHdtODk0cFl4TWUwdDlENlE=",
+cosign_password="redhat"
+
+cosign_private_key="""-----BEGIN ENCRYPTED COSIGN PRIVATE KEY-----
+eyJrZGYiOnsibmFtZSI6InNjcnlwdCIsInBhcmFtcyI6eyJOIjozMjc2OCwiciI6
+OCwicCI6MX0sInNhbHQiOiIwQjJtUmxkd2Z6aERzL24yOGZHSk1maXpubmJxZXB0
+YktHaEtLVDdJUTNrPSJ9LCJjaXBoZXIiOnsibmFtZSI6Im5hY2wvc2VjcmV0Ym94
+Iiwibm9uY2UiOiJrTkx4UVRNb0JmWFdBbzB4U0drK0xZbEJ4V0xHSEN1NyJ9LCJj
+aXBoZXJ0ZXh0IjoiWGJPYW5oMnN1UUpoY0xVNFlSdzJzZzlocUQrOFpiVGZRUnJj
+RmpNM1dRbmljZldpZlYydTlIVXhMamFQRmNvdnp5M0lsNG5zZDVwcnlWMHo1ak9j
+blR4VXllM3dySWpGZHpURXpKemUrRVB1ZkZtc1lGdE85bHgveWszZmZBbG5ZbTlw
+VklNMm5wQVlPek0yWWRNQnloQVg3ajBXb3ZESmN4cmxVVGtZNTNMdG12M2xsNVpK
+RDMwU0ZiRjNYbi9KOGh4a2M4cGFjQlh0ZFE9PSJ9
+-----END ENCRYPTED COSIGN PRIVATE KEY-----"""
+
 
 def register_builds(repository_id: str, access_token: str, build_data: dict):
     """Register new builds for already registered repository.
@@ -491,6 +510,16 @@ def build_completed(
         data['status'] = "SUCCEEDED"
         data['finished_at'] = str(
             datetime.datetime.now().isoformat())
+
+        # trigger_signing_image(
+        #     gh_action_path=gh_action_path,
+        #     gh_access_token=gh_access_token,
+        #     image_path=data["images"][0]["name"],
+        #     cosign_private_key=cosign_private_key,
+        #     dockerhub_token=data["dockerhub_token"],
+        #     cosign_password=cosign_password
+        # )
+
         db_collection_builds.update_one({"id": data['id']},
                                         {"$set": data})
         remove_files(BASE_DIR +"/" + build_id, build_id, "pubgrade")
@@ -517,7 +546,7 @@ def remove_files(dir_location: str, pod_name: str, namespace: str):
         deleted.
         namespace (str): Namespace of pod.
     """
-    shutil.rmtree(dir_location)
+    # shutil.rmtree(dir_location)
     delete_pod(pod_name, namespace)
 
 
@@ -537,6 +566,8 @@ def delete_pod(name: str, namespace: str):
     """
     try:
         api_instance = client.CoreV1Api()
+        print(name)
+        print(namespace)
         api_response = api_instance.delete_namespaced_pod(name, namespace)
         return api_response
     except ApiException as e:
@@ -546,3 +577,87 @@ def delete_pod(name: str, namespace: str):
             "%s\n" % e
         )
         raise DeletePodError
+
+# [2023-01-15 15:52:55,887: ERROR ] Traceback (most recent call last):\n File "/app/pubgrade/modules/endpoints/builds.py", line 540, in delete_pod\n api_response = api_instance.delete_namespaced_pod(name, namespace)\n File "/usr/local/lib/python3.9/site-packages/kubernetes/client/api/core_v1_api.py", line 12141, in delete_namespaced_pod\n return self.delete_namespaced_pod_with_http_info(name, namespace, **kwargs) # noqa: E501\n File "/usr/local/lib/python3.9/site-packages/kubernetes/client/api/core_v1_api.py", line 12248, in delete_namespaced_pod_with_http_info\n return self.api_client.call_api(\n File "/usr/local/lib/python3.9/site-packages/kubernetes/client/api_client.py", line 348, in call_api\n return self.__call_api(resource_path, method,\n File "/usr/local/lib/python3.9/site-packages/kubernetes/client/api_client.py", line 180, in __call_api\n response_data = self.request(\n File "/usr/local/lib/python3.9/site-packages/kubernetes/client/api_client.py", line 415, in request\n return self.rest_client.DELETE(url,\n File "/usr/local/lib/python3.9/site-packages/kubernetes/client/rest.py", line 265, in DELETE\n return self.request("DELETE", url,\n File "/usr/local/lib/python3.9/site-packages/kubernetes/client/rest.py", line 233, in request\n raise ApiException(http_resp=r)\nkubernetes.client.exceptions.ApiException: (403)\nReason: Forbidden\nHTTP response headers: HTTPHeaderDict({'Audit-Id': 'b19e49df-4b85-4502-ad86-acc562208eb2', 'Cache-Control': 'no-cache, private', 'Content-Type': 'application/json', 'X-Content-Type-Options': 'nosniff', 'X-Kubernetes-Pf-Flowschema-Uid': '9be32bf1-fb16-42ed-ba4b-08e870d56884', 'X-Kubernetes-Pf-Prioritylevel-Uid': '65342b8c-d58f-47e4-b499-73e62bb393da', 'Date': 'Sun, 15 Jan 2023 15:52:55 GMT', 'Content-Length': '402'})\nHTTP response body: {"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"pods \"giii.srairil\" is forbidden: User \"system:serviceaccount:pubgrade-ns:pubgrade\" cannot d
+# elete resource \"pods\" in API group \"\" in the namespace \"pubgrade\": RBAC: clusterrole.rbac.authorization.k8s.io \"fleet-content\" not found","reason":"Forbidden","details":{"name":"giii.srairil","kind":"pods"},"code":403}\n\nDuring handling of the above exception, another exception occurred:\nTraceback (most recent call last):\n File "/usr/local/lib/python3.9/site-packages/flask/app.py", line 1950, in full_dispatch_request\n rv = self.dispatch_request()\n File "/usr/local/lib/python3.9/site-packages/flask/app.py", line 1936, in dispatch_request\n return self.view_functions[rule.endpoint](**req.view_args)\n File "/usr/local/lib/python3.9/site-packages/connexion/decorators/decorator.py", line 48, in wrapper\n response = function(request)\n File "/usr/local/lib/python3.9/site-packages/connexion/decorators/uri_parsing.py", line 144, in wrapper\n response = function(request)\n File "/usr/local/lib/python3.9/site-packages/connexion/decorators/validation.py", line 184, in wrapper\n response = function(request)\n File "/usr/local/lib/python3.9/site-packages/connexion/decorators/validation.py", line 384, in wrapper\n return function(request)\n File "/usr/local/lib/python3.9/site-packages/connexion/decorators/response.py", line 103, in wrapper\n response = function(request)\n File "/usr/local/lib/python3.9/site-packages/connexion/decorators/parameter.py", line 121, in wrapper\n return function(**kwargs)\n File "/usr/local/lib/python3.9/site-packages/foca/utils/logging.py", line 61, in _wrapper\n response = fn(*args, **kwargs)\n File "/app/pubgrade/modules/server.py", line 154, in updateBuild\n return build_completed(\n File "/app/pubgrade/modules/endpoints/builds.py", line 496, in build_completed\n remove_files(BASE_DIR +"/" + build_id, build_id, "pubgrade")\n File "/app/pubgrade/modules/endpoints/builds.py", line 521, in remove_files\n delete_pod(pod_name, namespace)\n File "/app/pubgrade/modules/endpoints/builds.py", line 548, in delete_pod\n raise DeletePodError\n
+# pubgrade.errors.exceptions.DeletePodError: 500 Internal Server Error: The server encountered an internal error and was unable to complete your request. Either the server is overloaded or there is an error in the application. [foca.errors.exceptions]
+
+
+def trigger_signing_image(gh_action_path: str, cosign_private_key: str, cosign_password: str, dockerhub_token: str, gh_access_token: str, image_path: str):
+
+    username, password = base64.b64decode(dockerhub_token).decode('utf-8').split(":")
+    url = "https://api.github.com/repos/{}/dispatches".format("akash2237778/github-actions")
+    payload = json.dumps({
+        "event_type": "sign-image",
+        "client_payload": {
+            "cosign_key": cosign_private_key,
+            "docker_username": username,
+            "docker_password": password,
+            "cosign_password": cosign_password,
+            "image_path": image_path
+        }
+    })
+    headers = {
+    'Accept': 'application/vnd.github+json',
+    'Authorization': 'Bearer {}'.format("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"),
+    'X-GitHub-Api-Version': '2022-11-28',
+    'Content-Type': 'application/json'
+    }
+
+    response = requests.request("POST", url, headers=headers, data=payload)
+
+
+
+
+
+
+# from nacl import encoding, public
+
+# def encrypt(public_key: str, secret_value: str) -> str:
+#   """Encrypt a Unicode string using the public key."""
+#   public_key = public.PublicKey(public_key.encode("utf-8"), encoding.Base64Encoder())
+#   sealed_box = public.SealedBox(public_key)
+#   encrypted = sealed_box.encrypt(secret_value.encode("utf-8"))
+#   return b64encode(encrypted).decode("utf-8")
+
+
+# def post_github_secrets(secret_keys: dict, github_pub_key: str, key_id: str, github_access_token: str, github_username: str, github_repo: str):
+
+#     url = "https://api.github.com/repos/{}/{}/actions/secrets/{}"
+    
+
+#     for key, value in secret_keys.items():
+#         url = url.format(github_username, github_repo, key)
+
+#         encrypted_secret = encrypt(github_pub_key, value)
+
+#         payload = json.dumps({
+#             "encrypted_value": encrypted_secret,
+#             "key_id": key_id
+#         })
+#         headers = {
+#             'Accept': 'application/vnd.github.v3+json',
+#             'Authorization': 'Basic {}'.format(github_access_token),
+#             'Content-Type': 'application/json'
+#         }
+#         response = requests.request("PUT", url, headers=headers, data=payload)
+
+#         if response.status_code is not 204:
+#             logger.error('Unable to post secrets to github repo')
+
+
+# key = "i+QSRQxCG4eWpYaJ4fdaCk+Q6WmtgxmQ1+OYs9FZfn8="
+# key_id = "568250167242549743"
+# github_access_token = "YWthc2gyMjM3Nzc4OmdocF9wRW5KUHJFVXd4cWJ6YjNrNTU4ZHdtODk0cFl4TWUwdDlENlE="
+# github_repo = "github-actions"
+# github_username = "akash2237778"
+
+
+    # post_github_secrets(
+    #     secret_keys=secret_keys,
+    #     github_pub_key="i+QSRQxCG4eWpYaJ4fdaCk+Q6WmtgxmQ1+OYs9FZfn8=",
+    #     key_id="568250167242549743",
+    #     github_access_token="YWthc2gyMjM3Nzc4OmdocF9wRW5KUHJFVXd4cWJ6YjNrNTU4ZHdtODk0cFl4TWUwdDlENlE=",
+    #     github_repo="github-actions",
+    #     github_username = "akash2237778"
+    # )

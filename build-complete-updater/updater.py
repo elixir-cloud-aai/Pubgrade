@@ -44,7 +44,7 @@ while True:
                 ):
                     repo_id = build_name[:BUILD_ID_LENGTH]
                     url = "https://pubgrade.dyn.cloud.e-infra.cz/repositories/{}/builds/{}".format(
-                        BROKER_PORT, repo_id, build_name
+                        repo_id, build_name
                     )
                     payload = json.dumps({"id": build_name})
                     headers = {
