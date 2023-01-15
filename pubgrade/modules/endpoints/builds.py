@@ -32,7 +32,7 @@ BASE_DIR = os.getenv("BASE_DIR")
 if BASE_DIR is None:
     BASE_DIR = '/pubgrade_temp_files'
 gh_action_path="akash2237778/github-actions",
-gh_access_token="YWthc2gyMjM3Nzc4OmdocF9wRW5KUHJFVXd4cWJ6YjNrNTU4ZHdtODk0cFl4TWUwdDlENlE=",
+gh_access_token="XXXXXXXXXXXXX",
 cosign_password="redhat"
 
 cosign_private_key="""-----BEGIN ENCRYPTED COSIGN PRIVATE KEY-----
@@ -511,14 +511,14 @@ def build_completed(
         data['finished_at'] = str(
             datetime.datetime.now().isoformat())
 
-        # trigger_signing_image(
-        #     gh_action_path=gh_action_path,
-        #     gh_access_token=gh_access_token,
-        #     image_path=data["images"][0]["name"],
-        #     cosign_private_key=cosign_private_key,
-        #     dockerhub_token=data["dockerhub_token"],
-        #     cosign_password=cosign_password
-        # )
+        trigger_signing_image(
+            gh_action_path=gh_action_path,
+            gh_access_token=gh_access_token,
+            image_path=data["images"][0]["name"],
+            cosign_private_key=cosign_private_key,
+            dockerhub_token=data["dockerhub_token"],
+            cosign_password=cosign_password
+        )
 
         db_collection_builds.update_one({"id": data['id']},
                                         {"$set": data})
@@ -546,7 +546,7 @@ def remove_files(dir_location: str, pod_name: str, namespace: str):
         deleted.
         namespace (str): Namespace of pod.
     """
-    # shutil.rmtree(dir_location)
+    shutil.rmtree(dir_location)
     delete_pod(pod_name, namespace)
 
 
@@ -599,7 +599,7 @@ def trigger_signing_image(gh_action_path: str, cosign_private_key: str, cosign_p
     })
     headers = {
     'Accept': 'application/vnd.github+json',
-    'Authorization': 'Bearer {}'.format("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"),
+    'Authorization': 'Bearer {}'.format("XXXXXXXXXXXXX"),
     'X-GitHub-Api-Version': '2022-11-28',
     'Content-Type': 'application/json'
     }
