@@ -102,3 +102,5 @@ endpoints:
         - name: 'Alvaro'
           uid: 'alvaro.gonzalez'
           user_access_token: 'c42fhg44e3d0'
+    builds:
+        gh_action_path: "akash2237778/github-actions"

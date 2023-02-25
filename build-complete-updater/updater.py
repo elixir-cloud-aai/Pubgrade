@@ -5,7 +5,7 @@ import requests
 import json
 
 NAMESPACE = "broker"
-BROKER_URL = "http://broker-service.broker"
+BROKER_URL="https://pubgrade.dyn.cloud.e-infra.cz/repositories/{}/builds/{}"
 BROKER_PORT = "8080"
 SLEEP_INTERVAL = 5
 BUILD_ID_LENGTH = 6
@@ -24,7 +24,6 @@ if os.getenv("BROKER_URL"):
 if os.getenv("BROKER_PORT"):
     BROKER_PORT = os.getenv("BROKER_PORT")
 
-BROKER_URL="https://pubgrade.dyn.cloud.e-infra.cz"
 
 def get_env(env, name):
     for var in env:
@@ -43,7 +42,7 @@ while True:
                     build_name is not None and access_token is not None
                 ):
                     repo_id = build_name[:BUILD_ID_LENGTH]
-                    url = "https://pubgrade.dyn.cloud.e-infra.cz/repositories/{}/builds/{}".format(
+                    url = BROKER_URL.format(
                         repo_id, build_name
                     )
                     payload = json.dumps({"id": build_name})

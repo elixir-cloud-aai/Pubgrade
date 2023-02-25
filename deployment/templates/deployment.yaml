@@ -18,8 +18,8 @@ spec:
         runAsUser: 1000
      containers:
      - name: pubgrade
-       imagePullPolicy: Always
-       image: akash7778/pubgrade:test_build_1
+       imagePullPolicy: IfNotPresent
+       image: {{ .Values.Pubgrade.image }}
        ports:
        - containerPort: 8080
        volumeMounts:
@@ -36,11 +36,3 @@ spec:
        - name: pubgrade-storage
          persistentVolumeClaim:
                claimName: {{ .Values.volumes.Pubgrade.name }}
-     initContainers:
-        - name: take-data-dir-ownership
-          image: alpine:3
-          command:
-          - ls
-          volumeMounts:
-          - name: pubgrade-storage
-            mountPath: {{ .Values.volumes.Pubgrade.pathToMountedDir }}

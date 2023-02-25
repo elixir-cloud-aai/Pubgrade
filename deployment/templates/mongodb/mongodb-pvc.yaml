@@ -1,28 +1,30 @@
-# {{ if .Values.volumes.mongodb.deployLocalPv }}
-# apiVersion: v1
-# kind: PersistentVolume
-# metadata:
-#  name: mongo-pv
-#  labels:
-#    type: local
-# spec:
-#  storageClassName: {{ .Values.volumes.mongodb.storageClass }}
-#  capacity:
-#    storage: {{ .Values.volumes.mongodb.size }}
-#  accessModes:
-#    - ReadWriteOnce
-#  hostPath:
-#    path: {{ .Values.volumes.mongodb.pathToLocalDir }}
-# {{ end }}
-# ---
-# apiVersion: v1
-# kind: PersistentVolumeClaim
-# metadata:
-#  name: {{ .Values.volumes.mongodb.name }}
-# spec:
-#  storageClassName: {{ .Values.volumes.mongodb.storageClass }}
-#  accessModes:
-#    - ReadWriteOnce
-#  resources:
-#    requests:
-#      storage: {{ .Values.volumes.mongodb.size }}
+{{ if .Values.volumes.mongodb.storage_active }}
+{{ if .Values.volumes.mongodb.deployLocalPv }}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+ name: mongo-pv
+ labels:
+   type: local
+spec:
+ storageClassName: {{ .Values.volumes.mongodb.storageClass }}
+ capacity:
+   storage: {{ .Values.volumes.mongodb.size }}
+ accessModes:
+   - ReadWriteOnce
+ hostPath:
+   path: {{ .Values.volumes.mongodb.pathToLocalDir }}
+{{ end }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+ name: {{ .Values.volumes.mongodb.name }}
+spec:
+ storageClassName: {{ .Values.volumes.mongodb.storageClass }}
+ accessModes:
+   - ReadWriteOnce
+ resources:
+   requests:
+     storage: {{ .Values.volumes.mongodb.size }}
+{{ end }}
