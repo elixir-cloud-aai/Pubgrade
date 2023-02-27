@@ -33,8 +33,6 @@ BASE_DIR = os.getenv("BASE_DIR")
 if BASE_DIR is None:
     BASE_DIR = '/pubgrade_temp_files'
 
-gh_action_path = current_app.config["FOCA"].endpoints["builds"]["gh_action_path"]
-
 
 def register_builds(repository_id: str, access_token: str, build_data: dict):
     """Register new builds for already registered repository.
@@ -113,6 +111,8 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
                     commit_sha = ""
             except KeyError:
                 commit_sha = build_data["head_commit"]["tag"]
+            intermediate_registry_format = current_app.config["FOCA"].endpoints["builds"]["intermediate_registery_format"]
+            intermediate_registry_path = intermediate_registry_format.format(build_data["images"][0]["name"].split("/")[1].split(":")[0])
             create_build(
                 repo_url=data_from_db["url"],
                 branch=branch,
@@ -120,7 +120,7 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
                 base_dir=BASE_DIR,
                 build_id=build_data["id"],
                 dockerfile_location=build_data["images"][0]["location"],
-                registry_destination=build_data["images"][0]["name"],
+                intermediate_registry_path=intermediate_registry_path,
                 dockerhub_token=build_data["dockerhub_token"],
                 project_access_token=access_token,
             )
@@ -219,7 +219,7 @@ def create_build(
         base_dir: str,
         build_id: str,
         dockerfile_location: str,
-        registry_destination: str,
+        intermediate_registry_path: str,
         dockerhub_token: str,
         project_access_token: str,
 ):
@@ -235,7 +235,7 @@ def create_build(
         build_id (str): Build Identifier.
         dockerfile_location (str): Location of dockerfile used for docker build
         taking git repository as base.
-        registry_destination (str): Path of repository to push build image.
+        intermediate_registry_path (str): Path of repository to push build image.
         dockerhub_token (str): Base 64 encoded USER:PASSWORD to access
         dockerhub to push image `echo -n USER:PASSWD | base64`
         project_access_token (str): Secret used to verify source, will be used
@@ -256,7 +256,7 @@ def create_build(
     # Create kaniko deployment file.
     create_deployment_YAML(
         "%s/%s" % (clone_path, dockerfile_location),
-        registry_destination,
+        intermediate_registry_path,
         clone_path,
         deployment_file_location,
         "%s/config.json" % build_id,
@@ -318,7 +318,7 @@ def git_clone_and_checkout(
 
 def create_deployment_YAML(
         dockerfile_location: str,
-        registry_destination: str,
+        intermediate_registry_path: str,
         build_context: str,
         deployment_file_location: str,
         config_file_location: str,
@@ -332,7 +332,7 @@ def create_deployment_YAML(
     Args:
         dockerfile_location (str): Location of dockerfile used for docker build
         taking git repository as base.
-        registry_destination (str): Path of repository to push build image.
+        intermediate_registry_path (str): Path of repository to push build image.
         build_context: Location of build context.
         deployment_file_location (str): Location to create deployment file.
         config_file_location (str): Dockerhub config file location, contains
@@ -355,7 +355,7 @@ def create_deployment_YAML(
         data["metadata"]["name"] = build_id
         data["spec"]["containers"][0]["args"] = [
             f"--dockerfile={dockerfile_location}",
-            f"--destination={registry_destination}",
+            f"--destination={intermediate_registry_path}",
             f"--context={build_context}",
             "--cleanup",
         ]
@@ -499,13 +499,14 @@ def build_completed(
         data['finished_at'] = str(
             datetime.datetime.now().isoformat())
 
+        intermediate_registry_format = current_app.config["FOCA"].endpoints["builds"]["intermediate_registery_format"]
         trigger_signing_image(
-            gh_action_path=gh_action_path,
-            gh_access_token=gh_access_token,
             image_path=data["images"][0]["name"],
             cosign_private_key=cosign_private_key,
             dockerhub_token=data["dockerhub_token"],
-            cosign_password=cosign_password
+            cosign_password=cosign_password,
+            pull_tag=intermediate_registry_format.format(data["images"][0]["name"].split("/")[1].split(":")[0]),
+            push_tag=data["images"][0]["name"]
         )
 
         db_collection_builds.update_one({"id": data['id']},
@@ -554,8 +555,6 @@ def delete_pod(name: str, namespace: str):
     """
     try:
         api_instance = client.CoreV1Api()
-        print("name: " + name)
-        print("namespace :" + namespace)
         api_response = api_instance.delete_namespaced_pod(name, namespace)
         return api_response
     except ApiException as e:
@@ -567,10 +566,10 @@ def delete_pod(name: str, namespace: str):
         raise DeletePodError
 
 
-def trigger_signing_image(gh_action_path: str, cosign_private_key: str, cosign_password: str, dockerhub_token: str,
-                          gh_access_token: str, image_path: str):
+def trigger_signing_image(cosign_private_key: str, cosign_password: str, dockerhub_token: str,
+                          image_path: str, pull_tag: str, push_tag: str):
     username, password = base64.b64decode(dockerhub_token).decode('utf-8').split(":")
-    url = "https://api.github.com/repos/{}/dispatches".format(gh_action_path)
+    url = "https://api.github.com/repos/{}/dispatches".format(current_app.config["FOCA"].endpoints["builds"]["gh_action_path"])
     payload = json.dumps({
         "event_type": "sign-image",
         "client_payload": {
@@ -578,7 +577,10 @@ def trigger_signing_image(gh_action_path: str, cosign_private_key: str, cosign_p
             "docker_username": username,
             "docker_password": password,
             "cosign_password": cosign_password,
-            "image_path": image_path
+            "image_path": image_path,
+            "pull_tag": pull_tag,
+            "push_tag": push_tag,
+
         }
     })
     headers = {
@@ -587,5 +589,6 @@ def trigger_signing_image(gh_action_path: str, cosign_private_key: str, cosign_p
         'X-GitHub-Api-Version': '2022-11-28',
         'Content-Type': 'application/json'
     }
-
     response = requests.request("POST", url, headers=headers, data=payload)
+
+
