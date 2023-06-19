@@ -184,7 +184,7 @@ def mocked_create_build(
     base_dir,
     build_id,
     dockerfile_location,
-    registry_destination,
+    intermediate_registry_path,
     dockerhub_token,
     project_access_token,
 ):
