@@ -104,4 +104,5 @@ endpoints:
           user_access_token: 'c42fhg44e3d0'
     builds:
         gh_action_path: "akash2237778/pubgrade-signer"
-        intermediate_registery_format: "ttl.sh/{}:1h"
+        intermediate_registery_format: "docker-registry.rahti.csc.fi/pubgrade/{}:1h"
+        intermediate_registry_token: "<token>"

@@ -111,8 +111,10 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
                     commit_sha = ""
             except KeyError:
                 commit_sha = build_data["head_commit"]["tag"]
-            intermediate_registry_format = current_app.config["FOCA"].endpoints["builds"]["intermediate_registery_format"]
-            intermediate_registry_path = intermediate_registry_format.format(build_data["images"][0]["name"].split("/")[1].split(":")[0])
+            intermediate_registry_format = current_app.config["FOCA"].endpoints["builds"][
+                "intermediate_registery_format"]
+            intermediate_registry_path = intermediate_registry_format.format(
+                build_data["images"][0]["name"].split("/")[1].split(":")[0])
             create_build(
                 repo_url=data_from_db["url"],
                 branch=branch,
@@ -402,16 +404,17 @@ def create_dockerhub_config_file(
         config_file_location (str): Location to create Dockerhub config file,
         it contains dockerhub access token.
     """
+    intermediate_registry_format = current_app.config["FOCA"].endpoints["builds"]["intermediate_registery_format"]
+    intermediate_registry_token = current_app.config["FOCA"].endpoints["builds"]["intermediate_registry_token"]
     template_config_file = (
             """{
 "auths": {
-"https://index.docker.io/v1/": {
+"%s": {
 "auth": "%s"
         }
     }
 }"""
-            % dockerhub_token
-    )
+                           ) % (intermediate_registry_format.split("/", 1)[0],  intermediate_registry_token )
     f = open(config_file_location, "w")
     f.write(template_config_file)
     f.close()
@@ -569,7 +572,8 @@ def delete_pod(name: str, namespace: str):
 def trigger_signing_image(cosign_private_key: str, cosign_password: str, dockerhub_token: str,
                           image_path: str, pull_tag: str, push_tag: str):
     username, password = base64.b64decode(dockerhub_token).decode('utf-8').split(":")
-    url = "https://api.github.com/repos/{}/dispatches".format(current_app.config["FOCA"].endpoints["builds"]["gh_action_path"])
+    url = "https://api.github.com/repos/{}/dispatches".format(
+        current_app.config["FOCA"].endpoints["builds"]["gh_action_path"])
     payload = json.dumps({
         "event_type": "sign-image",
         "client_payload": {
@@ -590,5 +594,3 @@ def trigger_signing_image(cosign_private_key: str, cosign_password: str, dockerh
         'Content-Type': 'application/json'
     }
     response = requests.request("POST", url, headers=headers, data=payload)
-
-
