@@ -32,6 +32,8 @@ spec:
            value: {{ .Values.volumes.Pubgrade.name }}
          - name: BASE_DIR
            value: {{ .Values.volumes.Pubgrade.pathToMountedDir }}
+         - name: PUBGRADE_URL
+           value: "http://pubgrade-service.pubgrade-ns"
      volumes:
        - name: pubgrade-storage
          persistentVolumeClaim:

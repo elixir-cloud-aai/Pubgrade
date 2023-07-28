@@ -1,5 +1,5 @@
 imageNotifyCompletion: 'akash7778/notify-completion' # This will be moved to elixir-cloud-aai
-pubgrade_URL: 'http://pubgrade-service.pubgrade'
+pubgrade_URL: "https://pubgrade.dyn.cloud.e-infra.cz"
 
 ingress:
   enabled: true

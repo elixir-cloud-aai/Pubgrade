@@ -5,10 +5,10 @@ import requests
 import json
 
 NAMESPACE = "broker"
-BROKER_URL = "https://pubgrade.dyn.cloud.e-infra.cz/repositories/{}/builds/{}"
 BROKER_PORT = "8080"
 SLEEP_INTERVAL = 5
 BUILD_ID_LENGTH = 6
+BROKER_URL = ""
 
 if os.getenv("NAMESPACE"):
     NAMESPACE = os.getenv("NAMESPACE")
@@ -20,6 +20,7 @@ else:
 
 if os.getenv("BROKER_URL"):
     BROKER_URL = os.getenv("BROKER_URL")
+    BROKER_URL = BROKER_URL + "/repositories/{}/builds/{}"
 
 if os.getenv("BROKER_PORT"):
     BROKER_PORT = os.getenv("BROKER_PORT")
@@ -29,6 +30,7 @@ def get_env(env, name):
     for var in env:
         if var.name == name:
             return var.value
+
 
 while True:
     v1 = client.CoreV1Api()
