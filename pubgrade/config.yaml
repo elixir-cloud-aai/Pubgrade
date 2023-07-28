@@ -98,11 +98,11 @@ endpoints:
       admin_users:
         - name: 'Akash'
           uid: 'akash.saini'
-          user_access_token: 'c42a6d44e3d0'
+          user_access_token: 'XXXXXXXXXXXXXXXXXXXX'
         - name: 'Alvaro'
           uid: 'alvaro.gonzalez'
-          user_access_token: 'c42fhg44e3d0'
+          user_access_token: 'XXXXXXXXXXXXXXXXXXX'
     builds:
         gh_action_path: "akash2237778/pubgrade-signer"
         intermediate_registery_format: "docker-registry.rahti.csc.fi/pubgrade/{}:1h"
-        intermediate_registry_token: "<token>"
+        intermediate_registry_token: "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"

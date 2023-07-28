@@ -5,7 +5,7 @@ import requests
 import json
 
 NAMESPACE = "broker"
-BROKER_URL="https://pubgrade.dyn.cloud.e-infra.cz/repositories/{}/builds/{}"
+BROKER_URL = "https://pubgrade.dyn.cloud.e-infra.cz/repositories/{}/builds/{}"
 BROKER_PORT = "8080"
 SLEEP_INTERVAL = 5
 BUILD_ID_LENGTH = 6
@@ -39,7 +39,7 @@ while True:
                 build_name = get_env(pod.spec.containers[0].env, "BUILDNAME")
                 access_token = get_env(pod.spec.containers[0].env, "ACCESSTOKEN")
                 if (
-                    build_name is not None and access_token is not None
+                        build_name is not None and access_token is not None
                 ):
                     repo_id = build_name[:BUILD_ID_LENGTH]
                     url = BROKER_URL.format(
