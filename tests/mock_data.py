@@ -53,6 +53,10 @@ ENDPOINT_CONFIG = {
             "user_access_token": "c42a6d44e3d0",
         }
     },
+    "builds": {
+            "gh_action_path": "akash2237778/pubgrade-signer",
+            "intermediate_registery_format": "ttl.sh/{}:1h"
+        },
 }
 
 MOCK_REPOSITORY_1 = {
@@ -87,7 +91,7 @@ MOCK_BUILD_INFO = {
         "branch": "main",
         "commit_sha": "8cd58eb160014c91e4f181562352" "c693d3442c52",
     },
-    "dockerhub_token": "dockerhub token",
+    "dockerhub_token": "dXNlcjpwYXNzd2Q=",
     "id": "eiic.gngdgrs",
     "finished_at": "NULL",
     "started_at": "2021-08-04T17:40:58.344809",

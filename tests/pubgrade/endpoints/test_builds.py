@@ -52,7 +52,7 @@ def mocked_create_build(
     base_dir,
     build_id,
     dockerfile_location,
-    registry_destination,
+    intermediate_registry_path,
     dockerhub_token,
     project_access_token,
 ):
@@ -451,7 +451,7 @@ class TestBuild:
             base_dir="basedir",
             build_id="build123",
             dockerfile_location="basedir/drs-filer/Dockerfile",
-            registry_destination="registry_destination",
+            intermediate_registry_path="test_intermediate_registry_path",
             dockerhub_token="dockerhub_token",
             project_access_token="access_token",
         )

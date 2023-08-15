@@ -1,3 +1,4 @@
+{{ if .Values.volumes.Pubgrade.storage_active }}
 {{ if .Values.volumes.Pubgrade.deployLocalPv }}
 apiVersion: v1
 kind: PersistentVolume
@@ -26,3 +27,37 @@ spec:
  resources:
    requests:
      storage: {{ .Values.volumes.Pubgrade.size }}
+---
+apiVersion: v1
+items:
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    finalizers:
+    - kubernetes.io/pvc-protection
+    name: mongo-pvc
+  spec:
+    accessModes:
+    - ReadWriteOnce
+    resources:
+      requests:
+        storage: 2Gi
+    storageClassName: standard-rwo
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    finalizers:
+    - kubernetes.io/pvc-protection
+    name: pubgrade-pvc
+  spec:
+    accessModes:
+    - ReadWriteOnce
+    resources:
+      requests:
+        storage: 2Gi
+    storageClassName: standard-rwo
+kind: List
+metadata:
+  resourceVersion: ""
+  selfLink: ""
+{{ end }}

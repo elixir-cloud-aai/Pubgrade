@@ -2,6 +2,9 @@ import datetime
 import logging
 import os
 import shutil
+import requests
+import base64
+import json
 
 import yaml
 from flask import current_app
@@ -21,13 +24,15 @@ from pubgrade.errors.exceptions import (
 )
 from pubgrade.modules.endpoints.repositories import generate_id
 from pubgrade.modules.endpoints.subscriptions import notify_subscriptions
+from pubgrade.secrets import gh_access_token, cosign_password, cosign_private_key
 
 logger = logging.getLogger(__name__)
 
-template_file = '/app/pubgrade/pubgrade/endpoints/kaniko/template.yaml'
+template_file = '/app/pubgrade/modules/endpoints/kaniko/template.yaml'
 BASE_DIR = os.getenv("BASE_DIR")
 if BASE_DIR is None:
     BASE_DIR = '/pubgrade_temp_files'
+
 
 def register_builds(repository_id: str, access_token: str, build_data: dict):
     """Register new builds for already registered repository.
@@ -106,6 +111,10 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
                     commit_sha = ""
             except KeyError:
                 commit_sha = build_data["head_commit"]["tag"]
+            intermediate_registry_format = current_app.config["FOCA"].endpoints["builds"][
+                "intermediate_registery_format"]
+            intermediate_registry_path = intermediate_registry_format.format(
+                build_data["images"][0]["name"].split("/")[1].split(":")[0])
             create_build(
                 repo_url=data_from_db["url"],
                 branch=branch,
@@ -113,7 +122,7 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
                 base_dir=BASE_DIR,
                 build_id=build_data["id"],
                 dockerfile_location=build_data["images"][0]["location"],
-                registry_destination=build_data["images"][0]["name"],
+                intermediate_registry_path=intermediate_registry_path,
                 dockerhub_token=build_data["dockerhub_token"],
                 project_access_token=access_token,
             )
@@ -206,15 +215,15 @@ def get_build_info(build_id: str):
 
 
 def create_build(
-    repo_url: str,
-    branch: str,
-    commit: str,
-    base_dir: str,
-    build_id: str,
-    dockerfile_location: str,
-    registry_destination: str,
-    dockerhub_token: str,
-    project_access_token: str,
+        repo_url: str,
+        branch: str,
+        commit: str,
+        base_dir: str,
+        build_id: str,
+        dockerfile_location: str,
+        intermediate_registry_path: str,
+        dockerhub_token: str,
+        project_access_token: str,
 ):
     """
     Create build and push to DockerHub.
@@ -228,7 +237,7 @@ def create_build(
         build_id (str): Build Identifier.
         dockerfile_location (str): Location of dockerfile used for docker build
         taking git repository as base.
-        registry_destination (str): Path of repository to push build image.
+        intermediate_registry_path (str): Path of repository to push build image.
         dockerhub_token (str): Base 64 encoded USER:PASSWORD to access
         dockerhub to push image `echo -n USER:PASSWD | base64`
         project_access_token (str): Secret used to verify source, will be used
@@ -249,7 +258,7 @@ def create_build(
     # Create kaniko deployment file.
     create_deployment_YAML(
         "%s/%s" % (clone_path, dockerfile_location),
-        registry_destination,
+        intermediate_registry_path,
         clone_path,
         deployment_file_location,
         "%s/config.json" % build_id,
@@ -269,7 +278,7 @@ def create_build(
 
 
 def git_clone_and_checkout(
-    repo_url: str, branch: str, commit: str, base_dir: str, build_id: str
+        repo_url: str, branch: str, commit: str, base_dir: str, build_id: str
 ):
     """Clone git repository and checkout to specified branch/commit/tag.
 
@@ -310,12 +319,12 @@ def git_clone_and_checkout(
 
 
 def create_deployment_YAML(
-    dockerfile_location: str,
-    registry_destination: str,
-    build_context: str,
-    deployment_file_location: str,
-    config_file_location: str,
-    project_access_token: str,
+        dockerfile_location: str,
+        intermediate_registry_path: str,
+        build_context: str,
+        deployment_file_location: str,
+        config_file_location: str,
+        project_access_token: str,
 ):
     """Create kaniko deployment file.
 
@@ -325,7 +334,7 @@ def create_deployment_YAML(
     Args:
         dockerfile_location (str): Location of dockerfile used for docker build
         taking git repository as base.
-        registry_destination (str): Path of repository to push build image.
+        intermediate_registry_path (str): Path of repository to push build image.
         build_context: Location of build context.
         deployment_file_location (str): Location to create deployment file.
         config_file_location (str): Dockerhub config file location, contains
@@ -348,7 +357,7 @@ def create_deployment_YAML(
         data["metadata"]["name"] = build_id
         data["spec"]["containers"][0]["args"] = [
             f"--dockerfile={dockerfile_location}",
-            f"--destination={registry_destination}",
+            f"--destination={intermediate_registry_path}",
             f"--context={build_context}",
             "--cleanup",
         ]
@@ -375,7 +384,7 @@ def create_deployment_YAML(
             data["spec"]["containers"][0]["env"][2]["value"] = "default"
         data["spec"]["containers"][0]["env"][3][
             "value"
-        ] = "http://pubgrade-service.pubgrade"  # PUBGRADE_URL
+        ] = os.getenv("PUBGRADE_URL")
         data["spec"]["containers"][0]["env"][4]["value"] = "8080"  # PORT
         with open(deployment_file_location, "w") as yaml_file:
             yaml_file.write(yaml.dump(data, default_flow_style=False))
@@ -385,7 +394,7 @@ def create_deployment_YAML(
 
 
 def create_dockerhub_config_file(
-    dockerhub_token: str, config_file_location: str
+        dockerhub_token: str, config_file_location: str
 ):
     """Create dockerhub config file.
 
@@ -395,16 +404,17 @@ def create_dockerhub_config_file(
         config_file_location (str): Location to create Dockerhub config file,
         it contains dockerhub access token.
     """
+    intermediate_registry_format = current_app.config["FOCA"].endpoints["builds"]["intermediate_registery_format"]
+    intermediate_registry_token = current_app.config["FOCA"].endpoints["builds"]["intermediate_registry_token"]
     template_config_file = (
-        """{
+            """{
 "auths": {
-"https://index.docker.io/v1/": {
+"%s": {
 "auth": "%s"
         }
     }
 }"""
-        % dockerhub_token
-    )
+                           ) % (intermediate_registry_format.split("/", 1)[0],  intermediate_registry_token )
     f = open(config_file_location, "w")
     f.write(template_config_file)
     f.close()
@@ -448,7 +458,7 @@ def build_push_image_using_kaniko(deployment_file_location: str):
 
 
 def build_completed(
-    repository_id: str, build_id: str, project_access_token: str
+        repository_id: str, build_id: str, project_access_token: str
 ):
     """Update build completion.
 
@@ -491,9 +501,20 @@ def build_completed(
         data['status'] = "SUCCEEDED"
         data['finished_at'] = str(
             datetime.datetime.now().isoformat())
+
+        intermediate_registry_format = current_app.config["FOCA"].endpoints["builds"]["intermediate_registery_format"]
+        trigger_signing_image(
+            image_path=data["images"][0]["name"],
+            cosign_private_key=cosign_private_key,
+            dockerhub_token=data["dockerhub_token"],
+            cosign_password=cosign_password,
+            pull_tag=intermediate_registry_format.format(data["images"][0]["name"].split("/")[1].split(":")[0]),
+            push_tag=data["images"][0]["name"]
+        )
+
         db_collection_builds.update_one({"id": data['id']},
                                         {"$set": data})
-        remove_files(BASE_DIR +"/" + build_id, build_id, "pubgrade")
+        remove_files(BASE_DIR + "/" + build_id, build_id, "pubgrade-ns")
 
         # Notifies available subscriptions registered for the repository.
         if "subscription_list" in data_from_db:
@@ -546,3 +567,30 @@ def delete_pod(name: str, namespace: str):
             "%s\n" % e
         )
         raise DeletePodError
+
+
+def trigger_signing_image(cosign_private_key: str, cosign_password: str, dockerhub_token: str,
+                          image_path: str, pull_tag: str, push_tag: str):
+    username, password = base64.b64decode(dockerhub_token).decode('utf-8').split(":")
+    url = "https://api.github.com/repos/{}/dispatches".format(
+        current_app.config["FOCA"].endpoints["builds"]["gh_action_path"])
+    payload = json.dumps({
+        "event_type": "sign-image",
+        "client_payload": {
+            "cosign_key": cosign_private_key,
+            "docker_username": username,
+            "docker_password": password,
+            "cosign_password": cosign_password,
+            "image_path": image_path,
+            "pull_tag": pull_tag,
+            "push_tag": push_tag,
+
+        }
+    })
+    headers = {
+        'Accept': 'application/vnd.github+json',
+        'Authorization': 'Bearer {}'.format(gh_access_token),
+        'X-GitHub-Api-Version': '2022-11-28',
+        'Content-Type': 'application/json'
+    }
+    response = requests.request("POST", url, headers=headers, data=payload)

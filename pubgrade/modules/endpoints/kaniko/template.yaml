@@ -3,6 +3,8 @@ kind: Pod
 metadata:
   name: kaniko
 spec:
+  securityContext:
+        runAsUser: 0
   containers:
   - args:
     - --dockerfile=/docker_file_path
@@ -21,6 +23,8 @@ spec:
         value: 'PUBGRADE_URL'
       - name: PUBGRADE_PORT
         value: 'PUBGRADE_PORT'
+      - name: container
+        value: docker
     volumeMounts:
     - mountPath: /pubgrade_temp_files
       name: pv-storage

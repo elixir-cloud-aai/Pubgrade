@@ -1,5 +1,5 @@
 imageNotifyCompletion: 'akash7778/notify-completion' # This will be moved to elixir-cloud-aai
-pubgrade_URL: 'http://pubgrade-service.pubgrade'
+pubgrade_URL: "https://pubgrade.dyn.cloud.e-infra.cz"
 
 ingress:
   enabled: true
@@ -7,6 +7,9 @@ ingress:
   https:
     enabled: true
     issuer: letsencrypt-prod
+  
+Pubgrade:
+  image: akash7778/pubgrade:test_build_1
 
 #Persistent volumes and claims
 volumes:
@@ -14,15 +17,17 @@ volumes:
     # In case you are working with minikube or another single-worker solution
     # you can add a peristent volume from a local directory. For fully-distributed
     #clusters you should use a StorageClass already existing in your cluster, so set this to false.
-    deployLocalPv: true
+    deployLocalPv: false
     pathToMountedDir: /pubgrade_temp_files
     pathToLocalDir: /tmp/pubgrade-pv
     name: pubgrade-pvc
     storageClass: manual
     size: 2Gi
+    storage_active: false
   mongodb:
-    deployLocalPv: true
+    deployLocalPv: false
     pathToLocalDir: /tmp/mongo-pv
     name: mongo-pvc
     storageClass: manual
     size: 2Gi
+    storage_active: false

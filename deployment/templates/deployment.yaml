@@ -14,10 +14,12 @@ spec:
    spec:
      serviceAccountName: pubgrade
      automountServiceAccountToken: true
+     securityContext:
+        runAsUser: 1000
      containers:
      - name: pubgrade
        imagePullPolicy: IfNotPresent
-       image: akash7778/pubgrade:test_build
+       image: {{ .Values.Pubgrade.image }}
        ports:
        - containerPort: 8080
        volumeMounts:
@@ -30,18 +32,9 @@ spec:
            value: {{ .Values.volumes.Pubgrade.name }}
          - name: BASE_DIR
            value: {{ .Values.volumes.Pubgrade.pathToMountedDir }}
+         - name: PUBGRADE_URL
+           value: "http://pubgrade-service.pubgrade-ns"
      volumes:
        - name: pubgrade-storage
          persistentVolumeClaim:
                claimName: {{ .Values.volumes.Pubgrade.name }}
-     initContainers:
-        - name: take-data-dir-ownership
-          image: alpine:3
-          command:
-          - chown
-          - -R
-          - 1000:1000
-          - {{ .Values.volumes.Pubgrade.pathToMountedDir }}
-          volumeMounts:
-          - name: pubgrade-storage
-            mountPath: {{ .Values.volumes.Pubgrade.pathToMountedDir }}
