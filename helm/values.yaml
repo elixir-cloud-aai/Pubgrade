@@ -51,7 +51,7 @@ pubgrade_webserver:
 
   ingress:
     url: pubgrade.dyn.cloud.e-infra.cz
-    tlsSecrets: pubgrade-cloud-e-infra-cz-tls
+    tlsSecrets: pubgrade-dyn-cloud-e-infra-cz-tls
 
 
   securityContext:

@@ -1,22 +1,23 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  annotations:
-    kubernetes.io/ingress.class: nginx
   name: pubgrade-ingress
+  annotations:
+    kubernetes.io/tls-acme: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
 spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - {{ .Values.pubgrade_webserver.ingress.url }}
+      secretName: pubgrade-dyn-cloud-e-infra-cz-tls
   rules:
   - host: {{ .Values.pubgrade_webserver.ingress.url }}
     http:
       paths:
-      - path: /
-        pathType: Prefix
-        backend:
+      - backend:
           service:
             name: pubgrade-service
             port:
-              number: {{ .Values.pubgrade_webserver.port }} 
-  tls:
-  - hosts:
-    - {{ .Values.pubgrade_webserver.ingress.url }}
-    secretName: {{ .Values.pubgrade_webserver.ingress.tlsSecrets }}
+              number: {{ .Values.pubgrade_webserver.port }}
+        pathType: ImplementationSpecific
