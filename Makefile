@@ -22,7 +22,7 @@ test: ## Runs unit tests and shows coverage.
 
 install-pubgrade: # build ## Install pubgrade on cluster using helm.
 #	kubectl create namespace $(APP_NAME) --dry-run=client -o yaml | kubectl apply -f -
-	helm upgrade --install $(APP_NAME) deployment/ -n $(APP_NAME)
+	helm upgrade --install $(APP_NAME) helm/ -n $(APP_NAME)-ns
 
 uninstall-pubgrade: ## Uninstall pubgrade.
 	helm delete $(APP_NAME) -n $(APP_NAME)

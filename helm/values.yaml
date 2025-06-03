@@ -50,11 +50,9 @@ pubgrade_webserver:
     storage_active: true
 
   ingress:
-    enabled: true
-    url: 'your.url.without.http.com'
-    https:
-      enabled: true
-      issuer: letsencrypt-prod
+    url: pubgrade.dyn.cloud.e-infra.cz
+    tlsSecrets: pubgrade-dyn-cloud-e-infra-cz-tls
+
 
   securityContext:
     runAsUser: 1004510000
