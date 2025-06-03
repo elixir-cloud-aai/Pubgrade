@@ -63,7 +63,7 @@ jobs:
      # Output the digest for reference
       - name: Output Digest for Verification
         run: |
-          echo "Image pushed and signed as ${{ github.event.client_payload.push_tag }} with digest akash7778/sampletestt@${{ steps.get-digest.outputs.digest }}"
-          echo "Verify with: cosign verify $IMAGE_NAME:${{ steps.get-digest.outputs.digest }}"
+          echo "Image pushed and signed as ${{ github.event.client_payload.push_tag }} with digest $IMAGE_NAME@${{ steps.get-digest.outputs.digest }}"
+          echo "Verify with: cosign verify $IMAGE_NAME@${{ steps.get-digest.outputs.digest }}"
 
 
