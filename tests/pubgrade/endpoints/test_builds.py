@@ -25,6 +25,7 @@ from pubgrade.errors.exceptions import (
     GitCloningError,
 )
 from pubgrade.modules.endpoints.builds import (
+    IMAGE_WITH_TAG,
     register_builds,
     get_builds,
     get_build_info,
@@ -794,6 +795,37 @@ class TestPublish:
                 }
             )
         create_build.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "images",
+        [
+            [],
+            [{"location": "./Dockerfile"}],
+            [{"name": "Org/image:1"}],
+            [{"name": "org/image:1:2"}],
+            [{"name": "registry.example.org/Org/image:1"}],
+        ],
+    )
+    def test_build_rejects_invalid_images(self, images):
+        """Requests without valid image references are rejected."""
+        self.app.config["FOCA"].endpoints["builds"]["enabled"] = True
+        with pytest.raises(InvalidImage):
+            self.publish({**self.payload, "images": images})
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "image:1",
+            "org/image:1.0-rc_1",
+            "registry.example.org/org/image:1",
+            "registry.example.org:5000/org/image:1",
+            "registry:5000/org/image:1",
+            "localhost/org/image:1",
+        ],
+    )
+    def test_image_with_tag_accepts_references(self, name):
+        """Valid references pass, with or without a registry."""
+        assert IMAGE_WITH_TAG.fullmatch(name)
 
     def test_build_completed_rejected(self):
         """`PUT` on a build is rejected."""
