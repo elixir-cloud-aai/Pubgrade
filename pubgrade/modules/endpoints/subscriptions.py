@@ -102,9 +102,7 @@ def register_subscription(uid: str, user_access_token: str, data: dict):
         raise RepositoryNotFound
     if db_collection_subscriptions.count_documents(
         {"repository_id": data["repository_id"]}
-    ) >= current_app.config["FOCA"].endpoints["subscriptions"].get(
-        "max_per_repository", DEFAULT_MAX_SUBSCRIPTIONS
-    ):
+    ) >= _max_subscriptions():
         raise TooManySubscriptions
     for i in range(retries):
         logger.debug(f"Trying to insert/update object: try {i}" + str(data))
@@ -378,11 +376,12 @@ def notify_all_subscriptions(
 ) -> List[Dict[str, Any]]:
     """Notify subscriptions concurrently and store the results on the build.
 
-    One subscription that fails or hangs affects none of the others: each one
-    has its own thread, so none waits behind another, and each call has a
-    timeout (`endpoints.subscriptions.notification_timeout`), for connecting
-    and for the response. Calls that go on for longer than these together count
-    as failed.
+    One subscription that fails or hangs affects none of the others: up to the
+    limit of subscriptions per repository, each one has its own thread, so none
+    waits behind another, and each call has a timeout
+    (`endpoints.subscriptions.notification_timeout`), for connecting and for
+    each wait for data. Calls that go on for longer than the overall wait count
+    as failed; their threads end with the call.
 
     Args:
         subscription_ids: Identifiers of the subscriptions.
@@ -417,7 +416,9 @@ def notify_all_subscriptions(
 
     results: List[Dict[str, Any]] = []
     if subscription_ids:
-        executor = ThreadPoolExecutor(max_workers=len(subscription_ids))
+        executor = ThreadPoolExecutor(
+            max_workers=min(len(subscription_ids), _max_subscriptions())
+        )
         futures = {
             executor.submit(notify, subscription_id): subscription_id
             for subscription_id in subscription_ids
@@ -437,6 +438,17 @@ def notify_all_subscriptions(
         "builds"
     ].client.update_one({"id": build_id}, {"$set": {"notifications": results}})
     return results
+
+
+def _max_subscriptions() -> int:
+    """Get the limit of subscriptions per repository.
+
+    Returns:
+        The setting `endpoints.subscriptions.max_per_repository`.
+    """
+    return current_app.config["FOCA"].endpoints["subscriptions"].get(
+        "max_per_repository", DEFAULT_MAX_SUBSCRIPTIONS
+    )
 
 
 def _notification_timeout() -> float:

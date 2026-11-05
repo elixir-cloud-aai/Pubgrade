@@ -577,6 +577,8 @@ def build_completed(
         raise RepositoryNotFound
     if data_from_db["access_token"] != project_access_token:
         raise Unauthorized
+    if build_id not in data_from_db.get("build_list", []):
+        raise BuildNotFound
     try:
         data = db_collection_builds.find(
             {'id': build_id}, {'_id': False}
