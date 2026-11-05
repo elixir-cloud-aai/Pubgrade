@@ -3,10 +3,11 @@
 # from its chart, for local checks and CI. Source this file; call `cluster_down`
 # to remove everything again.
 #
-# Variables: E2E_NAME (name of the container, network and volume),
+# Variables: E2E_NAME (name of the container and network, by default one per
+# run; an existing container or network of that name gets removed),
 # PUBGRADE_IMAGE (a local image, by default built from this repository).
 
-E2E_NAME="${E2E_NAME:-pubgrade-e2e}"
+E2E_NAME="${E2E_NAME:-pubgrade-e2e-$$}"
 E2E_K3S_IMAGE="${E2E_K3S_IMAGE:-rancher/k3s:v1.31.5-k3s1}"
 E2E_REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 E2E_ADMIN_TOKEN="$(head -c 24 /dev/urandom | base64 | tr -d '/+=')"

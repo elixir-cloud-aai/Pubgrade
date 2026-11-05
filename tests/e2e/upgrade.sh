@@ -225,9 +225,11 @@ done
 jq -e --arg id "${unreachable}" \
   '.status == "FAILED" and (.notifications[] | select(.subscription_id == $id) | .result == "failed")' \
   <<< "${result}" > /dev/null || fail "The unreachable subscriber wasn't reported"
-if grep -Eq 'nobody|callback_url|access_token' <<< "${result}"; then
-  fail "The public build shows URLs or tokens"
-fi
+for secret in nobody sidecar. callback_url access_token "${tokens[@]}"; do
+  if grep -Fq "${secret}" <<< "${result}"; then
+    fail "The public build shows URLs or tokens"
+  fi
+done
 
 # A sidecar accepts a tag that doesn't exist, as an image can take a while to
 # arrive, and only reports the failure after its retries: nothing changes
