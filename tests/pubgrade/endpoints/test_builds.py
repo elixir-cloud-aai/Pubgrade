@@ -59,10 +59,6 @@ def mocked_create_build(
     return "working fine"
 
 
-def mocked_build_push_image_using_kaniko(deployment_file_location):
-    return 0
-
-
 def mocked_remove_files(dir_location: str, pod_name: str, namespace: str):
     return "removed"
 
@@ -434,10 +430,9 @@ class TestBuild:
         os.remove("config.json")
 
     @patch(
-        "pubgrade.modules.endpoints.builds." "build_push_image_using_kaniko",
-        mocked_build_push_image_using_kaniko,
+        "pubgrade.modules.endpoints.builds." "build_push_image_using_kaniko"
     )
-    def test_create_build(self):
+    def test_create_build(self, push_image):
         builds.template_file = (
             "pubgrade/modules/endpoints/kaniko" "/template.yaml"
         )
@@ -459,6 +454,13 @@ class TestBuild:
                 dockerhub_token="dockerhub_token",
                 project_access_token="access_token",
             )
+        deployment_file = "basedir/build123/build123.yaml"
+        assert os.path.isfile(deployment_file)
+        assert os.path.isfile("basedir/build123/config.json")
+        assert os.path.isdir("basedir/build123/drs-filer/.git")
+        push_image.assert_called_once_with(
+            deployment_file_location=deployment_file
+        )
         shutil.rmtree("basedir")
 
     @patch(

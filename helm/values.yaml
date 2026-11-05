@@ -3,8 +3,9 @@ pubgrade_url: "https://pubgrade.dyn.cloud.e-infra.cz"
 
 pubgrade_build_complete_updater:
   replicaCount: 1
+  # `dev` follows the branch; pin `sha-<commit>` to control upgrades
   image: elixircloud/pubgrade-updater:dev
-  imagePullPolicy: IfNotPresent
+  imagePullPolicy: Always
 
 
 
@@ -32,7 +33,8 @@ pubgrade_mongodb:
 pubgrade_webserver:
   serviceAccountName: pubgrade
   replicaCount: 3
-  imagePullPolicy: IfNotPresent
+  imagePullPolicy: Always
+  # `dev` follows the branch; pin `sha-<commit>` to control upgrades
   image: elixircloud/pubgrade:dev
   port: 8080
   portType: NodePort

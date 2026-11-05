@@ -104,6 +104,12 @@ jobs:
           docker network create smoke
           docker run --detach --name mongodb --network smoke \
             --network-alias mongodb.pubgrade-ns mongo:7.0
+          for _ in $(seq 1 30); do
+            if docker exec mongodb mongosh --quiet --eval 'db.adminCommand({ping: 1}).ok' > /dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
           docker run --detach --name pubgrade --network smoke \
             --publish 8080:8080 pubgrade:smoke
           for _ in $(seq 1 60); do
