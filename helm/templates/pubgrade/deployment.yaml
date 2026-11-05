@@ -28,7 +28,7 @@ spec:
               containerPort: {{ .Values.pubgrade.port }}
           readinessProbe:
             httpGet:
-              path: /repositories
+              path: /ui/
               port: http
             periodSeconds: 10
           {{- with .Values.pubgrade.resources }}

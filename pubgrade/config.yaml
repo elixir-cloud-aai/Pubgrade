@@ -103,13 +103,12 @@ endpoints:
     subscriptions:
       # Switch off after setup to close registration
       registration_enabled: True
-      # Switch off after setup to close registration
-      registration_enabled: True
       # Seconds for each call to a subscriber, to connect and for the response.
       # Publishing waits for this, so with both, keep it below the time limit
       # of the Route or Ingress (e.g., 30 seconds by default on OpenShift)
       notification_timeout: 10
-      # Users that can verify other users: `name`, `uid`, `user_access_token`
+      # Users that can verify other users: `name`, `uid`, `user_access_token`.
+      # At each start, the database is made to match this list
       admin_users: []
     builds:
         # Off: `POST /repositories/{id}/builds` takes a prebuilt image from the

@@ -595,7 +595,11 @@ def build_completed(
 
         db_collection_builds.update_one({"id": data['id']},
                                         {"$set": data})
-        remove_files(BASE_DIR + "/" + build_id, build_id, "pubgrade-ns")
+        remove_files(
+            BASE_DIR + "/" + build_id,
+            build_id,
+            os.getenv("NAMESPACE", "default"),
+        )
 
         # Notifies available subscriptions registered for the repository.
         notify_all_subscriptions(

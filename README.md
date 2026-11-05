@@ -23,7 +23,8 @@ Currently supported features:
 ## Installation
 
 The Helm chart in `helm/` installs Pubgrade and a MongoDB on Kubernetes or
-OpenShift, into any namespace, without special rights.
+OpenShift, into any namespace, without special rights. Install one release per
+namespace, as resource names are fixed.
 
 1. Install and setup [kubernetes][kubernetes-install].
 2. Install [Helm][helm-install].
@@ -32,7 +33,8 @@ OpenShift, into any namespace, without special rights.
    `endpoints.subscriptions.admin_users`, and store it in a Secret:
    `kubectl create secret generic pubgrade-config -n pubgrade --from-file=config.yaml`.
    Secrets don't belong in values files. Admin users are the only ones who can
-   verify other users.
+   verify other users. After changing the Secret, restart Pubgrade: the database
+   then follows the list of admin users.
 5. Install: `helm install pubgrade helm/ -n pubgrade --set pubgrade.configSecret=pubgrade-config --set hostName=<host name>`
 
 The service is exposed by a Route if the cluster serves Routes (OpenShift; TLS
@@ -44,8 +46,24 @@ assigns its own.
 
 Builds are off by default. To let Pubgrade build images, set
 `endpoints.builds.enabled` in the configuration and `builds.enabled` in the
-chart, with the other values under `builds`; this adds an updater, a shared
-volume and rights to manage pods in the namespace.
+chart, which must match, with the other values under `builds`; this adds an
+updater, a shared volume and rights to manage pods in the namespace. Build pods
+run as root, so builds don't work under OpenShift's default restrictions.
+
+### Moving from chart 0.1
+
+Chart 0.2 can't upgrade a 0.1 release, as its selectors and names changed:
+
+- Remove the old release and install anew. MongoDB's volume has a new name and a
+  newer major version, so its data doesn't carry over: register repositories and
+  subscriptions again.
+- Values were renamed: `pubgrade_webserver` to `pubgrade`, `pubgrade_mongodb` to
+  `mongodb`, `pubgrade_build_complete_updater` to `builds.updater`,
+  `pubgrade_url` to `builds.pubgradeUrl`, and the Ingress's `url` to `hostName`.
+- The configuration in the image has no admin users any more, and no debug mode:
+  bring your own, with new tokens, in a Secret (step 4).
+- The Secret `pubgrade-secret` is gone: with builds on, create your own
+  (`builds.existingSecret`).
 
 ## Usage
 

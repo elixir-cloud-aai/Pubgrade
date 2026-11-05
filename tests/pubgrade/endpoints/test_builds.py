@@ -494,6 +494,26 @@ class TestBuild:
             assert data["status"] == "SUCCEEDED"
             assert res["id"] == MOCK_REPOSITORY_2["build_list"][0]
 
+    @patch("pubgrade.modules.endpoints.builds.remove_files")
+    @patch("requests.request", mocked_request_api)
+    def test_build_completed_removes_pod_in_own_namespace(self, remove_files):
+        """The build pod is removed from Pubgrade's namespace."""
+        self.setup_with_build()
+        self.app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+            "subscriptions"
+        ].client = mongomock.MongoClient().db.collection
+        os.environ["NAMESPACE"] = "any"
+        try:
+            with self.app.app_context():
+                build_completed(
+                    MOCK_REPOSITORY_2["id"],
+                    MOCK_REPOSITORY_2["build_list"][0],
+                    MOCK_REPOSITORY_2["access_token"],
+                )
+        finally:
+            del os.environ["NAMESPACE"]
+        assert remove_files.call_args[0][2] == "any"
+
     def test_build_completed_build_not_found(self):
         self.setup_with_build()
         with self.app.app_context():

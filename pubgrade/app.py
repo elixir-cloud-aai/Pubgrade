@@ -9,34 +9,37 @@ logger = logging.getLogger(__name__)
 
 
 def create_admin_user(app):
-    """
-    Function is used to create admin user.
+    """Make the admin users in the database match the configuration.
+
+    New tokens take effect at the next start, and users removed from the
+    configuration lose their rights.
+
+    Args:
+        app: The app, as returned by FOCA.
     """
     with app.app.app_context():
-
-        # Adding admin users from `config.yaml`.
         admin_users = current_app.config["FOCA"].endpoints["subscriptions"][
             "admin_users"
         ]
+        db_collection = (
+            current_app.config["FOCA"]
+            .db.dbs["pubgradeStore"]
+            .collections["admin_users"]
+            .client
+        )
         for user in admin_users:
-            uid = user["uid"]
-            name = user["name"]
-            user_access_token = user["user_access_token"]
-            db_collection = (
-                current_app.config["FOCA"]
-                .db.dbs["pubgradeStore"]
-                .collections["admin_users"]
-                .client
+            db_collection.replace_one(
+                {"uid": user["uid"]},
+                {
+                    "uid": user["uid"],
+                    "name": user["name"],
+                    "user_access_token": user["user_access_token"],
+                },
+                upsert=True,
             )
-            data = db_collection.find({"uid": uid})
-            if data.count() == 0:
-                db_collection.insert_one(
-                    {
-                        "uid": uid,
-                        "name": name,
-                        "user_access_token": user_access_token,
-                    }
-                )
+        db_collection.delete_many(
+            {"uid": {"$nin": [user["uid"] for user in admin_users]}}
+        )
 
 
 def main():
