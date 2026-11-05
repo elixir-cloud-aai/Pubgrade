@@ -23,7 +23,7 @@ from pubgrade.errors.exceptions import (
     InternalServerError,
 )
 from pubgrade.modules.endpoints.repositories import generate_id
-from pubgrade.modules.endpoints.subscriptions import notify_subscriptions
+from pubgrade.modules.endpoints.subscriptions import notify_all_subscriptions
 
 logger = logging.getLogger(__name__)
 
@@ -514,13 +514,11 @@ def build_completed(
         remove_files(BASE_DIR + "/" + build_id, build_id, "pubgrade-ns")
 
         # Notifies available subscriptions registered for the repository.
-        if "subscription_list" in data_from_db:
-            subscription_list = data_from_db["subscription_list"]
-            for subscription in subscription_list:
-                # for image_name in data['images']:
-                notify_subscriptions(
-                    subscription, data["images"][0]["name"], build_id
-                )
+        notify_all_subscriptions(
+            data_from_db.get("subscription_list", []),
+            data["images"][0]["name"],
+            build_id,
+        )
         return {"id": build_id}
     except StopIteration:
         raise BuildNotFound

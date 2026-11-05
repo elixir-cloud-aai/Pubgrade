@@ -61,13 +61,6 @@ class MongoError(InternalServerError):
     pass
 
 
-class RequestNotSent(InternalServerError):
-    """Raised when something unexpected happen while requesting side-car
-    service for deploying updates."""
-
-    pass
-
-
 class GitCloningError(InternalServerError):
     """Raised when there is problem while cloning repository."""
 
@@ -157,10 +150,6 @@ exceptions = {
         "status_code": "500",
     },
     CreatePodError: {"msg": "Unable to create pod.", "status_code": "500"},
-    RequestNotSent: {
-        "msg": "Unable to update deployment.",
-        "status_code": "500",
-    },
     GitCloningError: {
         "msg": "Git repository information is wrong",
         "status_code": "500",

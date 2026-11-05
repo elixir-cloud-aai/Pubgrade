@@ -1,5 +1,7 @@
+from concurrent.futures import ThreadPoolExecutor
 import datetime
 import logging
+from typing import Any, Dict, List, Optional
 
 import requests
 from pubgrade.errors.exceptions import (
@@ -7,7 +9,6 @@ from pubgrade.errors.exceptions import (
     UserNotFound,
     SubscriptionNotFound,
     BuildNotFound,
-    RequestNotSent,
     InternalServerError,
     UserNotVerified,
 )
@@ -18,6 +19,10 @@ from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized
 
 logger = logging.getLogger(__name__)
+
+# Seconds, if `endpoints.subscriptions.notification_timeout` isn't set
+DEFAULT_NOTIFICATION_TIMEOUT = 30
+MAX_NOTIFICATION_THREADS = 32
 
 
 def register_subscription(uid: str, user_access_token: str, data: dict):
@@ -247,24 +252,27 @@ def delete_subscription(
         raise SubscriptionNotFound
 
 
-def notify_subscriptions(subscription_id: str, image: str, build_id: str):
-    """Notifies subscriptions.
+def notify_subscriptions(
+    subscription_id: str, image: str, build_id: str
+) -> Dict[str, Any]:
+    """Notify one subscription of an image, if it matches the build.
 
-    Function sends request on callback URL set by user on registering
-    build after build completion (called at
-    `pubgrade.modules.endpoints.builds`) if subscription type is equal
-    to build type.
+    Sends a request to the callback URL of the subscription, if its type and
+    value match the build's `head_commit`. The result doesn't contain the
+    callback URL or the subscription's token, as builds are public.
 
     Args:
-        subscription_id (str): Identifier for subscription.
-        image (str): Docker image to be updated at deployment.
-        build_id (str): Build Identifier for build to be used for subscription.
+        subscription_id: Identifier for subscription.
+        image: Docker image to be updated at deployment.
+        build_id: Build Identifier for build to be used for subscription.
+
+    Returns:
+        Result of the notification: `subscription_id`, `result` (`delivered`,
+        `failed` or `skipped`), `http_status` (or None without a response) and
+        `finished_at`.
 
     Raises:
-        RequestException: Raised when something unexpected happen while
-        requesting side-car service for deploying updates.
-        SubscriptionNotFound: Raised when no subscription is available for
-        the user.
+        SubscriptionNotFound: Raised when the subscription doesn't exist.
         BuildNotFound: Raised when object with given build identifier was not
         found.
     """
@@ -283,71 +291,126 @@ def notify_subscriptions(subscription_id: str, image: str, build_id: str):
     build_object = db_collection_builds.find_one({"id": build_id})
     if build_object is None:
         raise BuildNotFound
-    try:
-        subscription_object = db_collection_subscriptions.find_one(
-            {"id": subscription_id}
-        )
-        subscription_type = subscription_object["type"]
-        value = subscription_object["value"]
-        if subscription_type in build_object["head_commit"]:
-            # Check if subscription type is equal to build type.
-            if build_object["head_commit"][subscription_type] == value:
-                # Update subscription object
-                subscription_object["state"] = "Active"
-                subscription_object["build_id"] = build_id
-                subscription_object["updated_at"] = str(
-                    datetime.datetime.now().isoformat()
-                )
-                del subscription_object["_id"]
-                db_collection_subscriptions.update_one(
-                    {"id": subscription_id}, {"$set": subscription_object}
-                )
-                # Retrieve callback URL for the side-car service (at
-                # deployment) from subscription collection, build payload
-                # and send request.
-                url = subscription_object["callback_url"]
-                payload = json.dumps(
-                    {
-                        "image_name": image.split(":")[0],
-                        "tag": image.split(":")[1],
-                    }
-                )
-                headers = {
-                    "X-Access-Token": subscription_object["access_token"],
-                    "Content-Type": "application/json",
-                }
-                try:
-                    requests.request("PUT", url, headers=headers, data=payload)
-                except requests.exceptions.Timeout:
-                    subscription_object["state"] = "Inactive"
-                    subscription_object["updated_at"] = str(
-                        datetime.datetime.now().isoformat()
-                    )
-                    db_collection_subscriptions.update_one(
-                        {"id": subscription_id}, {"$set": subscription_object}
-                    )
-                    raise RequestNotSent
-                except requests.exceptions.TooManyRedirects:
-                    subscription_object["state"] = "Inactive"
-                    subscription_object["updated_at"] = str(
-                        datetime.datetime.now().isoformat()
-                    )
-                    db_collection_subscriptions.update_one(
-                        {"id": subscription_id}, {"$set": subscription_object}
-                    )
-                    raise RequestNotSent
-                except requests.exceptions.RequestException:
-                    subscription_object["state"] = "Inactive"
-                    subscription_object["updated_at"] = str(
-                        datetime.datetime.now().isoformat()
-                    )
-                    db_collection_subscriptions.update_one(
-                        {"id": subscription_id}, {"$set": subscription_object}
-                    )
-                    raise RequestNotSent
-            else:
-                print("Value not matched")
-        else:
-            print("Type not matched")
-    except TypeError:
+    subscription_object = db_collection_subscriptions.find_one(
+        {"id": subscription_id}
+    )
+    if subscription_object is None:
         raise SubscriptionNotFound
+    subscription_type = subscription_object["type"]
+    if (
+        build_object["head_commit"].get(subscription_type)
+        != subscription_object["value"]
+    ):
+        logger.info(f"Subscription {subscription_id} doesn't match the build.")
+        return _notification_result(subscription_id, "skipped")
+
+    del subscription_object["_id"]
+    subscription_object["build_id"] = build_id
+    name, _, tag = image.rpartition(":")
+    timeout = current_app.config["FOCA"].endpoints["subscriptions"].get(
+        "notification_timeout", DEFAULT_NOTIFICATION_TIMEOUT
+    )
+    http_status = None
+    try:
+        # No redirects, as they would forward the token to another host
+        response = requests.request(
+            "PUT",
+            subscription_object["callback_url"],
+            headers={
+                "X-Access-Token": subscription_object["access_token"],
+                "Content-Type": "application/json",
+            },
+            data=json.dumps({"image_name": name, "tag": tag}),
+            timeout=timeout,
+            allow_redirects=False,
+        )
+        http_status = response.status_code
+        result = "delivered" if 200 <= http_status < 300 else "failed"
+    except requests.exceptions.RequestException as error:
+        logger.error(
+            f"Notifying subscription {subscription_id} failed: "
+            f"{type(error).__name__}"
+        )
+        result = "failed"
+    subscription_object["state"] = (
+        "Active" if result == "delivered" else "Inactive"
+    )
+    subscription_object["updated_at"] = str(
+        datetime.datetime.now().isoformat()
+    )
+    db_collection_subscriptions.update_one(
+        {"id": subscription_id}, {"$set": subscription_object}
+    )
+    return _notification_result(subscription_id, result, http_status)
+
+
+def notify_all_subscriptions(
+    subscription_ids: List[str], image: str, build_id: str
+) -> List[Dict[str, Any]]:
+    """Notify subscriptions concurrently and store the results on the build.
+
+    One subscription that fails or hangs affects none of the others; each call
+    has a timeout (`endpoints.subscriptions.notification_timeout`).
+
+    Args:
+        subscription_ids: Identifiers of the subscriptions.
+        image: Docker image to be updated at deployments.
+        build_id: Identifier of the build.
+
+    Returns:
+        One result per subscription, see `notify_subscriptions()`.
+    """
+    app = current_app._get_current_object()
+
+    def notify(subscription_id: str) -> Dict[str, Any]:
+        """Notify one subscription, turning all errors into its result.
+
+        Args:
+            subscription_id: Identifier of the subscription.
+
+        Returns:
+            Result of the notification.
+        """
+        with app.app_context():
+            try:
+                return notify_subscriptions(subscription_id, image, build_id)
+            except SubscriptionNotFound:
+                # Deleting a subscription leaves its ID at the repository
+                return _notification_result(subscription_id, "skipped")
+            except Exception:
+                logger.exception(
+                    f"Notifying subscription {subscription_id} failed."
+                )
+                return _notification_result(subscription_id, "failed")
+
+    results: List[Dict[str, Any]] = []
+    if subscription_ids:
+        with ThreadPoolExecutor(
+            max_workers=min(len(subscription_ids), MAX_NOTIFICATION_THREADS)
+        ) as executor:
+            results = list(executor.map(notify, subscription_ids))
+    app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+        "builds"
+    ].client.update_one({"id": build_id}, {"$set": {"notifications": results}})
+    return results
+
+
+def _notification_result(
+    subscription_id: str, result: str, http_status: Optional[int] = None
+) -> Dict[str, Any]:
+    """Create the result of a notification.
+
+    Args:
+        subscription_id: Identifier of the subscription.
+        result: `delivered`, `failed` or `skipped`.
+        http_status: Status of the subscriber's response, if any.
+
+    Returns:
+        The result, as stored on the build.
+    """
+    return {
+        "subscription_id": subscription_id,
+        "result": result,
+        "http_status": http_status,
+        "finished_at": datetime.datetime.now().isoformat(),
+    }

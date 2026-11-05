@@ -1,4 +1,6 @@
 """Tests for /subscriptions endpoint """
+import json
+import threading
 from unittest.mock import patch, MagicMock
 
 import mongomock
@@ -14,7 +16,6 @@ from pubgrade.errors.exceptions import (
     UserNotFound,
     SubscriptionNotFound,
     BuildNotFound,
-    RequestNotSent,
     UserNotVerified,
 )
 from pubgrade.modules.endpoints.subscriptions import (
@@ -22,6 +23,7 @@ from pubgrade.modules.endpoints.subscriptions import (
     get_subscriptions,
     get_subscription_info,
     delete_subscription,
+    notify_all_subscriptions,
     notify_subscriptions,
 )
 from tests.mock_data import (
@@ -38,19 +40,19 @@ from tests.mock_data import (
 )
 
 
-def mocked_request_api(method, url, data, headers):
-    return "successful"
+def mocked_request_api(method, url, data, headers, **kwargs):
+    return MagicMock(status_code=200)
 
 
-def mocked_request_api_timeout_error(method, url, data, headers):
+def mocked_request_api_timeout_error(method, url, data, headers, **kwargs):
     raise requests.exceptions.Timeout
 
 
-def mocked_request_api_too_many_redirects(method, url, data, headers):
+def mocked_request_api_too_many_redirects(method, url, data, headers, **kwargs):
     raise requests.exceptions.TooManyRedirects
 
 
-def mocked_request_api_request_exception(method, url, data, headers):
+def mocked_request_api_request_exception(method, url, data, headers, **kwargs):
     raise requests.exceptions.RequestException
 
 
@@ -404,12 +406,13 @@ class TestSubscriptions:
         self.setup()
         self.insert_subscription()
         with self.app.app_context():
-            with pytest.raises(RequestNotSent):
-                notify_subscriptions(
-                    MOCK_SUBSCRIPTION_INFO["id"],
-                    "elixir-cloud-aai/pubgrade:0.0.1",
-                    MOCK_BUILD_INFO["id"],
-                )
+            result = notify_subscriptions(
+                MOCK_SUBSCRIPTION_INFO["id"],
+                "elixir-cloud-aai/pubgrade:0.0.1",
+                MOCK_BUILD_INFO["id"],
+            )
+            assert result["result"] == "failed"
+            assert result["http_status"] is None
             data = (
                 self.app.config["FOCA"]
                 .db.dbs["pubgradeStore"]
@@ -423,12 +426,13 @@ class TestSubscriptions:
         self.setup()
         self.insert_subscription()
         with self.app.app_context():
-            with pytest.raises(RequestNotSent):
-                notify_subscriptions(
-                    MOCK_SUBSCRIPTION_INFO["id"],
-                    "elixir-cloud-aai/pubgrade:0.0.1",
-                    MOCK_BUILD_INFO["id"],
-                )
+            result = notify_subscriptions(
+                MOCK_SUBSCRIPTION_INFO["id"],
+                "elixir-cloud-aai/pubgrade:0.0.1",
+                MOCK_BUILD_INFO["id"],
+            )
+            assert result["result"] == "failed"
+            assert result["http_status"] is None
             data = (
                 self.app.config["FOCA"]
                 .db.dbs["pubgradeStore"]
@@ -442,12 +446,13 @@ class TestSubscriptions:
         self.setup()
         self.insert_subscription()
         with self.app.app_context():
-            with pytest.raises(RequestNotSent):
-                notify_subscriptions(
-                    MOCK_SUBSCRIPTION_INFO["id"],
-                    "elixir-cloud-aai/pubgrade:0.0.1",
-                    MOCK_BUILD_INFO["id"],
-                )
+            result = notify_subscriptions(
+                MOCK_SUBSCRIPTION_INFO["id"],
+                "elixir-cloud-aai/pubgrade:0.0.1",
+                MOCK_BUILD_INFO["id"],
+            )
+            assert result["result"] == "failed"
+            assert result["http_status"] is None
             data = (
                 self.app.config["FOCA"]
                 .db.dbs["pubgradeStore"]
@@ -497,3 +502,142 @@ class TestSubscriptions:
             assert isinstance(data, dict)
             assert data["state"] == "Inactive"
             assert "build_id" not in data
+
+    @patch("requests.request")
+    def test_notify_subscriptions_error_status(self, request):
+        """A response other than 2xx counts as a failure."""
+        request.return_value = MagicMock(status_code=500)
+        self.setup()
+        self.insert_subscription()
+        with self.app.app_context():
+            result = notify_subscriptions(
+                MOCK_SUBSCRIPTION_INFO["id"],
+                "elixir-cloud-aai/pubgrade:0.0.1",
+                MOCK_BUILD_INFO["id"],
+            )
+        assert result["result"] == "failed"
+        assert result["http_status"] == 500
+
+    @patch("requests.request")
+    def test_notify_subscriptions_request(self, request):
+        """The call has a timeout and follows no redirects."""
+        request.return_value = MagicMock(status_code=200)
+        self.setup()
+        self.insert_subscription()
+        with self.app.app_context():
+            notify_subscriptions(
+                MOCK_SUBSCRIPTION_INFO["id"],
+                "registry.example.org:5000/pubgrade:0.0.1",
+                MOCK_BUILD_INFO["id"],
+            )
+        kwargs = request.call_args[1]
+        assert kwargs["timeout"] == 30
+        assert kwargs["allow_redirects"] is False
+        assert json.loads(kwargs["data"]) == {
+            "image_name": "registry.example.org:5000/pubgrade",
+            "tag": "0.0.1",
+        }
+
+    def insert_subscriptions(self, *ids):
+        """Insert subscriptions that match `MOCK_BUILD_INFO`.
+
+        Args:
+            *ids: Identifiers of the subscriptions; each one's callback URL
+                ends with its identifier.
+        """
+        for subscription_id in ids:
+            self.app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+                "subscriptions"
+            ].client.insert_one(
+                {
+                    **MOCK_SUBSCRIPTION_INFO,
+                    "id": subscription_id,
+                    "callback_url": f"https://example.org/{subscription_id}",
+                }
+            )
+
+    def get_stored_notifications(self):
+        """Get the results stored on the build.
+
+        Returns:
+            The field `notifications` of the build.
+        """
+        return (
+            self.app.config["FOCA"]
+            .db.dbs["pubgradeStore"]
+            .collections["builds"]
+            .client.find_one({"id": MOCK_BUILD_INFO["id"]})["notifications"]
+        )
+
+    def test_notify_all_concurrently(self):
+        """All calls are in progress at the same time."""
+        barrier = threading.Barrier(3, timeout=10)
+
+        def request(*args, **kwargs):
+            barrier.wait()
+            return MagicMock(status_code=200)
+
+        self.setup()
+        self.insert_subscriptions("sub1", "sub2", "sub3")
+        with self.app.app_context(), patch("requests.request", request):
+            results = notify_all_subscriptions(
+                ["sub1", "sub2", "sub3"], "org/image:1", MOCK_BUILD_INFO["id"]
+            )
+        assert [result["result"] for result in results] == ["delivered"] * 3
+
+    def test_notify_all_failure_does_not_stop_others(self):
+        """Failures of any kind stay with their subscription."""
+
+        def request(method, url, **kwargs):
+            if url.endswith("timeout"):
+                raise requests.exceptions.Timeout
+            if url.endswith("unexpected"):
+                raise ValueError
+            return MagicMock(status_code=200)
+
+        self.setup()
+        ids = ["timeout", "unexpected", "good"]
+        self.insert_subscriptions(*ids)
+        with self.app.app_context(), patch("requests.request", request):
+            results = notify_all_subscriptions(
+                ids, "org/image:1", MOCK_BUILD_INFO["id"]
+            )
+        assert {r["subscription_id"]: r["result"] for r in results} == {
+            "timeout": "failed",
+            "unexpected": "failed",
+            "good": "delivered",
+        }
+
+    def test_notify_all_deleted_subscription(self):
+        """A deleted subscription, still listed at its repository, is skipped."""
+        self.setup()
+        with self.app.app_context():
+            results = notify_all_subscriptions(
+                ["gone"], "org/image:1", MOCK_BUILD_INFO["id"]
+            )
+        assert results[0]["result"] == "skipped"
+
+    @patch("requests.request", mocked_request_api)
+    def test_notify_all_stores_results_without_secrets(self):
+        """Builds are public: their results hold no URLs or tokens."""
+        self.setup()
+        self.insert_subscriptions("sub1")
+        with self.app.app_context():
+            notify_all_subscriptions(
+                ["sub1"], "org/image:1", MOCK_BUILD_INFO["id"]
+            )
+        stored = self.get_stored_notifications()
+        assert stored[0]["subscription_id"] == "sub1"
+        assert stored[0]["http_status"] == 200
+        assert "example.org" not in str(stored)
+        assert MOCK_SUBSCRIPTION_INFO["access_token"] not in str(stored)
+
+    def test_notify_all_without_subscriptions(self):
+        """Without subscriptions, the build has an empty list of results."""
+        self.setup()
+        with self.app.app_context():
+            results = notify_all_subscriptions(
+                [], "org/image:1", MOCK_BUILD_INFO["id"]
+            )
+        assert results == []
+        assert self.get_stored_notifications() == []

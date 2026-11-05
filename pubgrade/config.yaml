@@ -95,6 +95,8 @@ endpoints:
         charset: [ string.ascii_lowercase, string.digits , '.' , '-' ]
         length: 32
     subscriptions:
+      # Seconds for each call to a subscriber
+      notification_timeout: 30
       admin_users:
         - name: 'Akash'
           uid: 'akash.saini'

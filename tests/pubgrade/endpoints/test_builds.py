@@ -85,8 +85,8 @@ def mocked_delete_namespaced_pod_error(
     raise ApiException
 
 
-def mocked_request_api(method, url, data, headers):
-    return "successful"
+def mocked_request_api(method, url, data, headers, **kwargs):
+    return MagicMock(status_code=200)
 
 
 def mocked_load_cluster_config(
