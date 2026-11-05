@@ -3,7 +3,7 @@ pubgrade_url: "https://pubgrade.dyn.cloud.e-infra.cz"
 
 pubgrade_build_complete_updater:
   replicaCount: 1
-  image: "akash7778/pubgrade-updater"  # This will be moved to elixir-cloud-aai
+  image: elixircloud/pubgrade-updater:dev
   imagePullPolicy: IfNotPresent
 
 
@@ -33,7 +33,7 @@ pubgrade_webserver:
   serviceAccountName: pubgrade
   replicaCount: 3
   imagePullPolicy: IfNotPresent
-  image: akash7778/pubgrade:test_build_1  # This will be moved to elixir-cloud-aai
+  image: elixircloud/pubgrade:dev
   port: 8080
   portType: NodePort
 

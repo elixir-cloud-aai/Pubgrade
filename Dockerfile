@@ -18,7 +18,8 @@ COPY --chown=1000:1000 ./ /app
 
 ## Install app
 ## FOCA 0.7 pins pymongo 3.10, which fails at startup on current MongoDB versions
-## (dropping the indexes of a collection that doesn't exist yet): 3.13 fixes that
+## (dropping the indexes of a collection that doesn't exist yet): 3.13 fixes that.
+## Remove this with the move to a newer FOCA
 RUN cd /app \
   && python setup.py develop \
   && chmod g+w /app/pubgrade/api/ \

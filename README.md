@@ -131,7 +131,8 @@ public repository, so they need network access.
 [CI](.github/workflows/ci.yml) runs on pull requests and pushes to `dev`. The
 job `CI passed` sums up all other jobs. Pushes to `dev` publish
 `elixircloud/pubgrade` and `elixircloud/pubgrade-updater`, tagged `dev`,
-`sha-<commit>` and `<YYYYMMDD>`.
+`sha-<commit>` and `<YYYYMMDD>`. The tag `latest` stays as it is until there are
+releases, so use one of these instead.
 
 ## Versioning
 
