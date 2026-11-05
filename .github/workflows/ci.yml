@@ -78,11 +78,11 @@ jobs:
           version: v3.22.1
       - name: Lint chart
         run: helm lint helm --strict
-      - name: Render chart
-        run: helm template pubgrade helm --namespace pubgrade > /dev/null
+      - name: Check rendered chart
+        run: tests/chart.sh
 
-  # Starts the image with MongoDB; the network alias must match `db.host` in
-  # `pubgrade/config.yaml`
+  # Starts the image with MongoDB, under an arbitrary user ID as on OpenShift;
+  # the container's name is the host in `pubgrade/config.yaml`
   smoke:
     name: Smoke test
     runs-on: ubuntu-latest
@@ -103,7 +103,7 @@ jobs:
         run: |
           docker network create smoke
           docker run --detach --name mongodb --network smoke \
-            --network-alias mongodb.pubgrade-ns mongo:7.0
+            mongo:7.0
           for _ in $(seq 1 30); do
             if docker exec mongodb mongosh --quiet --eval 'db.adminCommand({ping: 1}).ok' > /dev/null 2>&1; then
               break
@@ -111,7 +111,7 @@ jobs:
             sleep 2
           done
           docker run --detach --name pubgrade --network smoke \
-            --publish 8080:8080 pubgrade:smoke
+            --user 12345:0 --publish 8080:8080 pubgrade:smoke
           for _ in $(seq 1 60); do
             if curl --fail --silent --output /dev/null "${API}/ui/"; then
               exit 0

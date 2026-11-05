@@ -1,0 +1,38 @@
+{{- if .Values.pubgrade.ingress.enabled }}
+{{- $hostName := required "hostName must be set if an Ingress is created" .Values.hostName }}
+{{- $ingress := .Values.pubgrade.ingress }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pubgrade
+  {{- if or $ingress.annotations $ingress.https.enabled }}
+  annotations:
+    {{- if $ingress.https.enabled }}
+    cert-manager.io/cluster-issuer: {{ $ingress.https.issuer | quote }}
+    {{- end }}
+    {{- with $ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- end }}
+spec:
+  {{- with $ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  rules:
+    - host: {{ $hostName | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: pubgrade-service
+                port:
+                  name: http
+  {{- if $ingress.https.enabled }}
+  tls:
+    - hosts:
+        - {{ $hostName | quote }}
+      secretName: pubgrade-tls
+  {{- end }}
+{{- end }}

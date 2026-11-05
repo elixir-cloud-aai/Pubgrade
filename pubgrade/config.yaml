@@ -1,14 +1,16 @@
-# FOCA configuration
+# FOCA configuration. Defaults that are safe to publish in the image: deployments
+# mount their own copy, with their admin users (see the README). The environment
+# variable MONGO_HOST takes precedence over `db.host`
 server:
     host: '0.0.0.0'
     port: 8080
-    debug: True
-    environment: development
-    testing: True
-    use_reloader: True
+    debug: False
+    environment: production
+    testing: False
+    use_reloader: False
 
 db:
-    host: mongodb.pubgrade-ns
+    host: mongodb
     port: 27017
     dbs:
         pubgradeStore:
@@ -101,21 +103,20 @@ endpoints:
     subscriptions:
       # Switch off after setup to close registration
       registration_enabled: True
+      # Switch off after setup to close registration
+      registration_enabled: True
       # Seconds for each call to a subscriber, to connect and for the response.
       # Publishing waits for this, so with both, keep it below the time limit
       # of the Route or Ingress (e.g., 30 seconds by default on OpenShift)
       notification_timeout: 10
-      admin_users:
-        - name: 'Akash'
-          uid: 'akash.saini'
-          user_access_token: 'c42a6d44e3d0'
-        - name: 'Alvaro'
-          uid: 'alvaro.gonzalez'
-          user_access_token: 'c42fhg44e3d0'
+      # Users that can verify other users: `name`, `uid`, `user_access_token`
+      admin_users: []
     builds:
         # Off: `POST /repositories/{id}/builds` takes a prebuilt image from the
         # repository's own CI and notifies the subscriptions. On: Pubgrade
         # clones the repository and builds the image; needs the settings below
         enabled: False
-        gh_action_path: "akash2237778/pubgrade-signer"
-        intermediate_registery_format: "cloud-registry.2.rahtiapp.fi/pubgrade/{}:1h"
+        # GitHub repository, `<owner>/<name>`, with the workflow that signs images
+        gh_action_path: ""
+        # Registry path for built images, with `{}` for the image's name
+        intermediate_registery_format: ""

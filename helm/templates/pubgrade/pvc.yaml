@@ -1,0 +1,15 @@
+{{- if .Values.builds.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pubgrade-builds
+spec:
+  {{- with .Values.builds.volume.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: {{ .Values.builds.volume.size }}
+{{- end }}

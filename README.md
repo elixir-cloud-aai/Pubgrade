@@ -22,11 +22,30 @@ Currently supported features:
 
 ## Installation
 
+The Helm chart in `helm/` installs Pubgrade and a MongoDB on Kubernetes or
+OpenShift, into any namespace, without special rights.
+
 1. Install and setup [kubernetes][kubernetes-install].
 2. Install [Helm][helm-install].
-3. Modify helm/values.yaml.
-4. Create a namespace. `kubectl create namespace pubgrade`
-5. Create deployment using helm. `helm install pubgrade helm/ -n pubgrade`
+3. Create a namespace: `kubectl create namespace pubgrade`
+4. Copy `pubgrade/config.yaml`, add your admin users with new tokens under
+   `endpoints.subscriptions.admin_users`, and store it in a Secret:
+   `kubectl create secret generic pubgrade-config -n pubgrade --from-file=config.yaml`.
+   Secrets don't belong in values files. Admin users are the only ones who can
+   verify other users.
+5. Install: `helm install pubgrade helm/ -n pubgrade --set pubgrade.configSecret=pubgrade-config --set hostName=<host name>`
+
+The service is exposed by a Route if the cluster serves Routes (OpenShift; TLS
+at the router); on other clusters, enable it with
+`--set pubgrade.ingress.enabled=true`, which requests a certificate from
+[cert-manager][cert-manager] by default. See `helm/values.yaml` for all values.
+Pubgrade's pods run as any user ID in group 0, with no fixed ID, as OpenShift
+assigns its own.
+
+Builds are off by default. To let Pubgrade build images, set
+`endpoints.builds.enabled` in the configuration and `builds.enabled` in the
+chart, with the other values under `builds`; this adds an updater, a shared
+volume and rights to manage pods in the namespace.
 
 ## Usage
 
@@ -182,6 +201,7 @@ proposal, question etc.
 [badge-license]: https://img.shields.io/badge/license-Apache%202.0-blue.svg
 [badge-url-build-status]: https://github.com/elixir-cloud-aai/Pubgrade/actions/workflows/ci.yml
 [contributing]: https://github.com/elixir-cloud-aai/elixir-cloud-aai/blob/dev/CONTRIBUTING.md
+[cert-manager]: https://cert-manager.io/
 [elixir-cloud]: https://github.com/elixir-cloud-aai/elixir-cloud-aai
 [elixir-cloud-registry]: https://cloud-registry.rahtiapp.fi/ga4gh/registry/v1/ui/
 [helm-install]: https://helm.sh/docs/intro/install/

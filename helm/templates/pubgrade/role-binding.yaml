@@ -1,0 +1,14 @@
+{{- if .Values.builds.enabled }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pubgrade
+subjects:
+  - kind: ServiceAccount
+    name: pubgrade
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: Role
+  name: pubgrade
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}

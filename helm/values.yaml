@@ -1,62 +1,67 @@
-appName: pubgrade
-pubgrade_url: "https://pubgrade.dyn.cloud.e-infra.cz"
+# Host name of the Ingress or Route; required if one of them is created
+hostName: ""
 
-pubgrade_build_complete_updater:
-  replicaCount: 1
-  # `dev` follows the branch; pin `sha-<commit>` to control upgrades
-  image: elixircloud/pubgrade-updater:dev
-  imagePullPolicy: Always
-
-
-
-pubgrade_mongodb:
-  image: mongo:3.6
-  name: mongodb
-  replicaCount: 1
-  port: 27017
-  portType: NodePort
+# Whether Pubgrade builds images itself. Must match `endpoints.builds.enabled`
+# in the app's configuration. Off (the default), it takes prebuilt images, and
+# the chart creates no updater, shared volume, service account rights or build
+# settings
+builds:
+  enabled: false
+  # With builds on, the name of an existing Secret with the keys
+  # `gh_access_token`, `cosign_password`, `cosign_private_key` and
+  # `intermediate_registry_token`
+  existingSecret: ""
+  # URL at which the build pods reach Pubgrade
+  pubgradeUrl: ""
+  # The volume that Pubgrade and the build pods share
   volume:
-    # In case you are working with minikube or another single-worker solution
-    # you can add a peristent volume from a local directory. For fully-distributed
-    # clusters you should use a StorageClass already existing in your cluster, so set this to false.
-    deployLocalPv: false
-    name: mongodb-storage
-    claimName: mongo-pvc
-    storageActive: true
-    storageClass: nfs-csi
+    storageClass: ""
     size: 2Gi
-    pathToLocalDir: /tmp/mongo-pv
-  securityContext:
-    runAsUser: 1004510000
+  updater:
+    # `dev` follows the branch; pin `sha-<commit>` to control upgrades
+    image: elixircloud/pubgrade-updater:dev
+    imagePullPolicy: Always
+    resources: {}
 
-
-pubgrade_webserver:
-  serviceAccountName: pubgrade
-  replicaCount: 3
-  imagePullPolicy: Always
+pubgrade:
   # `dev` follows the branch; pin `sha-<commit>` to control upgrades
   image: elixircloud/pubgrade:dev
+  imagePullPolicy: Always
+  replicaCount: 1
   port: 8080
-  portType: NodePort
-
-  volume:
-    # In case you are working with minikube or another single-worker solution
-    # you can add a peristent volume from a local directory. For fully-distributed
-    # clusters you should use a StorageClass already existing in your cluster, so set this to false.
-    deployLocalPv: false
-    pathToMountedDir: /pubgrade_temp_files
-    pathToLocalDir: /tmp/pubgrade-pv
-    pvcName: pubgrade-pvc
-    storageClass: nfs-csi
-    size: 2Gi
-    storage_active: true
-
+  # Name of an existing Secret with the key `config.yaml`, the app's whole
+  # configuration (see `pubgrade/config.yaml`); it holds the tokens of the admin
+  # users. Without it, the app runs with the configuration in the image, which
+  # has no admin users, so that users can't be verified
+  configSecret: ""
+  resources: {}
+  # Created if enabled; `hostName` is required then
   ingress:
-    enabled: true
-    url: 'your.url.without.http.com'
+    enabled: false
+    # Ingress class; the cluster's default class if empty
+    className: ""
+    annotations: {}
     https:
+      # Request a certificate from cert-manager (via `issuer`, a ClusterIssuer)
+      # and serve HTTPS
       enabled: true
       issuer: letsencrypt-prod
+  # An OpenShift Route, with TLS at the router: created if the cluster serves
+  # Routes, unless this is off or an Ingress is enabled; `hostName` is required
+  # then
+  route:
+    enabled: true
+    annotations: {}
 
-  securityContext:
-    runAsUser: 1004510000
+mongodb:
+  image: mongo:7.0
+  imagePullPolicy: IfNotPresent
+  port: 27017
+  resources: {}
+  volume:
+    # The cluster's default storage class if empty
+    storageClass: ""
+    size: 2Gi
+  # Allow connections only from Pubgrade's pods
+  networkPolicy:
+    enabled: true
