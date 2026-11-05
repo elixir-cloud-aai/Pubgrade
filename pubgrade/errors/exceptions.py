@@ -55,6 +55,24 @@ class UserNotVerified(Unauthorized):
     pass
 
 
+class BuildsDisabled(Forbidden):
+    """Raised when a request needs the build path, which is switched off."""
+
+    pass
+
+
+class RegistrationDisabled(Forbidden):
+    """Raised when registration is closed by configuration."""
+
+    pass
+
+
+class InvalidImage(BadRequest):
+    """Raised when a request doesn't name exactly one image with a tag."""
+
+    pass
+
+
 class MongoError(InternalServerError):
     """Raised when Mongo operations raise an Unexpected error."""
 
@@ -165,5 +183,17 @@ exceptions = {
     UserNotVerified: {
         "msg": "User is not verified by the super user.",
         "status_code": "403",
+    },
+    BuildsDisabled: {
+        "msg": "Builds are switched off: publish a prebuilt image instead.",
+        "status_code": "403",
+    },
+    RegistrationDisabled: {
+        "msg": "Registration is closed.",
+        "status_code": "403",
+    },
+    InvalidImage: {
+        "msg": "The request must name exactly one image, with a tag.",
+        "status_code": "400",
     },
 }

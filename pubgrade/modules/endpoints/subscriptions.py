@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 
 import requests
 from pubgrade.errors.exceptions import (
+    RegistrationDisabled,
     RepositoryNotFound,
     UserNotFound,
     SubscriptionNotFound,
@@ -45,7 +46,13 @@ def register_subscription(uid: str, user_access_token: str, data: dict):
         Unauthorized: Raised when access_token is invalid or not specified
         in request.
         UserNotFound: Raised when there is no user with specified uid.
+        RegistrationDisabled: Raised when registration is closed by the
+        setting `endpoints.subscriptions.registration_enabled`.
     """
+    if not current_app.config["FOCA"].endpoints["subscriptions"].get(
+        "registration_enabled", True
+    ):
+        raise RegistrationDisabled
     db_collection_subscriptions = (
         current_app.config["FOCA"]
         .db.dbs["pubgradeStore"]
@@ -265,7 +272,8 @@ def notify_subscriptions(
     """Notify one subscription of an image, if it matches the build.
 
     Sends a request to the callback URL of the subscription, if its type and
-    value match the build's `head_commit`. The result doesn't contain the
+    value match the build's `head_commit`; the value `*` matches any value of
+    the type. The result doesn't contain the
     callback URL or the subscription's token, as builds are public.
 
     Args:
@@ -303,10 +311,12 @@ def notify_subscriptions(
     )
     if subscription_object is None:
         raise SubscriptionNotFound
+    head_commit = build_object["head_commit"]
     subscription_type = subscription_object["type"]
-    if (
-        build_object["head_commit"].get(subscription_type)
-        != subscription_object["value"]
+    value = subscription_object["value"]
+    if subscription_type not in head_commit or value not in (
+        "*",
+        head_commit[subscription_type],
     ):
         logger.info(f"Subscription {subscription_id} doesn't match the build.")
         return _notification_result(subscription_id, "skipped")

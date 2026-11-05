@@ -12,6 +12,7 @@ from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized, InternalServerError
 
 from pubgrade.errors.exceptions import (
+    RegistrationDisabled,
     RepositoryNotFound,
     UserNotFound,
     SubscriptionNotFound,
@@ -126,6 +127,20 @@ class TestSubscriptions:
             assert isinstance(res, dict)
             assert res["subscription_id"] in data["subscription_list"]
             assert subscription["state"] == "Inactive"
+
+    def test_register_subscription_closed(self):
+        """Registration can be closed by configuration."""
+        self.setup()
+        self.app.config["FOCA"].endpoints["subscriptions"][
+            "registration_enabled"
+        ] = False
+        with self.app.app_context():
+            with pytest.raises(RegistrationDisabled):
+                register_subscription(
+                    MOCK_USER["uid"],
+                    MOCK_USER["user_access_token"],
+                    SUBSCRIPTION_PAYLOAD,
+                )
 
     def test_register_subscription_duplicate_key_error(self):
         self.setup()
@@ -726,3 +741,32 @@ class TestSubscriptions:
                     MOCK_USER["user_access_token"],
                     MOCK_SUBSCRIPTION_INFO["id"],
                 )
+
+    @patch("requests.request", mocked_request_api)
+    def test_notify_subscriptions_any_value(self):
+        """The value `*` matches any value of the subscription's type."""
+        self.setup()
+        MOCK_SUBSCRIPTION_INFO["value"] = "*"
+        self.insert_subscription()
+        with self.app.app_context():
+            result = notify_subscriptions(
+                MOCK_SUBSCRIPTION_INFO["id"],
+                "org/image:1",
+                MOCK_BUILD_INFO["id"],
+            )
+        assert result["result"] == "delivered"
+
+    @patch("requests.request", mocked_request_api)
+    def test_notify_subscriptions_any_value_other_type(self):
+        """The value `*` doesn't match other types."""
+        self.setup()
+        MOCK_SUBSCRIPTION_INFO["value"] = "*"
+        MOCK_SUBSCRIPTION_INFO["type"] = "tag"
+        self.insert_subscription()
+        with self.app.app_context():
+            result = notify_subscriptions(
+                MOCK_SUBSCRIPTION_INFO["id"],
+                "org/image:1",
+                MOCK_BUILD_INFO["id"],
+            )
+        assert result["result"] == "skipped"

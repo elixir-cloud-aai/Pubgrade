@@ -54,6 +54,7 @@ ENDPOINT_CONFIG = {
         }
     },
     "builds": {
+            "enabled": True,
             "gh_action_path": "akash2237778/pubgrade-signer",
             "intermediate_registery_format": "ttl.sh/{}:1h"
         },

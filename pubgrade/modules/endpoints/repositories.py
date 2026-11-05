@@ -7,6 +7,7 @@ from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized
 
 from pubgrade.errors.exceptions import (
+    RegistrationDisabled,
     RepositoryNotFound,
     URLNotFound,
     InternalServerError,
@@ -29,7 +30,13 @@ def register_repository(data: dict):
         URLNotFound: Raised when request data does not have url string.
         InternalServerError: Raised when it's unable to create unique
         identifier for the repository_object.
+        RegistrationDisabled: Raised when registration is closed by the
+        setting `endpoints.repository.registration_enabled`.
     """
+    if not current_app.config["FOCA"].endpoints["repository"].get(
+        "registration_enabled", True
+    ):
+        raise RegistrationDisabled
     repository_object = {}
     try:
         repository_object["url"] = data["url"]

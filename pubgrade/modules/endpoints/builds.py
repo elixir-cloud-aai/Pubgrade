@@ -5,6 +5,7 @@ import shutil
 import requests
 import base64
 import json
+import re
 
 import yaml
 from flask import current_app
@@ -15,6 +16,8 @@ from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized
 
 from pubgrade.errors.exceptions import (
+    BuildsDisabled,
+    InvalidImage,
     RepositoryNotFound,
     BuildNotFound,
     DeletePodError,
@@ -32,9 +35,69 @@ BASE_DIR = os.getenv("BASE_DIR")
 if BASE_DIR is None:
     BASE_DIR = '/pubgrade_temp_files'
 
+# An image with a tag (no digest), optionally with a registry and its port
+IMAGE_WITH_TAG = re.compile(
+    r"[a-zA-Z0-9][a-zA-Z0-9._:/-]*:[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}"
+)
+
+
+def builds_enabled() -> bool:
+    """Check whether Pubgrade builds images itself.
+
+    Returns:
+        The setting `endpoints.builds.enabled`; False if it isn't set.
+    """
+    return current_app.config["FOCA"].endpoints["builds"].get("enabled", False)
+
+
+def validate_prebuilt_image(build_data: dict) -> None:
+    """Check a request to publish a prebuilt image.
+
+    Args:
+        build_data: Request data.
+
+    Raises:
+        BuildsDisabled: Raised when the request asks for a build.
+        InvalidImage: Raised when the request doesn't name exactly one image
+        with a tag.
+    """
+    images = build_data["images"]
+    if "dockerhub_token" in build_data or any(
+        "location" in image for image in images
+    ):
+        raise BuildsDisabled
+    if len(images) != 1 or not IMAGE_WITH_TAG.fullmatch(images[0]["name"]):
+        raise InvalidImage
+
+
+def publish_prebuilt_image(build_id: str, image: str, subscriptions: list):
+    """Notify subscriptions of a prebuilt image and finish its build.
+
+    Args:
+        build_id: Identifier of the build.
+        image: Name and tag of the image.
+        subscriptions: Identifiers of the repository's subscriptions.
+    """
+    results = notify_all_subscriptions(subscriptions, image, build_id)
+    failed = any(result["result"] == "failed" for result in results)
+    current_app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+        "builds"
+    ].client.update_one(
+        {"id": build_id},
+        {
+            "$set": {
+                "status": "FAILED" if failed else "SUCCEEDED",
+                "finished_at": datetime.datetime.now().isoformat(),
+            }
+        },
+    )
+
 
 def register_builds(repository_id: str, access_token: str, build_data: dict):
     """Register new builds for already registered repository.
+
+    With builds switched off (`endpoints.builds.enabled`), the request names a
+    prebuilt image, and the repository's subscriptions are notified of it.
 
     Args:
         repository_id (str): Identifier for repository.
@@ -50,6 +113,9 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
         in request.
         RepositoryNotFound: Raised when repository is not found with given
         identifier.
+        BuildsDisabled: Raised when the request asks for a build, with builds
+        switched off.
+        InvalidImage: Raised when a prebuilt image is invalid.
     """
     db_collection_builds = (
         current_app.config["FOCA"]
@@ -84,6 +150,9 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
         raise RepositoryNotFound
     if data_from_db["access_token"] != access_token:
         raise Unauthorized
+    build_path = builds_enabled()
+    if not build_path:
+        validate_prebuilt_image(build_data)
     for i in range(retries):
         logger.debug(
             f"Trying to insert/update object: try {i}" + str(build_data)
@@ -100,6 +169,8 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
             build_data["started_at"] = str(datetime.datetime.now().isoformat())
             build_data["status"] = "QUEUED"
             db_collection_builds.insert_one(build_data)
+            if not build_path:
+                break
             branch = ""
             commit_sha = ""
             try:
@@ -138,6 +209,12 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
             f" Tried {retries + 1} times."
         )
         raise InternalServerError
+    if not build_path:
+        publish_prebuilt_image(
+            build_data["id"],
+            build_data["images"][0]["name"],
+            data_from_db.get("subscription_list", []),
+        )
     return {"id": build_data["id"]}
 
 
@@ -207,7 +284,7 @@ def get_build_info(build_id: str):
             .next()
         )
         del build_object["id"]
-        del build_object["dockerhub_token"]
+        build_object.pop("dockerhub_token", None)
         return build_object
     except StopIteration:
         raise BuildNotFound
@@ -474,7 +551,10 @@ def build_completed(
         identifier is not found.
         BuildNotFound: Raised when object with given build identifier was
         not found.
+        BuildsDisabled: Raised when builds are switched off.
     """
+    if not builds_enabled():
+        raise BuildsDisabled
     db_collection_repositories = (
         current_app.config["FOCA"]
         .db.dbs["pubgradeStore"]
