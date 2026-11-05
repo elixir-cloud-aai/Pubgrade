@@ -490,6 +490,36 @@ class TestBuild:
             assert data["status"] == "SUCCEEDED"
             assert res["id"] == MOCK_REPOSITORY_2["build_list"][0]
 
+    def test_build_completed_build_of_other_repository(self):
+        """A repository's token only completes that repository's builds."""
+        self.setup_with_build()
+        builds_collection = (
+            self.app.config["FOCA"]
+            .db.dbs["pubgradeStore"]
+            .collections["builds"]
+            .client
+        )
+        builds_collection.insert_one({"id": "other", "status": "QUEUED"})
+        with self.app.app_context():
+            with pytest.raises(BuildNotFound):
+                build_completed(
+                    MOCK_REPOSITORY_2["id"],
+                    "other",
+                    MOCK_REPOSITORY_2["access_token"],
+                )
+        assert builds_collection.find_one({"id": "other"})["status"] == "QUEUED"
+
+    def test_build_completed_listed_build_is_gone(self):
+        """A build listed at the repository, but no longer stored, isn't found."""
+        self.setup()
+        with self.app.app_context():
+            with pytest.raises(BuildNotFound):
+                build_completed(
+                    MOCK_REPOSITORY_2["id"],
+                    MOCK_REPOSITORY_2["build_list"][0],
+                    MOCK_REPOSITORY_2["access_token"],
+                )
+
     def test_build_completed_build_not_found(self):
         self.setup_with_build()
         with self.app.app_context():

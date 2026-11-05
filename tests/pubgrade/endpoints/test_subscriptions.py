@@ -1,6 +1,7 @@
 """Tests for /subscriptions endpoint """
 import json
 import threading
+import time
 from unittest.mock import patch, MagicMock
 
 import mongomock
@@ -627,6 +628,34 @@ class TestSubscriptions:
                 ids, "org/image:1", MOCK_BUILD_INFO["id"]
             )
         assert [result["result"] for result in results] == ["delivered"] * count
+
+    def test_notify_all_bounds_threads_by_limit(self):
+        """IDs beyond the limit, e.g., from older data, add no more threads."""
+        lock = threading.Lock()
+        running = [0]
+        highest = [0]
+
+        def request(*args, **kwargs):
+            with lock:
+                running[0] += 1
+                highest[0] = max(highest[0], running[0])
+            time.sleep(0.05)
+            with lock:
+                running[0] -= 1
+            return MagicMock(status_code=200)
+
+        ids = [f"sub{i}" for i in range(6)]
+        self.setup()
+        self.app.config["FOCA"].endpoints["subscriptions"][
+            "max_per_repository"
+        ] = 2
+        self.insert_subscriptions(*ids)
+        with self.app.app_context(), patch("requests.request", request):
+            results = notify_all_subscriptions(
+                ids, "org/image:1", MOCK_BUILD_INFO["id"]
+            )
+        assert [result["result"] for result in results] == ["delivered"] * 6
+        assert highest[0] == 2
 
     def test_notify_all_failure_does_not_stop_others(self):
         """Failures of any kind stay with their subscription."""
