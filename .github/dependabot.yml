@@ -1,0 +1,12 @@
+version: 2
+# Dependencies of the app follow with the move to a newer FOCA, whose base
+# image pins most of them
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    target-branch: dev
+    groups:
+      actions:
+        patterns: ["*"]

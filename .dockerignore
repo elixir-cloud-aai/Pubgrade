@@ -13,3 +13,8 @@ src
 venv/
 # Ignore CI-related files and dirs
 .travis.yml
+
+# Never put secrets into the image
+.env*
+!.env.example
+.venv

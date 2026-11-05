@@ -2,7 +2,6 @@
 
 [![License][badge-license]][badge-url-license]
 [![Build_status][badge-build-status]][badge-url-build-status]
-[![Coverage Status][coverage-badge-svg]][badge-url-coverage]
 
 ## Description
 
@@ -25,9 +24,9 @@ Currently supported features:
 
 1. Install and setup [kubernetes][kubernetes-install].
 2. Install [Helm][helm-install].
-3. Modify deployment/values.yaml.
+3. Modify helm/values.yaml.
 4. Create a namespace. `kubectl create namespace pubgrade`
-5. Create deployment using helm. `helm install pubgrade deployment/ -n pubgrade`
+5. Create deployment using helm. `helm install pubgrade helm/ -n pubgrade`
 
 ## Usage
 
@@ -123,6 +122,17 @@ changes. Please refer to our organization's [contribution guidelines][contributi
 contribute. Please mind the [code of conduct][coc] for all interactions with
 the community.
 
+## Development
+
+`make test` builds the image and runs the unit tests in it, with coverage: the
+base image of [FOCA][foca] pins most of the dependencies. Some tests clone a
+public repository, so they need network access.
+
+[CI](.github/workflows/ci.yml) runs on pull requests and pushes to `dev`. The
+job `CI passed` sums up all other jobs. Pushes to `dev` publish
+`elixircloud/pubgrade` and `elixircloud/pubgrade-updater`, tagged `dev`,
+`sha-<commit>` and `<YYYYMMDD>`.
+
 ## Versioning
 
 The project adopts the [semantic versioning][semver] scheme for versioning.
@@ -142,12 +152,9 @@ via chat or email. Please mention the name of this service for any inquiry,
 proposal, question etc.
 
 [anim-schema]: images/app-schema-animation.gif
-[badge-build-status]: https://travis-ci.com/elixir-cloud-aai/Pubgrade.svg?branch=dev
-[badge-coverage]: https://coveralls.io/repos/github/elixir-cloud-aai/Pubgrade/badge.svg?branch=dev
+[badge-build-status]: https://github.com/elixir-cloud-aai/Pubgrade/actions/workflows/ci.yml/badge.svg?branch=dev
 [badge-license]: https://img.shields.io/badge/license-Apache%202.0-blue.svg
-[badge-url-build-status]: https://travis-ci.com/elixir-cloud-aai/Pubgrade
-[badge-url-coverage]: https://coveralls.io/github/elixir-cloud-aai/Pubgrade?branch=dev
-[coverage-badge-svg]: https://coveralls.io/repos/github/elixir-cloud-aai/Pubgrade/badge.svg?branch=dev
+[badge-url-build-status]: https://github.com/elixir-cloud-aai/Pubgrade/actions/workflows/ci.yml
 [contributing]: https://github.com/elixir-cloud-aai/elixir-cloud-aai/blob/dev/CONTRIBUTING.md
 [elixir-cloud]: https://github.com/elixir-cloud-aai/elixir-cloud-aai
 [elixir-cloud-registry]: https://cloud-registry.rahtiapp.fi/ga4gh/registry/v1/ui/
@@ -158,5 +165,6 @@ proposal, question etc.
 [license]: LICENSE
 [badge-license]: https://img.shields.io/badge/license-Apache%202.0-blue.svg
 [badge-url-license]: http://www.apache.org/licenses/LICENSE-2.0
+[foca]: https://github.com/elixir-cloud-aai/foca
 [ga4gh]: https://www.ga4gh.org/
 [coc]: https://github.com/elixir-cloud-aai/elixir-cloud-aai/blob/dev/CODE_OF_CONDUCT.md

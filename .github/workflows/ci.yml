@@ -1,0 +1,239 @@
+# Everything that must pass on pull requests and pushes to `dev`: the pull
+# request title, the unit tests, the chart, a smoke test of the image and,
+# on pushes, publishing the images. The gate `passed` ("CI passed") is the only
+# check to require. No `paths:` filters, so that the gate always reports; skip
+# jobs with `if:` instead (and allow the skip in the gate). Runs also when a
+# pull request is edited, so that the title check follows the title
+
+name: CI
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+    branches: [dev]
+
+permissions:
+  contents: read
+
+# Cancel superseded runs of a pull request; runs for pushes get their own
+# group, so that queued runs for successive pushes are not dropped. Runs for
+# edits that leave the title unchanged share a group of their own, so that they
+# cancel each other but not the run for the pull request's commit
+concurrency:
+  group: >-
+    ${{ github.workflow }}-${{
+      github.event_name == 'push' && github.sha ||
+      github.event.action == 'edited' && !github.event.changes.title &&
+        format('{0}-edited', github.ref) ||
+      github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+
+  # Pull request titles become the commit messages on `dev` (squash merges):
+  # Conventional Commits, at most 50 characters (shared action of
+  # elixir-cloud-aai/.github, pinned to the commit of a release). Skipped on
+  # pushes and for Dependabot, whose titles can't be configured to pass,
+  # unless someone else edits the title
+  title:
+    name: PR title
+    if: >-
+      github.event_name == 'pull_request' && (
+        github.event.pull_request.user.login != 'dependabot[bot]' ||
+        github.event.changes.title &&
+        github.event.sender.login != 'dependabot[bot]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Check PR title
+        uses: elixir-cloud-aai/.github/actions/pr-title@743e82d290a53768454999e413756a924e383259 # v1.0.0
+
+  # In the image, as the FOCA base image pins most of the dependencies
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Run unit tests with coverage
+        run: make test
+
+  chart:
+    name: Chart
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v3.22.1
+      - name: Lint chart
+        run: helm lint helm --strict
+      - name: Render chart
+        run: helm template pubgrade helm --namespace pubgrade > /dev/null
+
+  # Starts the image with MongoDB, as the configuration in the image expects it
+  smoke:
+    name: Smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      API: http://localhost:8080
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build images
+        run: |
+          docker build --tag pubgrade:smoke .
+          docker build --tag pubgrade-updater:smoke \
+            --file build-complete-updater/Dockerfile .
+      - name: Start app
+        run: |
+          docker network create smoke
+          docker run --detach --name mongodb --network smoke \
+            --network-alias mongodb.pubgrade-ns mongo:7.0
+          docker run --detach --name pubgrade --network smoke \
+            --publish 8080:8080 pubgrade:smoke
+          for _ in $(seq 1 60); do
+            if curl --fail --silent --output /dev/null "${API}/ui/"; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::App did not respond"
+          exit 1
+      - name: Check API with MongoDB
+        run: tests/smoke.sh "${API}"
+      - name: Show app logs
+        if: failure()
+        run: docker logs pubgrade
+
+  # Report only (an artifact, no alerts), as the old base image has many
+  # findings: this job can't pass as a gate before the move to a newer FOCA.
+  # Without credentials, like the other jobs on pull requests
+  scan:
+    name: Scan image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build image
+        run: docker build --tag pubgrade:scan .
+      - name: Scan image
+        uses: elixir-cloud-aai/.github/actions/scan-image@743e82d290a53768454999e413756a924e383259 # v1.0.0
+        with:
+          image: pubgrade:scan
+          category: image
+          upload: "false"
+          report: "true"
+          fail: "false"
+
+  # On pushes, after the checks. `dev` follows the branch; `sha-<commit>` and
+  # the date don't change with later commits (a later commit of the same day
+  # replaces the date's tag). Never `latest`, which is for releases
+  push:
+    name: Push image (${{ matrix.image }})
+    if: ${{ github.event_name == 'push' }}
+    needs: [test, chart, smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: pubgrade
+            file: Dockerfile
+          - image: pubgrade-updater
+            file: build-complete-updater/Dockerfile
+    # Publish one image at a time, and only for the newest commit on the
+    # branch, so that an older run cannot overwrite `dev` with older code
+    concurrency:
+      group: ${{ github.workflow }}-push-${{ matrix.image }}-${{ github.ref }}
+      cancel-in-progress: false
+    env:
+      IMAGE_NAME: docker.io/${{ vars.DOCKERHUB_ORG || 'elixircloud' }}/${{ matrix.image }}
+    steps:
+      - name: Check that commit is still the branch head
+        id: head
+        env:
+          REPOSITORY: ${{ github.repository }}
+          REF: ${{ github.ref }}
+          SHA: ${{ github.sha }}
+        run: |
+          head=$(git ls-remote "https://github.com/${REPOSITORY}.git" "${REF}" | cut -f1)
+          [ -n "${head}" ] || { echo "::error::Could not look up ${REF}"; exit 1; }
+          if [ "${head}" = "${SHA}" ]; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Skipping push: ${REF} has moved on to ${head}"
+          fi
+      - name: Check out repository
+        if: steps.head.outputs.current == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Generate tags
+        id: tags
+        if: steps.head.outputs.current == 'true'
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          {
+            echo "tags<<EOT"
+            echo "${IMAGE_NAME}:dev"
+            echo "${IMAGE_NAME}:sha-${SHA}"
+            echo "${IMAGE_NAME}:$(date '+%Y%m%d')"
+            echo "EOT"
+          } >> "$GITHUB_OUTPUT"
+      - name: Set up Docker Buildx
+        if: steps.head.outputs.current == 'true'
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Log in to Docker Hub
+        if: steps.head.outputs.current == 'true'
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          username: ${{ secrets.DOCKERHUB_LOGIN }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build and push image
+        if: steps.head.outputs.current == 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: ${{ matrix.file }}
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          sbom: true
+          provenance: mode=max
+
+  # The only check to require: passes if every other job passed, or was skipped
+  # where that is intended: `push` on pull requests. Any other result (failure,
+  # cancelled, or an unintended skip) fails it. Add every new job to `needs`
+  passed:
+    name: CI passed
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: always()
+    needs: [title, test, chart, smoke, scan, push]
+    permissions: {}
+    steps:
+      - name: Check results of all jobs
+        uses: elixir-cloud-aai/.github/actions/gate@743e82d290a53768454999e413756a924e383259 # v1.0.0
+        with:
+          needs: ${{ toJSON(needs) }}
+          # `title` is skipped on purpose on pushes and for Dependabot, `push`
+          # on pull requests
+          allow-skipped: ${{ github.event_name == 'pull_request' && 'title push' || 'title' }}
