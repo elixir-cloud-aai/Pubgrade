@@ -19,6 +19,12 @@ class RepositoryNotFound(NotFound):
     pass
 
 
+class TooManySubscriptions(Forbidden):
+    """Raised when a repository has reached its limit of subscriptions."""
+
+    pass
+
+
 class BuildNotFound(NotFound):
     """Raised when object with given build identifier was not found."""
 
@@ -195,5 +201,9 @@ exceptions = {
     InvalidImage: {
         "msg": "The request must name exactly one image, with a tag.",
         "status_code": "400",
+    },
+    TooManySubscriptions: {
+        "msg": "The repository has reached its limit of subscriptions.",
+        "status_code": "403",
     },
 }

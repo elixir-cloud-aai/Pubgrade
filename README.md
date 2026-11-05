@@ -139,7 +139,9 @@ configuration, by default 10 seconds, for connecting and for the response). Resu
 are done, are in the field `notifications` of the build
 (`GET /repositories/{repo_id}/builds/{build_id}`): `delivered` for a 2xx
 response, `failed` for another response or none in time, `skipped` if the
-subscription doesn't match the build.
+subscription doesn't match the build. A repository takes at most 100
+subscriptions (`endpoints.subscriptions.max_per_repository`); further ones get a
+403.
 
 ### Configuration
 

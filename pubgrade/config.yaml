@@ -107,6 +107,8 @@ endpoints:
       # Publishing waits for this, so with both, keep it below the time limit
       # of the Route or Ingress (e.g., 30 seconds by default on OpenShift)
       notification_timeout: 10
+      # Each subscriber of a repository gets its own thread when publishing
+      max_per_repository: 100
       # Users that can verify other users: `name`, `uid`, `user_access_token`.
       # At each start, the database is made to match this list
       admin_users: []
