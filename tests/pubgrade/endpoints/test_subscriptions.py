@@ -15,6 +15,7 @@ from pubgrade.errors.exceptions import (
     RepositoryNotFound,
     UserNotFound,
     SubscriptionNotFound,
+    TooManySubscriptions,
     BuildNotFound,
     UserNotVerified,
 )
@@ -126,6 +127,25 @@ class TestSubscriptions:
             assert isinstance(res, dict)
             assert res["subscription_id"] in data["subscription_list"]
             assert subscription["state"] == "Inactive"
+
+    def test_register_subscription_limit(self):
+        """A repository takes no more subscriptions than configured."""
+        self.setup()
+        self.app.config["FOCA"].endpoints["subscriptions"][
+            "max_per_repository"
+        ] = 1
+        with self.app.app_context():
+            register_subscription(
+                MOCK_USER["uid"],
+                MOCK_USER["user_access_token"],
+                dict(SUBSCRIPTION_PAYLOAD),
+            )
+            with pytest.raises(TooManySubscriptions):
+                register_subscription(
+                    MOCK_USER["uid"],
+                    MOCK_USER["user_access_token"],
+                    dict(SUBSCRIPTION_PAYLOAD),
+                )
 
     def test_register_subscription_duplicate_key_error(self):
         self.setup()
@@ -589,6 +609,24 @@ class TestSubscriptions:
                 ["sub1", "sub2", "sub3"], "org/image:1", MOCK_BUILD_INFO["id"]
             )
         assert [result["result"] for result in results] == ["delivered"] * 3
+
+    def test_notify_all_does_not_queue_behind_hanging_calls(self):
+        """Every subscriber gets its call, however many others hang."""
+        count = 40
+        ids = [f"sub{i}" for i in range(count)]
+        barrier = threading.Barrier(count, timeout=10)
+
+        def request(*args, **kwargs):
+            barrier.wait()
+            return MagicMock(status_code=200)
+
+        self.setup()
+        self.insert_subscriptions(*ids)
+        with self.app.app_context(), patch("requests.request", request):
+            results = notify_all_subscriptions(
+                ids, "org/image:1", MOCK_BUILD_INFO["id"]
+            )
+        assert [result["result"] for result in results] == ["delivered"] * count
 
     def test_notify_all_failure_does_not_stop_others(self):
         """Failures of any kind stay with their subscription."""

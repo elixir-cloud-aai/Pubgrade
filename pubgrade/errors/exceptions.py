@@ -19,6 +19,12 @@ class RepositoryNotFound(NotFound):
     pass
 
 
+class TooManySubscriptions(Forbidden):
+    """Raised when a repository has reached its limit of subscriptions."""
+
+    pass
+
+
 class BuildNotFound(NotFound):
     """Raised when object with given build identifier was not found."""
 
@@ -164,6 +170,10 @@ exceptions = {
     },
     UserNotVerified: {
         "msg": "User is not verified by the super user.",
+        "status_code": "403",
+    },
+    TooManySubscriptions: {
+        "msg": "The repository has reached its limit of subscriptions.",
         "status_code": "403",
     },
 }

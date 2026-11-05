@@ -8,6 +8,7 @@ from pubgrade.errors.exceptions import (
     RepositoryNotFound,
     UserNotFound,
     SubscriptionNotFound,
+    TooManySubscriptions,
     BuildNotFound,
     InternalServerError,
     UserNotVerified,
@@ -22,7 +23,10 @@ logger = logging.getLogger(__name__)
 
 # Seconds, if `endpoints.subscriptions.notification_timeout` isn't set
 DEFAULT_NOTIFICATION_TIMEOUT = 10
-MAX_NOTIFICATION_THREADS = 32
+# Subscriptions per repository, if
+# `endpoints.subscriptions.max_per_repository` isn't set. This also limits the
+# threads per notification, as each subscriber gets its own
+DEFAULT_MAX_SUBSCRIPTIONS = 100
 # Seconds that all calls of a notification may take beyond connecting and
 # waiting for the response
 NOTIFICATION_MARGIN = 5
@@ -45,6 +49,8 @@ def register_subscription(uid: str, user_access_token: str, data: dict):
         Unauthorized: Raised when access_token is invalid or not specified
         in request.
         UserNotFound: Raised when there is no user with specified uid.
+        TooManySubscriptions: Raised when the repository has reached the limit
+        `endpoints.subscriptions.max_per_repository`.
     """
     db_collection_subscriptions = (
         current_app.config["FOCA"]
@@ -87,6 +93,12 @@ def register_subscription(uid: str, user_access_token: str, data: dict):
         raise Unauthorized
     if data_from_db_repository is None:
         raise RepositoryNotFound
+    if db_collection_subscriptions.count_documents(
+        {"repository_id": data["repository_id"]}
+    ) >= current_app.config["FOCA"].endpoints["subscriptions"].get(
+        "max_per_repository", DEFAULT_MAX_SUBSCRIPTIONS
+    ):
+        raise TooManySubscriptions
     for i in range(retries):
         logger.debug(f"Trying to insert/update object: try {i}" + str(data))
         data["id"] = generate_id(
@@ -356,10 +368,11 @@ def notify_all_subscriptions(
 ) -> List[Dict[str, Any]]:
     """Notify subscriptions concurrently and store the results on the build.
 
-    One subscription that fails or hangs affects none of the others: each call
-    has a timeout (`endpoints.subscriptions.notification_timeout`), for
-    connecting and for the response, and calls that go on for longer than these
-    together count as failed.
+    One subscription that fails or hangs affects none of the others: each one
+    has its own thread, so none waits behind another, and each call has a
+    timeout (`endpoints.subscriptions.notification_timeout`), for connecting
+    and for the response. Calls that go on for longer than these together count
+    as failed.
 
     Args:
         subscription_ids: Identifiers of the subscriptions.
@@ -394,9 +407,7 @@ def notify_all_subscriptions(
 
     results: List[Dict[str, Any]] = []
     if subscription_ids:
-        executor = ThreadPoolExecutor(
-            max_workers=min(len(subscription_ids), MAX_NOTIFICATION_THREADS)
-        )
+        executor = ThreadPoolExecutor(max_workers=len(subscription_ids))
         futures = {
             executor.submit(notify, subscription_id): subscription_id
             for subscription_id in subscription_ids
@@ -405,7 +416,7 @@ def notify_all_subscriptions(
             futures, timeout=2 * _notification_timeout() + NOTIFICATION_MARGIN
         )
         # Calls that are still running end with their timeouts
-        executor.shutdown(wait=False, cancel_futures=True)
+        executor.shutdown(wait=False)
         results = [
             future.result()
             if future in done
