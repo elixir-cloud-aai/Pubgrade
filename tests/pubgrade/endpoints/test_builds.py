@@ -752,6 +752,19 @@ class TestPublish:
                     self.repository["id"], "wrong", {"images": []}
                 )
 
+    @patch("pubgrade.modules.endpoints.builds.create_build")
+    def test_build_rejects_image_without_tag(self, create_build):
+        """Also with builds on, images need a tag."""
+        self.app.config["FOCA"].endpoints["builds"]["enabled"] = True
+        with pytest.raises(InvalidImage):
+            self.publish(
+                {
+                    **self.payload,
+                    "images": [{"name": "org/image", "location": "./Dockerfile"}],
+                }
+            )
+        create_build.assert_not_called()
+
     def test_build_completed_rejected(self):
         """`PUT` on a build is rejected."""
         with self.app.app_context():

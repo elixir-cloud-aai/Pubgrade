@@ -112,9 +112,10 @@ Settings under `endpoints` in the configuration (`pubgrade/config.yaml`):
   and builds the image, and step 5 also needs a `location` for the image and a
   `dockerhub_token`. With this off, such requests get a 403, as does
   `PUT /repositories/{repo_id}/builds/{build_id}`.
-- `repository.registration_enabled` and `subscriptions.registration_enabled`
-  (default: on): switch these off once repositories and subscriptions are set
-  up. Further registrations then get a 403.
+- `repository.registration_enabled`, `user.registration_enabled` and
+  `subscriptions.registration_enabled` (default: on): switch these off once
+  repositories, users and subscriptions are set up. Further registrations then
+  get a 403.
 
 ### Queries
 

@@ -90,6 +90,8 @@ endpoints:
         id_length: 6
         retries: 3
     user:
+        # Switch off after setup to close registration
+        registration_enabled: True
         uid_charset: [string.ascii_lowercase, string.digits , '.' , '-']
         uid_length: 6
         retries: 3

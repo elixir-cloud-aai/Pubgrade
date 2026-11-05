@@ -58,15 +58,14 @@ def validate_prebuilt_image(build_data: dict) -> None:
 
     Raises:
         BuildsDisabled: Raised when the request asks for a build.
-        InvalidImage: Raised when the request doesn't name exactly one image
-        with a tag.
+        InvalidImage: Raised when the request doesn't name exactly one image.
     """
     images = build_data["images"]
     if "dockerhub_token" in build_data or any(
         "location" in image for image in images
     ):
         raise BuildsDisabled
-    if len(images) != 1 or not IMAGE_WITH_TAG.fullmatch(images[0]["name"]):
+    if len(images) != 1:
         raise InvalidImage
 
 
@@ -115,7 +114,8 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
         identifier.
         BuildsDisabled: Raised when the request asks for a build, with builds
         switched off.
-        InvalidImage: Raised when a prebuilt image is invalid.
+        InvalidImage: Raised when an image has no tag, or a request for a
+        prebuilt image doesn't name exactly one.
     """
     db_collection_builds = (
         current_app.config["FOCA"]
@@ -150,6 +150,10 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
         raise RepositoryNotFound
     if data_from_db["access_token"] != access_token:
         raise Unauthorized
+    if not all(
+        IMAGE_WITH_TAG.fullmatch(image["name"]) for image in build_data["images"]
+    ):
+        raise InvalidImage
     build_path = builds_enabled()
     if not build_path:
         validate_prebuilt_image(build_data)
