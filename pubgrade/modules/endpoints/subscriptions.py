@@ -1,4 +1,4 @@
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait
 import datetime
 import logging
 from typing import Any, Dict, List, Optional
@@ -21,8 +21,11 @@ from werkzeug.exceptions import Unauthorized
 logger = logging.getLogger(__name__)
 
 # Seconds, if `endpoints.subscriptions.notification_timeout` isn't set
-DEFAULT_NOTIFICATION_TIMEOUT = 30
+DEFAULT_NOTIFICATION_TIMEOUT = 10
 MAX_NOTIFICATION_THREADS = 32
+# Seconds that all calls of a notification may take beyond connecting and
+# waiting for the response
+NOTIFICATION_MARGIN = 5
 
 
 def register_subscription(uid: str, user_access_token: str, data: dict):
@@ -195,6 +198,8 @@ def get_subscription_info(
         raise UserNotVerified
     if data_from_db_user["user_access_token"] != user_access_token:
         raise Unauthorized
+    if subscription_id not in data_from_db_user.get("subscription_list", []):
+        raise SubscriptionNotFound
     subscription_object = db_collection_subscriptions.find_one(
         {"id": subscription_id}
     )
@@ -245,6 +250,8 @@ def delete_subscription(
         raise UserNotVerified
     if data_from_db_user["user_access_token"] != user_access_token:
         raise Unauthorized
+    if subscription_id not in data_from_db_user.get("subscription_list", []):
+        raise SubscriptionNotFound
     data = db_collection_subscriptions.delete_one({"id": subscription_id})
     if data.deleted_count > 0:
         return data.deleted_count
@@ -307,12 +314,10 @@ def notify_subscriptions(
     del subscription_object["_id"]
     subscription_object["build_id"] = build_id
     name, _, tag = image.rpartition(":")
-    timeout = current_app.config["FOCA"].endpoints["subscriptions"].get(
-        "notification_timeout", DEFAULT_NOTIFICATION_TIMEOUT
-    )
     http_status = None
     try:
-        # No redirects, as they would forward the token to another host
+        # No redirects, as they would forward the token to another host. Only
+        # the status counts: the body isn't read
         response = requests.request(
             "PUT",
             subscription_object["callback_url"],
@@ -321,9 +326,11 @@ def notify_subscriptions(
                 "Content-Type": "application/json",
             },
             data=json.dumps({"image_name": name, "tag": tag}),
-            timeout=timeout,
+            timeout=_notification_timeout(),
             allow_redirects=False,
+            stream=True,
         )
+        response.close()
         http_status = response.status_code
         result = "delivered" if 200 <= http_status < 300 else "failed"
     except requests.exceptions.RequestException as error:
@@ -349,8 +356,10 @@ def notify_all_subscriptions(
 ) -> List[Dict[str, Any]]:
     """Notify subscriptions concurrently and store the results on the build.
 
-    One subscription that fails or hangs affects none of the others; each call
-    has a timeout (`endpoints.subscriptions.notification_timeout`).
+    One subscription that fails or hangs affects none of the others: each call
+    has a timeout (`endpoints.subscriptions.notification_timeout`), for
+    connecting and for the response, and calls that go on for longer than these
+    together count as failed.
 
     Args:
         subscription_ids: Identifiers of the subscriptions.
@@ -385,14 +394,39 @@ def notify_all_subscriptions(
 
     results: List[Dict[str, Any]] = []
     if subscription_ids:
-        with ThreadPoolExecutor(
+        executor = ThreadPoolExecutor(
             max_workers=min(len(subscription_ids), MAX_NOTIFICATION_THREADS)
-        ) as executor:
-            results = list(executor.map(notify, subscription_ids))
+        )
+        futures = {
+            executor.submit(notify, subscription_id): subscription_id
+            for subscription_id in subscription_ids
+        }
+        done, _ = wait(
+            futures, timeout=2 * _notification_timeout() + NOTIFICATION_MARGIN
+        )
+        # Calls that are still running end with their timeouts
+        executor.shutdown(wait=False, cancel_futures=True)
+        results = [
+            future.result()
+            if future in done
+            else _notification_result(subscription_id, "failed")
+            for future, subscription_id in futures.items()
+        ]
     app.config["FOCA"].db.dbs["pubgradeStore"].collections[
         "builds"
     ].client.update_one({"id": build_id}, {"$set": {"notifications": results}})
     return results
+
+
+def _notification_timeout() -> float:
+    """Get the timeout for calls to subscribers.
+
+    Returns:
+        The setting `endpoints.subscriptions.notification_timeout`, in seconds.
+    """
+    return current_app.config["FOCA"].endpoints["subscriptions"].get(
+        "notification_timeout", DEFAULT_NOTIFICATION_TIMEOUT
+    )
 
 
 def _notification_result(

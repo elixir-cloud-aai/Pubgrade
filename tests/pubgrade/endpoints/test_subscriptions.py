@@ -95,7 +95,10 @@ class TestSubscriptions:
     def insert_subscription(self):
         self.app.config["FOCA"].db.dbs["pubgradeStore"].collections[
             "users"
-        ].client.insert_one(MOCK_USER_DB)
+        ].client.update_one(
+            {"uid": MOCK_USER_DB["uid"]},
+            {"$set": {"subscription_list": MOCK_USER_DB["subscription_list"]}},
+        )
         self.app.config["FOCA"].db.dbs["pubgradeStore"].collections[
             "subscriptions"
         ].client.insert_one(MOCK_SUBSCRIPTION_INFO)
@@ -531,8 +534,10 @@ class TestSubscriptions:
                 MOCK_BUILD_INFO["id"],
             )
         kwargs = request.call_args[1]
-        assert kwargs["timeout"] == 30
+        assert kwargs["timeout"] == 10
         assert kwargs["allow_redirects"] is False
+        assert kwargs["stream"] is True
+        request.return_value.close.assert_called_once_with()
         assert json.loads(kwargs["data"]) == {
             "image_name": "registry.example.org:5000/pubgrade",
             "tag": "0.0.1",
@@ -641,3 +646,83 @@ class TestSubscriptions:
             )
         assert results == []
         assert self.get_stored_notifications() == []
+
+    def test_notify_all_bounds_total_time(self):
+        """A call that goes on past its timeouts counts as failed."""
+        release = threading.Event()
+
+        def request(method, url, **kwargs):
+            if url.endswith("hanging"):
+                release.wait(30)
+            return MagicMock(status_code=200)
+
+        self.setup()
+        self.app.config["FOCA"].endpoints["subscriptions"][
+            "notification_timeout"
+        ] = 0.1
+        self.insert_subscriptions("hanging", "good")
+        try:
+            with self.app.app_context(), patch(
+                "requests.request", request
+            ), patch(
+                "pubgrade.modules.endpoints.subscriptions.NOTIFICATION_MARGIN",
+                0,
+            ):
+                results = notify_all_subscriptions(
+                    ["hanging", "good"], "org/image:1", MOCK_BUILD_INFO["id"]
+                )
+        finally:
+            release.set()
+        assert {r["subscription_id"]: r["result"] for r in results} == {
+            "hanging": "failed",
+            "good": "delivered",
+        }
+
+    def test_get_subscription_info_of_other_user(self):
+        """Users only see their own subscriptions."""
+        self.setup()
+        self.app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+            "subscriptions"
+        ].client.insert_one(MOCK_SUBSCRIPTION_INFO)
+        with self.app.app_context():
+            with pytest.raises(SubscriptionNotFound):
+                get_subscription_info(
+                    MOCK_USER["uid"],
+                    MOCK_USER["user_access_token"],
+                    MOCK_SUBSCRIPTION_INFO["id"],
+                )
+
+    def test_delete_subscription_of_other_user(self):
+        """Users only delete their own subscriptions."""
+        self.setup()
+        self.app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+            "subscriptions"
+        ].client.insert_one(MOCK_SUBSCRIPTION_INFO)
+        with self.app.app_context():
+            with pytest.raises(SubscriptionNotFound):
+                delete_subscription(
+                    MOCK_USER["uid"],
+                    MOCK_USER["user_access_token"],
+                    MOCK_SUBSCRIPTION_INFO["id"],
+                )
+
+    def test_subscription_gone_but_listed(self):
+        """A subscription listed for its user, but deleted, isn't found."""
+        self.setup()
+        self.insert_subscription()
+        self.app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+            "subscriptions"
+        ].client.delete_many({})
+        with self.app.app_context():
+            with pytest.raises(SubscriptionNotFound):
+                get_subscription_info(
+                    MOCK_USER["uid"],
+                    MOCK_USER["user_access_token"],
+                    MOCK_SUBSCRIPTION_INFO["id"],
+                )
+            with pytest.raises(SubscriptionNotFound):
+                delete_subscription(
+                    MOCK_USER["uid"],
+                    MOCK_USER["user_access_token"],
+                    MOCK_SUBSCRIPTION_INFO["id"],
+                )

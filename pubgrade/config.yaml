@@ -95,8 +95,10 @@ endpoints:
         charset: [ string.ascii_lowercase, string.digits , '.' , '-' ]
         length: 32
     subscriptions:
-      # Seconds for each call to a subscriber
-      notification_timeout: 30
+      # Seconds for each call to a subscriber, to connect and for the response.
+      # Publishing waits for this, so with both, keep it below the time limit
+      # of the Route or Ingress (e.g., 30 seconds by default on OpenShift)
+      notification_timeout: 10
       admin_users:
         - name: 'Akash'
           uid: 'akash.saini'
