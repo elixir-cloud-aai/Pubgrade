@@ -5,6 +5,6 @@ metadata:
   name: pubgrade
 rules:
   - apiGroups: [""]
-    resources: ["pods", "services"]
+    resources: ["pods"]
     verbs: ["get", "list", "watch", "create", "update", "delete"]
 {{- end }}

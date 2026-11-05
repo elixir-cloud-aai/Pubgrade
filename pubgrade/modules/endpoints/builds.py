@@ -35,9 +35,13 @@ BASE_DIR = os.getenv("BASE_DIR")
 if BASE_DIR is None:
     BASE_DIR = '/pubgrade_temp_files'
 
-# An image with a tag (no digest), optionally with a registry and its port
+# An image with a tag (no digest), optionally with a registry and its port,
+# following Docker's rules for references
 IMAGE_WITH_TAG = re.compile(
-    r"[a-zA-Z0-9][a-zA-Z0-9._:/-]*:[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}"
+    r"(?:(?:localhost|[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+|[a-zA-Z0-9-]+(?=:))"
+    r"(?::[0-9]+)?/)?"
+    r"[a-z0-9]+(?:[._-]+[a-z0-9]+)*(?:/[a-z0-9]+(?:[._-]+[a-z0-9]+)*)*"
+    r":[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}"
 )
 
 
@@ -114,8 +118,9 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
         identifier.
         BuildsDisabled: Raised when the request asks for a build, with builds
         switched off.
-        InvalidImage: Raised when an image has no tag, or a request for a
-        prebuilt image doesn't name exactly one.
+        InvalidImage: Raised when there is no image, an image isn't a valid
+        reference with a tag, or a request for a prebuilt image doesn't name
+        exactly one.
     """
     db_collection_builds = (
         current_app.config["FOCA"]
@@ -150,8 +155,9 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
         raise RepositoryNotFound
     if data_from_db["access_token"] != access_token:
         raise Unauthorized
-    if not all(
-        IMAGE_WITH_TAG.fullmatch(image["name"]) for image in build_data["images"]
+    images = build_data.get("images")
+    if not images or not all(
+        IMAGE_WITH_TAG.fullmatch(image.get("name", "")) for image in images
     ):
         raise InvalidImage
     build_path = builds_enabled()
@@ -577,6 +583,8 @@ def build_completed(
         raise RepositoryNotFound
     if data_from_db["access_token"] != project_access_token:
         raise Unauthorized
+    if build_id not in data_from_db.get("build_list", []):
+        raise BuildNotFound
     try:
         data = db_collection_builds.find(
             {'id': build_id}, {'_id': False}

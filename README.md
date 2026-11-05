@@ -47,8 +47,9 @@ assigns its own.
 Builds are off by default. To let Pubgrade build images, set
 `endpoints.builds.enabled` in the configuration and `builds.enabled` in the
 chart, which must match, with the other values under `builds`; this adds an
-updater, a shared volume and rights to manage pods in the namespace. Build pods
-run as root, so builds don't work under OpenShift's default restrictions.
+updater, a shared volume and rights to manage pods in the namespace. The volume
+needs a storage class with `ReadWriteMany` (`builds.volume.storageClass`). Build
+pods run as root, so builds don't work under OpenShift's default restrictions.
 
 ### Moving from chart 0.1
 
@@ -110,6 +111,9 @@ curl --location --request POST 'http://<host_url>:<host_port>/subscriptions' \
     "value": "<branch_name OR tag_name>"
 }'
 ```
+
+   Pubgrade sends `access_token` to `callback_url`, so use `https` for anything
+   outside the cluster.
 
 5. Publish an image. (The repository's CI builds and pushes the image, then
    calls this)

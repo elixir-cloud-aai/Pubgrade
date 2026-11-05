@@ -25,6 +25,7 @@ from pubgrade.errors.exceptions import (
     GitCloningError,
 )
 from pubgrade.modules.endpoints.builds import (
+    IMAGE_WITH_TAG,
     register_builds,
     get_builds,
     get_build_info,
@@ -514,6 +515,36 @@ class TestBuild:
             del os.environ["NAMESPACE"]
         assert remove_files.call_args[0][2] == "any"
 
+    def test_build_completed_build_of_other_repository(self):
+        """A repository's token only completes that repository's builds."""
+        self.setup_with_build()
+        builds_collection = (
+            self.app.config["FOCA"]
+            .db.dbs["pubgradeStore"]
+            .collections["builds"]
+            .client
+        )
+        builds_collection.insert_one({"id": "other", "status": "QUEUED"})
+        with self.app.app_context():
+            with pytest.raises(BuildNotFound):
+                build_completed(
+                    MOCK_REPOSITORY_2["id"],
+                    "other",
+                    MOCK_REPOSITORY_2["access_token"],
+                )
+        assert builds_collection.find_one({"id": "other"})["status"] == "QUEUED"
+
+    def test_build_completed_listed_build_is_gone(self):
+        """A build listed at the repository, but no longer stored, isn't found."""
+        self.setup()
+        with self.app.app_context():
+            with pytest.raises(BuildNotFound):
+                build_completed(
+                    MOCK_REPOSITORY_2["id"],
+                    MOCK_REPOSITORY_2["build_list"][0],
+                    MOCK_REPOSITORY_2["access_token"],
+                )
+
     def test_build_completed_build_not_found(self):
         self.setup_with_build()
         with self.app.app_context():
@@ -784,6 +815,37 @@ class TestPublish:
                 }
             )
         create_build.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "images",
+        [
+            [],
+            [{"location": "./Dockerfile"}],
+            [{"name": "Org/image:1"}],
+            [{"name": "org/image:1:2"}],
+            [{"name": "registry.example.org/Org/image:1"}],
+        ],
+    )
+    def test_build_rejects_invalid_images(self, images):
+        """Requests without valid image references are rejected."""
+        self.app.config["FOCA"].endpoints["builds"]["enabled"] = True
+        with pytest.raises(InvalidImage):
+            self.publish({**self.payload, "images": images})
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "image:1",
+            "org/image:1.0-rc_1",
+            "registry.example.org/org/image:1",
+            "registry.example.org:5000/org/image:1",
+            "registry:5000/org/image:1",
+            "localhost/org/image:1",
+        ],
+    )
+    def test_image_with_tag_accepts_references(self, name):
+        """Valid references pass, with or without a registry."""
+        assert IMAGE_WITH_TAG.fullmatch(name)
 
     def test_build_completed_rejected(self):
         """`PUT` on a build is rejected."""
