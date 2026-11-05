@@ -36,6 +36,7 @@ has "${chart}" 'image: "elixircloud/pubgrade:' "default"
 has "${chart}" 'image: "mongo:7' "default"
 has "${chart}" 'kind: NetworkPolicy$' "default"
 has "${chart}" 'automountServiceAccountToken: false' "default"
+has "$(render --set mongodb.port=27018)" 'args: \["--port", "27018"\]' "MongoDB port"
 
 # OpenShift: a Route, also for the Ingress off by default
 chart="$(render --api-versions route.openshift.io/v1 --set hostName=pubgrade.example.org)"
@@ -71,6 +72,7 @@ for pattern in 'kind: Role$' 'kind: RoleBinding$' 'kind: ServiceAccount$' \
   'name: pubgrade-updater' 'claimName: pubgrade-builds' 'GH_ACCESS_TOKEN'; do
   has "${chart}" "${pattern}" "builds"
 done
+has "${chart}" 'resources: \["pods"\]' "builds"
 if render --set builds.enabled=true > /dev/null 2>&1; then
   echo "::error::Builds without their Secret must fail"
   status=1

@@ -20,6 +20,7 @@ spec:
         - name: mongodb
           image: {{ .Values.mongodb.image | quote }}
           imagePullPolicy: {{ .Values.mongodb.imagePullPolicy }}
+          args: ["--port", {{ .Values.mongodb.port | quote }}]
           ports:
             - name: mongodb
               containerPort: {{ .Values.mongodb.port }}
