@@ -120,6 +120,32 @@ image_of() {
     --output 'jsonpath={.spec.template.spec.containers[0].image}'
 }
 
+# Print a sidecar's report on the Deployment
+sidecar_report() {
+  k exec --namespace "$1" deployment/sidecar -- python -c '
+import sys, urllib.request
+request = urllib.request.Request(
+    "http://localhost:8080/deployment/target",
+    headers={"X-Access-Token": sys.argv[1]},
+)
+with urllib.request.urlopen(request, timeout=30) as response:
+    print(response.read().decode())
+' "${tokens[$1]}"
+}
+
+# Wait until a sidecar reports a status, or fail
+wait_for_report() {
+  local site="$1" status="$2" _ report=""
+  for _ in $(seq 1 90); do
+    report="$(sidecar_report "${site}")"
+    if [ "$(jq -r .status <<< "${report}")" = "${status}" ]; then
+      return 0
+    fi
+    sleep 2
+  done
+  fail "${site}: sidecar didn't report ${status}: ${report}"
+}
+
 # Wait until a site runs an image, and print the seconds this took
 wait_for_rollout() {
   local site="$1" image="$2" start="${SECONDS}" _
@@ -169,11 +195,11 @@ subscribe() {
     | jq -r .subscription_id
 }
 
-declare -A subscriptions
+declare -A subscriptions tokens
 for site in "${SITES[@]}"; do
-  token="$(head -c 24 /dev/urandom | base64 | tr -d '/+=')"
-  create_site "${site}" "${token}"
-  subscriptions[${site}]="$(subscribe "sidecar.${site}" "${token}")"
+  tokens[${site}]="$(head -c 24 /dev/urandom | base64 | tr -d '/+=')"
+  create_site "${site}" "${tokens[${site}]}"
+  subscriptions[${site}]="$(subscribe "sidecar.${site}" "${tokens[${site}]}")"
 done
 unreachable="$(subscribe "nobody.pubgrade" "token")"
 
@@ -187,6 +213,7 @@ echo "Publishing took $((SECONDS - start)) s"
 for site in "${SITES[@]}"; do
   seconds="$(wait_for_rollout "${site}" "${IMAGE}:${NEW_TAG}")"
   echo "${site} rolled out after ${seconds} s more"
+  wait_for_report "${site}" complete
 done
 result="$(call 200 GET "/repositories/${repository_id}/builds/${build_id}")"
 jq . <<< "${result}"
@@ -202,14 +229,12 @@ if grep -Eq 'nobody|callback_url|access_token' <<< "${result}"; then
   fail "The public build shows URLs or tokens"
 fi
 
-# A tag that doesn't exist changes nothing, and the build tells so
-build="$(call 200 POST "/repositories/${repository_id}/builds" "${project_headers}" \
-  "{\"images\": [{\"name\": \"${IMAGE}:does-not-exist\"}], \"head_commit\": {\"tag\": \"does-not-exist\"}}")"
-result="$(call 200 GET "/repositories/${repository_id}/builds/$(jq -r .id <<< "${build}")")"
+# A sidecar accepts a tag that doesn't exist, as an image can take a while to
+# arrive, and only reports the failure after its retries: nothing changes
+call 200 POST "/repositories/${repository_id}/builds" "${project_headers}" \
+  "{\"images\": [{\"name\": \"${IMAGE}:does-not-exist\"}], \"head_commit\": {\"tag\": \"does-not-exist\"}}" > /dev/null
 for site in "${SITES[@]}"; do
-  jq -e --arg id "${subscriptions[${site}]}" \
-    '.notifications[] | select(.subscription_id == $id) | .result == "failed"' \
-    <<< "${result}" > /dev/null || fail "${site} didn't report the missing tag: ${result}"
+  wait_for_report "${site}" failed
   [ "$(image_of "${site}")" = "${IMAGE}:${NEW_TAG}" ] \
     || fail "${site} changed to a tag that doesn't exist: $(image_of "${site}")"
 done
