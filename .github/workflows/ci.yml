@@ -126,6 +126,24 @@ jobs:
         if: failure()
         run: docker logs pubgrade
 
+  # One publish upgrades two namespaces of a local cluster, with Pubgrade from
+  # its chart and sidecars built from the branch `master` of Pubgrade-Sidecar
+  upgrade:
+    name: Upgrade test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v3.22.1
+      - name: Run upgrade test
+        run: tests/e2e/upgrade.sh
+
   # Report only (an artifact, no alerts), as the old base image has many
   # findings: this job can't pass as a gate before the move to a newer FOCA.
   # Without credentials, like the other jobs on pull requests
@@ -237,7 +255,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     if: always()
-    needs: [title, test, chart, smoke, scan, push]
+    needs: [title, test, chart, smoke, upgrade, scan, push]
     permissions: {}
     steps:
       - name: Check results of all jobs

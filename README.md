@@ -192,6 +192,14 @@ the community.
 base image of [FOCA][foca] pins most of the dependencies. Some tests clone a
 public repository, so they need network access.
 
+`tests/e2e/upgrade.sh` tests the whole path, and needs Docker, Helm and jq: it
+starts a throwaway k3s cluster, installs Pubgrade from its chart, sets up two
+namespaces with a Deployment and a sidecar each, publishes one image and checks
+that both roll out. It also covers an unreachable subscriber and a tag that
+doesn't exist. Sidecars are built from the branch `master` of
+[Pubgrade-Sidecar](https://github.com/elixir-cloud-aai/Pubgrade-Sidecar); set
+`SIDECAR_IMAGE` to use a local image instead. CI runs this test as well.
+
 [CI](.github/workflows/ci.yml) runs on pull requests and pushes to `dev`. The
 job `CI passed` sums up all other jobs. Pushes to `dev` publish
 `elixircloud/pubgrade` and `elixircloud/pubgrade-updater`, tagged `dev`,
