@@ -1,2 +1,2 @@
 kubernetes~=17.17.0
-requests==2.32.3
+requests==2.33.0
