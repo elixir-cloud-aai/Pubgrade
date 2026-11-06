@@ -13,11 +13,17 @@ src
 venv/
 # Not needed at runtime
 helm/
+docs/
+external/
+mkdocs.yml
+site/
 
 # Never put secrets into the image
 **/.env*
 !**/.env.example
-.venv
+.venv*
+# A deployment's configuration, with its tokens (see the README)
+/config.yaml
 
 # Test reports
 reports/

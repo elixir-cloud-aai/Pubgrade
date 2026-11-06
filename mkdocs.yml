@@ -1,0 +1,100 @@
+site_name: Pubgrade
+site_description: >-
+  Publish-subscribe service that notifies deployments of new images
+# Read the Docs serves each version under its own path (e.g., `/en/latest/`)
+site_url: !ENV [READTHEDOCS_CANONICAL_URL, "https://pubgrade.readthedocs.io/en/latest/"]
+repo_url: https://github.com/elixir-cloud-aai/Pubgrade
+repo_name: elixir-cloud-aai/Pubgrade
+edit_uri: edit/dev/docs/
+copyright: Copyright &copy; ELIXIR On-Cloud
+
+# Python hooks of the build (not part of the site, nor their bytecode)
+exclude_docs: |
+  hooks.py
+  __pycache__/
+# Adds the documentation of Pubgrade-Sidecar (submodule
+# `external/pubgrade-sidecar`) as a section; see `docs/hooks.py`
+hooks:
+  - docs/hooks.py
+
+# Files included in pages: snippets of `README.md` (`pymdownx.snippets`) and
+# the Sidecar's pages (`docs/hooks.py`)
+watch:
+  - README.md
+  - external/pubgrade-sidecar/docs
+
+theme:
+  name: material
+  features:
+    - content.code.copy
+    - navigation.footer
+    - navigation.indexes
+    - navigation.sections
+    - navigation.top
+    - search.highlight
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  # Sections of `README.md` (between `--8<-- [start:<name>]` and
+  # `--8<-- [end:<name>]`), so that they are not written twice; fails if a
+  # file or section is missing
+  - pymdownx.snippets:
+      check_paths: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+  # For the code reference of Pubgrade-Sidecar (its package is in `app/` of
+  # its repository), with the options of its own `mkdocs.yml`
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: ["external/pubgrade-sidecar/app"]
+          options:
+            docstring_style: google
+            show_source: false
+            show_root_heading: false
+            show_signature_annotations: true
+            separate_signature: true
+            members_order: source
+            filters: ["!^_"]
+
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+
+# The section "Pubgrade-Sidecar" is added at the end by `docs/hooks.py`
+nav:
+  - Home: index.md
+  - Usage: usage.md
+  - Deployment: deployment.md
+  - API: api.md
+  - Development: development.md
