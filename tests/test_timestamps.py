@@ -129,17 +129,29 @@ def test_repair_keeps_concurrent_writes() -> None:
     client = mongomock.MongoClient()
     builds = client.db.builds
     subscriptions = client.db.subscriptions
-    builds.insert_one({"id": "b", "finished_at": "NULL", "status": "RUNNING"})
+    builds.insert_one(
+        {
+            "id": "b",
+            "started_at": "2026-01-02T03:04:05",
+            "finished_at": "NULL",
+            "notifications": [{"finished_at": "2026-01-02T03:04:06"}],
+        }
+    )
     subscriptions.insert_one({"id": "s", "updated_at": "2026-01-02T03:04:05"})
     finished = "2026-01-02T03:05:00+00:00"
+    written = {
+        "started_at": "2026-01-02T03:04:30+00:00",
+        "finished_at": finished,
+        "notifications": [{"finished_at": finished}, {"finished_at": finished}],
+    }
     assert (
         repair_timestamps(
-            _WrittenMeanwhile(builds, {"finished_at": finished}),
+            _WrittenMeanwhile(builds, written),
             _WrittenMeanwhile(subscriptions, {"updated_at": finished}),
         )
         == 0
     )
-    assert builds.find_one({"id": "b"})["finished_at"] == finished
+    assert builds.find_one({"id": "b"}, {"_id": 0}) == {"id": "b", **written}
     assert subscriptions.find_one({"id": "s"})["updated_at"] == finished
 
 

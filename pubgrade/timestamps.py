@@ -65,10 +65,13 @@ def _repaired_fields(document: Dict[str, Any], fields: List[str]) -> Dict[str, A
     Returns:
         Repaired values, by field; empty if nothing needs repair.
     """
+    repaired = {
+        field: _repaired(document[field]) for field in fields if field in document
+    }
     return {
-        field: _repaired(document[field])
-        for field in fields
-        if field in document and _repaired(document[field]) != document[field]
+        field: value
+        for field, value in repaired.items()
+        if value != document[field]
     }
 
 
@@ -147,8 +150,9 @@ def repair_timestamps(
     for build in builds.find(query, fields):
         update = _repaired_fields(build, ["started_at", "finished_at"])
         notifications: List[Dict[str, Any]] = build.get("notifications") or []
-        if _repaired_notifications(notifications) != notifications:
-            update["notifications"] = _repaired_notifications(notifications)
+        repaired = _repaired_notifications(notifications)
+        if repaired != notifications:
+            update["notifications"] = repaired
         stored = {field: build[field] for field in update}
         result = builds.update_one({"_id": build["_id"], **stored}, {"$set": update})
         changed += result.modified_count

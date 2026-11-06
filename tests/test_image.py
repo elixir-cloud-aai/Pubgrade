@@ -3,8 +3,11 @@
 import json
 from pathlib import Path
 import re
+import sys
 
 from foca import gunicorn_config
+from gunicorn.app.wsgiapp import WSGIApplication
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE_IMAGE = re.compile(
@@ -41,7 +44,7 @@ def test_image_serves_app_with_gunicorn() -> None:
     assert command is not None, "No CMD in exec form"
     args = json.loads(command[1])
     assert args[0] == "gunicorn"
-    assert "python:foca.gunicorn_config" in args
+    assert "python:pubgrade.gunicorn_config" in args
     assert args[-1] == "pubgrade.app:create_app()"
     assert gunicorn_config.bind == ["0.0.0.0:8080"]
 
@@ -52,7 +55,25 @@ def test_image_runs_as_unprivileged_user() -> None:
     assert users[-1] == "1000"
 
 
-def test_image_serves_with_more_threads() -> None:
-    """Long requests (publishes, slow clients) don't take all threads."""
-    assert re.search(r'^ENV GUNICORN_CMD_ARGS="--threads 16"$', _dockerfile(), re.M)
-    assert gunicorn_config.threads < 16
+def test_image_serves_with_more_threads(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Long requests (publishes, slow clients) don't take all threads.
+
+    Settings are loaded as the image's command does, without the app; they
+    leave `GUNICORN_CMD_ARGS` to deployments.
+
+    Args:
+        monkeypatch: Fixture to set the command line.
+    """
+    assert "ENV GUNICORN_CMD_ARGS" not in _dockerfile()
+    command = re.search(
+        r"^CMD (\[.*?\])$", _dockerfile().replace("\\\n", ""), re.M | re.S
+    )
+    assert command is not None, "No CMD in exec form"
+    monkeypatch.delenv("GUNICORN_CMD_ARGS", raising=False)
+    monkeypatch.setattr(sys, "argv", json.loads(command[1]))
+    settings = WSGIApplication().cfg
+    assert settings.threads == 16
+    assert settings.workers == gunicorn_config.workers
+    assert settings.bind == gunicorn_config.bind
+    # Running requests finish within Kubernetes' default grace period
+    assert gunicorn_config.graceful_timeout < settings.graceful_timeout < 30

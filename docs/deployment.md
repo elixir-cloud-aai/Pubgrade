@@ -95,12 +95,15 @@ From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA
   with a full URL.
 - **Server:** the image serves the app with Gunicorn instead of Flask's
   development server, still on port 8080, with one worker and 16 threads
-  (`GUNICORN_CMD_ARGS=--threads 16`; set the variable to change Gunicorn's
-  settings). Each thread serves one request at a time: a publish holds one
-  until its subscribers answer (up to twice `notification_timeout`), and a
-  slow client holds one while it sends its request. Raise `--threads` for
-  many concurrent publishes, and serve Pubgrade behind a proxy that buffers
-  request bodies (as ingress-nginx does by default). Request bodies larger
+  (`pubgrade/gunicorn_config.py`; change Gunicorn's settings via
+  `GUNICORN_CMD_ARGS`, e.g., `--threads 32`). Each thread serves one request
+  at a time: a publish holds one until its subscribers answer (up to twice
+  `notification_timeout`, plus 5 seconds), and a slow client holds one while
+  it sends its request. Raise `--threads` for many concurrent publishes, and
+  serve Pubgrade behind a proxy that buffers request bodies (as ingress-nginx
+  does by default). On shutdown, Gunicorn lets running requests finish for
+  up to 28 seconds, within Kubernetes' default grace period of 30 seconds;
+  with a `notification_timeout` above 10, a publish may be cut off then. Request bodies larger
   than 1 MiB are rejected.
 - **Image:** it runs as user 1000 (group 0), and its app files are read-only;
   any user ID works, e.g., on OpenShift.

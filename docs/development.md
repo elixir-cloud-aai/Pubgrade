@@ -23,8 +23,8 @@ Some tests clone a public repository, so they need network access.
 The app is built on [FOCA](https://foca.readthedocs.io/) 0.21: its
 configuration is `pubgrade/config.yaml`, and `pubgrade/app.py` creates the app
 (`create_app()`). The image serves it with Gunicorn, with FOCA's settings
-(`foca.gunicorn_config`); `python -m pubgrade.app` runs Flask's development
-server instead. FOCA is bumped by hand: the tag and digest of the base image in
+and more threads and shutdown time (`pubgrade/gunicorn_config.py`);
+`python -m pubgrade.app` runs Flask's development server instead. FOCA is bumped by hand: the tag and digest of the base image in
 the `Dockerfile` and `foca` in `requirements.txt` together, following FOCA's
 migration guides; `tests/test_image.py` fails if they don't match.
 
