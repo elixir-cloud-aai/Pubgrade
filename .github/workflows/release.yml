@@ -1,0 +1,529 @@
+# Release when a version tag (`vX.Y.Z`, or `vX.Y.ZaN`, `vX.Y.ZbN`,
+# `vX.Y.ZrcN` for pre-releases) is pushed, as cloud-registry and
+# Pubgrade-Sidecar do: check the tag, that the app, the chart and the citation
+# metadata have its version, and that CI passed for its commit, and package
+# the Helm chart (recording its file name and SHA-256) (`prepare`); build and
+# push the Docker images `pubgrade` and `pubgrade-updater` (with SBOM and
+# provenance attestations) by digest, untagged (`push`); scan exactly those
+# digests for vulnerabilities in a job of its own, without the release
+# credentials and signing identity (`scan`); and only then attest their build
+# provenance, sign them (Sigstore keyless signing) and tag them, and create
+# the GitHub release with the chart attached, checked against its recorded
+# name and SHA-256, also attested and signed (`publish`). The images and the
+# chart are released together, with one version: the tag must match
+# `__version__` in `pubgrade/__init__.py` and the chart's `version` and
+# `appVersion` (set by the release-prep pull request; see "Versioning and
+# releases" in `docs/development.md`). `push` and `publish` each need
+# approval in the `release` environment. Re-running all jobs builds, scans,
+# signs and tags new digests (and packages the chart again); re-running
+# failed jobs reuses the digests already pushed (and scans them again if a
+# scan failed); a full re-run of a release that was already published moves
+# its image tags to the new digests before it fails at the release (whose
+# assets can't change), so re-run failed jobs only. Release notes are GitHub's generated notes (for a
+# first release, built by `scripts/release_notes.py first`), edited by hand
+# into the agreed format after publishing (the notes of immutable releases
+# stay editable). Release tags are immutable (tag ruleset). Until 1.0.0, all
+# releases are GitHub pre-releases (but stable ones still move `latest`).
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+# Fully qualified (`docker.io/`), as the attestation needs it. The Docker Hub
+# organization is the variable `DOCKERHUB_ORG` (by default `elixircloud`), as
+# in `ci.yml` and `scan.yml`, so that the scan job, which has no secrets,
+# scans the images that are published; `IMAGE_ORG` is the form of the chart's
+# values (`elixircloud/pubgrade:<tag>`)
+env:
+  IMAGE_ORG: ${{ vars.DOCKERHUB_ORG || 'elixircloud' }}
+  IMAGE_PREFIX: docker.io/${{ vars.DOCKERHUB_ORG || 'elixircloud' }}
+
+# One run per tag, so that a run waiting for approval is not cancelled by
+# the run of another tag; `latest` is decided at the end of each run, from
+# freshly fetched tags on `main`
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Prepare release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read # read the CI runs of the release commit
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+      sha: ${{ steps.commit.outputs.sha }}
+      chart_file: ${{ steps.chart.outputs.file }}
+      chart_sha256: ${{ steps.chart.outputs.sha256 }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Full history and all tags, to check that the release commit is on
+          # `main`
+          fetch-depth: 0
+      # For the scripts in `scripts/` (standard library only)
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      # Guards against accidental releases, e.g., of unmerged commits; the
+      # `release` environment's protection rules (required reviewer) are
+      # what actually control publishing. Runs no code of the tagged commit,
+      # so that its scripts (below) only run once the tag is verified and the
+      # commit is on `main`, and never next to this step's token
+      - name: Check release tag and commit
+        id: commit
+        env:
+          TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          # Annotated, with a signature that GitHub verified
+          if [[ "$(git cat-file -t "refs/tags/${TAG}")" != "tag" ]]; then
+              echo "::error::Tag '${TAG}' is not annotated (git tag -s)"
+              exit 1
+          fi
+          verified="$(gh api "repos/${REPOSITORY}/git/tags/$(git rev-parse "refs/tags/${TAG}")" \
+              --jq .verification.verified)"
+          if [[ "${verified}" != "true" ]]; then
+              echo "::error::Tag '${TAG}' has no signature verified by GitHub (git tag -s)"
+              exit 1
+          fi
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+              echo "::error::Release commit is not on 'main'"
+              exit 1
+          fi
+          echo "sha=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
+      # Fails unless the tag is a release version; version, chart version
+      # and kind of release (see `scripts/release_version.py`)
+      - name: Derive release version
+        id: version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: python scripts/release_version.py outputs "${TAG}" >> "${GITHUB_OUTPUT}"
+      # One version for the app and the chart (`scripts/check_versions.py`)
+      - name: Check app and chart versions
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          CHART_VERSION: ${{ steps.version.outputs.chart_version }}
+        run: python scripts/check_versions.py "${VERSION}" "${CHART_VERSION}"
+      # Zenodo archives the release with the citation metadata of the tagged
+      # commit, so they must have the release version
+      - name: Check citation metadata
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: python scripts/citation.py check "${VERSION}"
+      # The checks above don't run the tests: require a successful run of
+      # the CI workflow for a push of the release commit (to `dev`, before it
+      # moved to `main`); runs for pull requests test merge commits, not the
+      # commit itself. Re-runs that succeeded count
+      - name: Check that CI passed for the release commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SHA: ${{ steps.commit.outputs.sha }}
+        run: |
+          runs="$(gh api "repos/${REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${SHA}&event=push&status=success&per_page=1" \
+              --jq .total_count)"
+          if [[ ! "${runs}" =~ ^[0-9]+$ || "${runs}" -lt 1 ]]; then
+              echo "::error::No successful run of the CI workflow (ci.yml) for a push of ${SHA}; once CI passed for it, re-run this workflow"
+              exit 1
+          fi
+      # Same Helm version as in `ci.yml`, which tests the chart
+      - name: Set up Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v3.22.1
+      # The chart's `version` and `appVersion` are the release version
+      # (checked above). Its values name the images with their tags
+      # (`elixircloud/pubgrade:dev` on `dev`), so the packaged chart defaults
+      # to the images of the release (tag `X.Y.Z`), also in forks that
+      # publish to another organization (`DOCKERHUB_ORG`); `values.yaml` of a
+      # copy is rewritten by yq, as in `scripts/` only the stdlib is used
+      - name: Package chart
+        id: chart
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          CHART_VERSION: ${{ steps.version.outputs.chart_version }}
+        run: |
+          helm lint helm --strict
+          chart="$(mktemp -d)/pubgrade"
+          cp -R helm "${chart}"
+          export PUBGRADE_IMAGE="${IMAGE_ORG}/pubgrade:${VERSION}"
+          export UPDATER_IMAGE="${IMAGE_ORG}/pubgrade-updater:${VERSION}"
+          yq -i '.pubgrade.image = strenv(PUBGRADE_IMAGE) |
+              .builds.updater.image = strenv(UPDATER_IMAGE)' "${chart}/values.yaml"
+          helm lint "${chart}" --strict
+          helm package "${chart}" -d dist
+          package="dist/pubgrade-${CHART_VERSION}.tgz"
+          values="$(tar -xzOf "${package}" pubgrade/values.yaml)"
+          [[ "$(yq .pubgrade.image <<< "${values}")" == "${PUBGRADE_IMAGE}" ]]
+          [[ "$(yq .builds.updater.image <<< "${values}")" == "${UPDATER_IMAGE}" ]]
+          # For `publish` to check the downloaded chart against
+          echo "file=${package#dist/}" >> "${GITHUB_OUTPUT}"
+          echo "sha256=$(sha256sum "${package}" | cut -d ' ' -f 1)" >> "${GITHUB_OUTPUT}"
+      - name: Upload chart
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: chart
+          path: dist/
+          if-no-files-found: error
+          # Re-runs of all jobs replace the chart of the earlier attempt
+          overwrite: true
+
+  # Builds the images of the release commit once and pushes them by digest
+  # only (untagged, with SBOM and provenance attestations), for `scan` to scan
+  # and `publish` to sign and tag. Digests of runs that fail are never signed
+  # or tagged, but stay on Docker Hub, untagged (pullable by digest only)
+  push:
+    name: Push release images
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Docker Hub secrets (required reviewer)
+    environment: release
+    permissions:
+      contents: read
+    outputs:
+      pubgrade: ${{ steps.pubgrade.outputs.digest }}
+      pubgrade-updater: ${{ steps.updater.outputs.digest }}
+    steps:
+      # The commit checked by `prepare`; release tags cannot be moved (tag
+      # ruleset)
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.prepare.outputs.sha }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      # OCI labels with the version, commit and source, shared by both
+      # images; `tags` only sets the version label (the images are tagged by
+      # digest in `publish`, after the scan)
+      - name: Generate image labels
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE_PREFIX }}/pubgrade
+          flavor: latest=false
+          tags: type=raw,value=${{ needs.prepare.outputs.version }}
+      - name: Log in to Docker Hub
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          username: ${{ secrets.DOCKERHUB_LOGIN }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build and push image by digest (pubgrade)
+        id: pubgrade
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          outputs: type=image,name=${{ env.IMAGE_PREFIX }}/pubgrade,push-by-digest=true,name-canonical=true,push=true
+          sbom: true
+          provenance: mode=max
+          labels: ${{ steps.meta.outputs.labels }}
+      - name: Build and push image by digest (pubgrade-updater)
+        id: updater
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: build-complete-updater/Dockerfile
+          outputs: type=image,name=${{ env.IMAGE_PREFIX }}/pubgrade-updater,push-by-digest=true,name-canonical=true,push=true
+          sbom: true
+          provenance: mode=max
+          labels: ${{ steps.meta.outputs.labels }}
+
+  # Scans exactly the pushed digests (`<image>@<digest>`; public, so pulling
+  # them needs no login) with Trivy (shared action
+  # `elixir-cloud-aai/.github/actions/scan-image`). Kept apart from `push` and
+  # `publish`, so that Trivy never runs next to the Docker Hub credentials,
+  # the `contents: write` token and the signing identity. Fails on critical
+  # and high vulnerabilities that have a fix in the app's image, as in CI, so
+  # that such an image is never signed, tagged or released; the updater's
+  # image, which isn't built on FOCA, is reported only, as in CI (`fail` in
+  # the matrix)
+  scan:
+    name: Scan release image (${{ matrix.image }})
+    needs: [prepare, push]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: pubgrade
+            fail: "true"
+          - image: pubgrade-updater
+            fail: "false"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.prepare.outputs.sha }}
+      - name: Check image digest
+        env:
+          DIGEST: ${{ needs.push.outputs[matrix.image] }}
+        run: |
+          if [[ ! "${DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "::error::Invalid image digest '${DIGEST}'"
+              exit 1
+          fi
+      - name: Scan image
+        uses: elixir-cloud-aai/.github/actions/scan-image@743e82d290a53768454999e413756a924e383259 # v1.0.0
+        with:
+          image: ${{ env.IMAGE_PREFIX }}/${{ matrix.image }}@${{ needs.push.outputs[matrix.image] }}
+          category: release-${{ matrix.image }}
+          upload: "false"
+          fail: ${{ matrix.fail }}
+
+  publish:
+    name: Publish release
+    needs: [prepare, push, scan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: release
+      url: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}
+    permissions:
+      contents: write # create the GitHub release
+      pull-requests: read # list the pull requests of a first release
+      id-token: write # Sigstore signing certificates
+      attestations: write # GitHub artifact attestations
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      DIGEST_PUBGRADE: ${{ needs.push.outputs.pubgrade }}
+      DIGEST_UPDATER: ${{ needs.push.outputs.pubgrade-updater }}
+    steps:
+      # The commit checked by `prepare`; release tags cannot be moved (tag
+      # ruleset)
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.prepare.outputs.sha }}
+          # All tags and `main`, to determine the highest release
+          fetch-depth: 0
+      # For the scripts in `scripts/` (standard library only)
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - name: Check image digests
+        run: |
+          for digest in "${DIGEST_PUBGRADE}" "${DIGEST_UPDATER}"; do
+              if [[ ! "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+                  echo "::error::Invalid image digest '${digest}'"
+                  exit 1
+              fi
+          done
+      - name: Download chart
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: chart
+          path: dist/
+      # Any job of the run can overwrite artifacts with the run's token, so
+      # the artifact must be exactly the chart that `prepare` packaged: a
+      # single file with the name and checksum of `prepare`. Hidden files
+      # count too, so that nothing else is in `dist/`. Checked first, so that
+      # a rejected chart leaves the images (pushed untagged by `push`) without
+      # GitHub attestation, signature and tags, and the chart unattested and
+      # unsigned
+      - name: Check chart
+        env:
+          FILE: ${{ needs.prepare.outputs.chart_file }}
+          SHA256: ${{ needs.prepare.outputs.chart_sha256 }}
+        run: |
+          if [[ ! "${FILE}" =~ ^pubgrade-[0-9A-Za-z.+-]+\.tgz$ ]]; then
+              echo "::error::Invalid chart file name '${FILE}'"
+              exit 1
+          fi
+          if [[ ! "${SHA256}" =~ ^[0-9a-f]{64}$ ]]; then
+              echo "::error::Invalid chart checksum '${SHA256}'"
+              exit 1
+          fi
+          shopt -s nullglob dotglob
+          files=(dist/*)
+          if [[ "${#files[@]}" -ne 1 || "${files[0]}" != "dist/${FILE}" ]]; then
+              echo "::error::Expected one chart in dist/, found: ${files[*]}"
+              exit 1
+          fi
+          echo "${SHA256}  ${files[0]}" | sha256sum --check --strict
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Log in to Docker Hub
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          username: ${{ secrets.DOCKERHUB_LOGIN }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      # Of the scanned digests
+      - name: Attest build provenance (pubgrade)
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE_PREFIX }}/pubgrade
+          subject-digest: ${{ env.DIGEST_PUBGRADE }}
+          push-to-registry: true
+          # No artifact metadata storage record (needs another permission)
+          create-storage-record: false
+      - name: Attest build provenance (pubgrade-updater)
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE_PREFIX }}/pubgrade-updater
+          subject-digest: ${{ env.DIGEST_UPDATER }}
+          push-to-registry: true
+          create-storage-record: false
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      # The signature covers the digest, and so every tag of it
+      - name: Sign images
+        run: |
+          cosign sign --yes "${IMAGE_PREFIX}/pubgrade@${DIGEST_PUBGRADE}"
+          cosign sign --yes "${IMAGE_PREFIX}/pubgrade-updater@${DIGEST_UPDATER}"
+      # Decided last, from freshly fetched tags (the repository is public, so
+      # no credentials are needed), so that neither a re-run of an older
+      # release nor a concurrent release moves `latest` back
+      - name: Check whether this is the highest release
+        id: latest
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          git fetch --quiet --force --tags origin \
+              "+refs/heads/main:refs/remotes/origin/main"
+          # The highest stable release among the tags on `main`, so that stray
+          # tags are ignored
+          git tag -l 'v*' --merged origin/main \
+              | python scripts/release_version.py latest "${TAG}" >> "${GITHUB_OUTPUT}"
+      # Tags `X.Y.Z` (and `latest`) point to the checked, scanned and signed
+      # digests: a single source is copied as is
+      - name: Tag images
+        env:
+          LATEST: ${{ steps.latest.outputs.latest }}
+        run: |
+          for image in "pubgrade@${DIGEST_PUBGRADE}" "pubgrade-updater@${DIGEST_UPDATER}"; do
+              name="${IMAGE_PREFIX}/${image%@*}"
+              digest="${image#*@}"
+              tags=("${name}:${VERSION}")
+              if [[ "${LATEST}" == "true" ]]; then
+                  tags+=("${name}:latest")
+              fi
+              for tag in "${tags[@]}"; do
+                  docker buildx imagetools create --tag "${tag}" "${name}@${digest}"
+                  actual="$(docker buildx imagetools inspect "${tag}" \
+                      --format '{{ json .Manifest }}' | jq -r .digest)"
+                  if [[ "${actual}" != "${digest}" ]]; then
+                      echo "::error::${tag} points to ${actual}, expected ${digest}"
+                      exit 1
+                  fi
+              done
+          done
+      # Provenance attestation (stored by GitHub) and a Sigstore bundle
+      # (`<chart>.tgz.sigstore.json`, attached to the release) for the chart
+      - name: Attest chart provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/${{ needs.prepare.outputs.chart_file }}
+      - name: Sign chart
+        env:
+          CHART: dist/${{ needs.prepare.outputs.chart_file }}
+        run: cosign sign-blob --yes --bundle "${CHART}.sigstore.json" "${CHART}"
+      # GitHub's generated notes list the merged pull requests since the
+      # previous release in the history of the release commit (see
+      # `scripts/release_version.py`). Only tags with a published GitHub
+      # release count, so that the changes of a tag whose release failed (and
+      # was replaced by a new patch version) are listed in the next release.
+      # The script filters the tags itself and reads all of them, so that
+      # `git tag` never fails with SIGPIPE under `pipefail`
+      - name: Determine the previous release
+        id: previous
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -o pipefail
+          published="$(mktemp)"
+          gh release list --limit 1000 --exclude-drafts --json tagName \
+              --jq '.[].tagName' > "${published}"
+          git tag -l 'v*' --merged HEAD \
+              | python scripts/release_version.py previous "${TAG}" \
+                  --published "${published}" >> "${GITHUB_OUTPUT}"
+      # Assets of a published immutable release (a repository setting) can't
+      # be added, replaced or deleted, so the release is created as a draft,
+      # gets its assets, and is published (with its notes and flags) last.
+      # Re-runs finish a draft of an earlier attempt; a release that is
+      # already published (e.g., by hand) gets no uploads, but must have all
+      # assets, or the step fails, saying what to do (see
+      # `scripts/release_assets.py`); only its title and flags are updated.
+      # The final edit is the only one that sets `latest`
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          LATEST: ${{ steps.latest.outputs.latest }}
+          PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+          PREVIOUS: ${{ steps.previous.outputs.previous_tag }}
+        run: |
+          # Without a previous published release, GitHub's generated notes
+          # would start at an older tag of its choice, even one without a
+          # release (e.g., of a failed attempt), so the notes of a first
+          # release list all merged pull requests in the history of the
+          # release commit instead, in GitHub's format
+          # (`scripts/release_notes.py first`)
+          notes_file="$(mktemp)"
+          if [[ -n "${PREVIOUS}" ]]; then
+              gh api "repos/${GH_REPO}/releases/generate-notes" \
+                  -f "tag_name=${TAG}" -f "previous_tag_name=${PREVIOUS}" \
+                  --jq .body > "${notes_file}"
+          else
+              pulls="$(mktemp)"
+              commits="$(mktemp)"
+              gh api --paginate --slurp \
+                  "repos/${GH_REPO}/pulls?state=closed&per_page=100" > "${pulls}"
+              git rev-list HEAD > "${commits}"
+              python scripts/release_notes.py first "${TAG}" \
+                  --repository "${GH_REPO}" --pulls "${pulls}" \
+                  --commits "${commits}" > "${notes_file}"
+          fi
+          # GitHub never marks pre-releases as the latest release, so don't
+          # ask it to
+          if [[ "${PRERELEASE}" == "true" ]]; then
+              LATEST=false
+          fi
+          # All releases of the repository, drafts included, to find those of
+          # the tag
+          releases="$(mktemp)"
+          gh api --paginate --slurp "repos/${GH_REPO}/releases?per_page=100" \
+              > "${releases}"
+          state="$(python scripts/release_assets.py state "${TAG}" \
+              --releases "${releases}" dist/*)"
+          state="${state#state=}"
+          if [[ "${state}" == "none" ]]; then
+              gh release create "${TAG}" \
+                  --draft \
+                  --verify-tag \
+                  --title "${TAG}" \
+                  --notes-file "${notes_file}" \
+                  --prerelease="${PRERELEASE}"
+          fi
+          edit=(--title "${TAG}" --prerelease="${PRERELEASE}" --latest="${LATEST}")
+          # Uploads to drafts may replace the assets of an earlier attempt;
+          # the notes of a published release are left as they are
+          if [[ "${state}" != "published" ]]; then
+              gh release upload "${TAG}" dist/* --clobber
+              edit+=(--notes-file "${notes_file}")
+          fi
+          # Publishes a draft
+          gh release edit "${TAG}" "${edit[@]}" --draft=false
