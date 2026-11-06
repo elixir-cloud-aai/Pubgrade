@@ -124,15 +124,16 @@ the community.
 
 ## Development
 
-`make test` builds the image and runs the unit tests in it, with coverage: the
-base image of [FOCA][foca] pins most of the dependencies. Some tests clone a
-public repository, so they need network access.
+`make test` builds the image and runs the unit tests in it, with coverage
+(written to `reports/coverage.xml`): the base image of [FOCA][foca] pins most
+of the dependencies. Some tests clone a public repository, so they need network
+access.
 
 [CI](.github/workflows/ci.yml) runs on pull requests and pushes to `dev`. The
 job `CI passed` sums up all other jobs. Pushes to `dev` publish
-`elixircloud/pubgrade` and `elixircloud/pubgrade-updater`, tagged `dev`,
-`sha-<commit>` and `<YYYYMMDD>`. The tag `latest` stays as it is until there are
-releases, so use one of these instead.
+`elixircloud/pubgrade` and `elixircloud/pubgrade-updater`, signed with Sigstore
+and tagged `dev` and `sha-<commit>`. The tag `latest` stays as it is until there
+are releases, so use one of these instead.
 
 ## Versioning
 
