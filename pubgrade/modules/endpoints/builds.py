@@ -530,15 +530,13 @@ def build_push_image_using_kaniko(deployment_file_location: str):
     # deployment file.
     with open(deployment_file_location) as f:
         dep = yaml.safe_load(f)
+        name = (dep.get("metadata") or {}).get("name")
         try:
             v1.create_namespaced_pod(body=dep, namespace=namespace)
         except ApiException as e:
-            logger.error(
-                f"Creating pod {dep['metadata']['name']} failed: "
-                f"{e.status} {e.reason}"
-            )
+            logger.error(f"Creating pod {name} failed: {e.status} {e.reason}")
             raise CreatePodError from None
-        logger.info(f"Pod {dep['metadata']['name']} created.")
+        logger.info(f"Pod {name} created.")
 
 
 def build_completed(

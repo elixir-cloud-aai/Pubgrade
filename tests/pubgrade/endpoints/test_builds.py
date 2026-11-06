@@ -737,6 +737,7 @@ class TestBuild:
         self, caplog, tmp_path, monkeypatch
     ):
         """Log messages name the created pod, without its environment."""
+        monkeypatch.delenv("KUBERNETES_SERVICE_HOST", raising=False)
         monkeypatch.setattr(
             builds,
             "template_file",
@@ -764,8 +765,11 @@ class TestBuild:
         "kubernetes.client.api.core_v1_api.CoreV1Api.create_namespaced_pod",
         mocked_create_namespaced_pod_error_body,
     )
-    def test_build_push_image_using_kaniko_error_logs_no_body(self, caplog):
+    def test_build_push_image_using_kaniko_error_logs_no_body(
+        self, caplog, monkeypatch
+    ):
         """Errors of the Kubernetes API are logged by status and reason."""
+        monkeypatch.delenv("KUBERNETES_SERVICE_HOST", raising=False)
         with self.app.app_context():
             with pytest.raises(CreatePodError) as raised:
                 build_push_image_using_kaniko(
@@ -781,6 +785,26 @@ class TestBuild:
         assert "pod-secret" not in "".join(
             traceback.format_exception(raised.value)
         )
+
+    @patch("kubernetes.config.load_kube_config", mocked_load_cluster_config)
+    @patch(
+        "kubernetes.client.api.core_v1_api.CoreV1Api.create_namespaced_pod",
+        mocked_create_namespaced_pod_error_body,
+    )
+    def test_build_push_image_using_kaniko_error_without_name(
+        self, caplog, monkeypatch, tmp_path
+    ):
+        """A manifest without name still gets its error, without context."""
+        monkeypatch.delenv("KUBERNETES_SERVICE_HOST", raising=False)
+        deployment_file = tmp_path / "pod.yaml"
+        deployment_file.write_text("kind: Pod\nmetadata: {}\n")
+        with self.app.app_context():
+            with pytest.raises(CreatePodError) as raised:
+                build_push_image_using_kaniko(str(deployment_file))
+        assert caplog.messages == [
+            "Creating pod None failed: 422 Unprocessable Entity"
+        ]
+        assert raised.value.__suppress_context__
 
     @patch("kubernetes.client.api.core_v1_api.CoreV1Api", mocked_core_v1_api)
     @patch(
