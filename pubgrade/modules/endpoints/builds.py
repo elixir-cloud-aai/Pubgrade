@@ -1,4 +1,3 @@
-import datetime
 import logging
 import os
 import shutil
@@ -8,13 +7,14 @@ import json
 import re
 
 import yaml
-from flask import current_app
+from foca import get_config
 from git import Repo, GitCommandError
 from kubernetes import client, config
 from kubernetes.client import ApiException
 from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized
 
+from pubgrade.timestamps import now, repaired_build
 from pubgrade.errors.exceptions import (
     BuildsDisabled,
     InvalidImage,
@@ -51,7 +51,7 @@ def builds_enabled() -> bool:
     Returns:
         The setting `endpoints.builds.enabled`; False if it isn't set.
     """
-    return current_app.config["FOCA"].endpoints["builds"].get("enabled", False)
+    return get_config().endpoints["builds"].get("enabled", False)
 
 
 def validate_prebuilt_image(build_data: dict) -> None:
@@ -83,14 +83,14 @@ def publish_prebuilt_image(build_id: str, image: str, subscriptions: list):
     """
     results = notify_all_subscriptions(subscriptions, image, build_id)
     failed = any(result["result"] == "failed" for result in results)
-    current_app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+    get_config().db.dbs["pubgradeStore"].collections[
         "builds"
     ].client.update_one(
         {"id": build_id},
         {
             "$set": {
                 "status": "FAILED" if failed else "SUCCEEDED",
-                "finished_at": datetime.datetime.now().isoformat(),
+                "finished_at": now(),
             }
         },
     )
@@ -123,22 +123,22 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
         exactly one.
     """
     db_collection_builds = (
-        current_app.config["FOCA"]
+        get_config()
         .db.dbs["pubgradeStore"]
         .collections["builds"]
         .client
     )
     db_collection_repositories = (
-        current_app.config["FOCA"]
+        get_config()
         .db.dbs["pubgradeStore"]
         .collections["repositories"]
         .client
     )
-    retries = current_app.config["FOCA"].endpoints["repository"]["retries"]
-    id_length: int = current_app.config["FOCA"].endpoints["repository"][
+    retries = get_config().endpoints["repository"]["retries"]
+    id_length: int = get_config().endpoints["repository"][
         "id_length"
     ]
-    id_charset: str = current_app.config["FOCA"].endpoints["repository"][
+    id_charset: str = get_config().endpoints["repository"][
         "id_charset"
     ]
     try:
@@ -175,8 +175,8 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
             {"id": repository_id}, {"$push": {"build_list": build_data["id"]}}
         )
         try:
-            build_data["finished_at"] = "NULL"
-            build_data["started_at"] = str(datetime.datetime.now().isoformat())
+            build_data["finished_at"] = None
+            build_data["started_at"] = now()
             build_data["status"] = "QUEUED"
             db_collection_builds.insert_one(build_data)
             if not build_path:
@@ -191,7 +191,7 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
                     commit_sha = ""
             except KeyError:
                 commit_sha = build_data["head_commit"]["tag"]
-            intermediate_registry_format = current_app.config["FOCA"].endpoints["builds"][
+            intermediate_registry_format = get_config().endpoints["builds"][
                 "intermediate_registery_format"]
             intermediate_registry_path = intermediate_registry_format.format(
                 build_data["images"][0]["name"].split("/")[1].split(":")[0])
@@ -244,7 +244,7 @@ def get_builds(repository_id: str):
         not found.
     """
     db_collection_repositories = (
-        current_app.config["FOCA"]
+        get_config()
         .db.dbs["pubgradeStore"]
         .collections["repositories"]
         .client
@@ -282,7 +282,7 @@ def get_build_info(build_id: str):
         not found.
     """
     db_collection_builds = (
-        current_app.config["FOCA"]
+        get_config()
         .db.dbs["pubgradeStore"]
         .collections["builds"]
         .client
@@ -295,7 +295,7 @@ def get_build_info(build_id: str):
         )
         del build_object["id"]
         build_object.pop("dockerhub_token", None)
-        return build_object
+        return repaired_build(build_object)
     except StopIteration:
         raise BuildNotFound
 
@@ -490,7 +490,7 @@ def create_dockerhub_config_file(
         config_file_location (str): Location to create Dockerhub config file,
         it contains dockerhub access token.
     """
-    intermediate_registry_format = current_app.config["FOCA"].endpoints["builds"]["intermediate_registery_format"]
+    intermediate_registry_format = get_config().endpoints["builds"]["intermediate_registery_format"]
     template_config_file = (
             """{
 "auths": {
@@ -566,13 +566,13 @@ def build_completed(
     if not builds_enabled():
         raise BuildsDisabled
     db_collection_repositories = (
-        current_app.config["FOCA"]
+        get_config()
         .db.dbs["pubgradeStore"]
         .collections["repositories"]
         .client
     )
     db_collection_builds = (
-        current_app.config["FOCA"]
+        get_config()
         .db.dbs["pubgradeStore"]
         .collections["builds"]
         .client
@@ -590,10 +590,9 @@ def build_completed(
             {'id': build_id}, {'_id': False}
         ).limit(1).next()
         data['status'] = "SUCCEEDED"
-        data['finished_at'] = str(
-            datetime.datetime.now().isoformat())
+        data['finished_at'] = now()
 
-        intermediate_registry_format = current_app.config["FOCA"].endpoints["builds"]["intermediate_registery_format"]
+        intermediate_registry_format = get_config().endpoints["builds"]["intermediate_registery_format"]
         trigger_signing_image(
             image_path=data["images"][0]["name"],
             dockerhub_token=data["dockerhub_token"],
@@ -664,7 +663,7 @@ def trigger_signing_image(dockerhub_token: str,
                           image_path: str, pull_tag: str, push_tag: str):
     username, password = base64.b64decode(dockerhub_token).decode('utf-8').split(":")
     url = "https://api.github.com/repos/{}/dispatches".format(
-        current_app.config["FOCA"].endpoints["builds"]["gh_action_path"])
+        get_config().endpoints["builds"]["gh_action_path"])
     payload = json.dumps({
         "event_type": "sign-image",
         "client_payload": {

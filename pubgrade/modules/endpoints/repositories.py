@@ -2,7 +2,7 @@ import logging
 import string
 from random import choice
 
-from flask import current_app
+from foca import get_config
 from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized
 
@@ -33,7 +33,7 @@ def register_repository(data: dict):
         RegistrationDisabled: Raised when registration is closed by the
         setting `endpoints.repository.registration_enabled`.
     """
-    if not current_app.config["FOCA"].endpoints["repository"].get(
+    if not get_config().endpoints["repository"].get(
         "registration_enabled", True
     ):
         raise RegistrationDisabled
@@ -45,22 +45,22 @@ def register_repository(data: dict):
         raise URLNotFound
 
     db_collection = (
-        current_app.config["FOCA"]
+        get_config()
         .db.dbs["pubgradeStore"]
         .collections["repositories"]
         .client
     )
-    retries = current_app.config["FOCA"].endpoints["repository"]["retries"]
-    id_length: int = current_app.config["FOCA"].endpoints["repository"][
+    retries = get_config().endpoints["repository"]["retries"]
+    id_length: int = get_config().endpoints["repository"][
         "id_length"
     ]
-    id_charset: str = current_app.config["FOCA"].endpoints["repository"][
+    id_charset: str = get_config().endpoints["repository"][
         "id_charset"
     ]
-    access_token_length: int = current_app.config["FOCA"].endpoints[
+    access_token_length: int = get_config().endpoints[
         "access_token"
     ]["length"]
-    access_token_charset: str = current_app.config["FOCA"].endpoints[
+    access_token_charset: str = get_config().endpoints[
         "access_token"
     ]["charset"]
     try:
@@ -118,7 +118,7 @@ def get_repositories():
         the pubgrade.
     """
     db_collection = (
-        current_app.config["FOCA"]
+        get_config()
         .db.dbs["pubgradeStore"]
         .collections["repositories"]
         .client
@@ -176,7 +176,7 @@ def get_repository(repo_id: str):
         identifier.
     """
     db_collection = (
-        current_app.config["FOCA"]
+        get_config()
         .db.dbs["pubgradeStore"]
         .collections["repositories"]
         .client
@@ -220,7 +220,7 @@ def modify_repository_info(repo_id: str, access_token: str, data: dict):
         identifier.
     """
     db_collection_repository = (
-        current_app.config["FOCA"]
+        get_config()
         .db.dbs["pubgradeStore"]
         .collections["repositories"]
         .client
@@ -262,7 +262,7 @@ def delete_repository(repo_id: str, access_token: str):
         identifier.
     """
     db_collection = (
-        current_app.config["FOCA"]
+        get_config()
         .db.dbs["pubgradeStore"]
         .collections["repositories"]
         .client

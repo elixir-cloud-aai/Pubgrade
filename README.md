@@ -80,7 +80,7 @@ This project is covered by the [Apache License 2.0][badge-url-license], also
 [badge-docs]: <https://img.shields.io/readthedocs/pubgrade>
 [badge-github-tag]: <https://img.shields.io/github/v/tag/elixir-cloud-aai/Pubgrade?color=C39BD3>
 [badge-license]: <https://img.shields.io/badge/license-Apache%202.0-blue.svg>
-[badge-python]: <https://img.shields.io/badge/python-3.9-blue.svg>
+[badge-python]: <https://img.shields.io/badge/python-3.13-blue.svg>
 [badge-url-build-status]: <https://github.com/elixir-cloud-aai/Pubgrade/actions/workflows/ci.yml?query=branch%3Adev>
 [badge-url-coverage]: <https://codecov.io/gh/elixir-cloud-aai/Pubgrade?branch=dev>
 [badge-url-docker]: <https://hub.docker.com/r/elixircloud/pubgrade/tags>

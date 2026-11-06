@@ -150,29 +150,29 @@ class TestBuild:
     id_length = 0
 
     def setup(self):
-        self.app.config["FOCA"] = Config(
+        self.app.config.foca = Config(
             db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG
         )
-        self.app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+        self.app.config.foca.db.dbs["pubgradeStore"].collections[
             "repositories"
         ].client = mongomock.MongoClient().db.collection
-        self.id_length = self.app.config["FOCA"].endpoints["repository"][
+        self.id_length = self.app.config.foca.endpoints["repository"][
             "id_length"
         ]
         for repository in MOCK_REPOSITORIES:
-            self.app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+            self.app.config.foca.db.dbs["pubgradeStore"].collections[
                 "repositories"
             ].client.insert_one(repository)
-        self.app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+        self.app.config.foca.db.dbs["pubgradeStore"].collections[
             "builds"
         ].client = mongomock.MongoClient().db.collection
 
     def setup_with_build(self):
         self.setup()
-        self.app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+        self.app.config.foca.db.dbs["pubgradeStore"].collections[
             "builds"
         ].client.insert_one(MOCK_BUILD_INFO)
-        self.app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+        self.app.config.foca.db.dbs["pubgradeStore"].collections[
             "builds"
         ].client.insert_one(MOCK_BUILD_INFO_2)
 
@@ -240,7 +240,7 @@ class TestBuild:
     def test_register_builds_duplicate_key_error(self):
         self.setup()
         mock_resp = MagicMock(side_effect=DuplicateKeyError(""))
-        self.app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+        self.app.config.foca.db.dbs["pubgradeStore"].collections[
             "builds"
         ].client.insert_one = mock_resp
         with self.app.app_context():
@@ -305,6 +305,27 @@ class TestBuild:
             assert "head_commit" in res
             assert "started_at" in res
             assert "branch" in res["head_commit"]
+
+    def test_get_build_info_old_format(self):
+        """Builds written by the previous version get timestamps with zone."""
+        self.setup()
+        self.app.config.foca.db.dbs["pubgradeStore"].collections[
+            "builds"
+        ].client.insert_one(
+            {
+                **MOCK_BUILD_INFO,
+                "started_at": "2026-01-02T03:04:05",
+                "finished_at": "NULL",
+                "notifications": [{"finished_at": "2026-01-02T03:04:06"}],
+            }
+        )
+        with self.app.app_context():
+            res = get_build_info(MOCK_BUILD_INFO["id"])
+        assert res["started_at"] == "2026-01-02T03:04:05+00:00"
+        assert res["finished_at"] is None
+        assert res["notifications"] == [
+            {"finished_at": "2026-01-02T03:04:06+00:00"}
+        ]
 
     def test_get_build_info_build_not_found(self):
         self.setup_with_build()
@@ -474,10 +495,10 @@ class TestBuild:
     @patch("requests.request", mocked_request_api)
     def test_build_completed(self):
         self.setup_with_build()
-        self.app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+        self.app.config.foca.db.dbs["pubgradeStore"].collections[
             "subscriptions"
         ].client = mongomock.MongoClient().db.collection
-        self.app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+        self.app.config.foca.db.dbs["pubgradeStore"].collections[
             "subscriptions"
         ].client.insert_one(MOCK_SUBSCRIPTION_INFO)
         with self.app.app_context():
@@ -487,7 +508,7 @@ class TestBuild:
                 MOCK_REPOSITORY_2["access_token"],
             )
             data = (
-                self.app.config["FOCA"]
+                self.app.config.foca
                 .db.dbs["pubgradeStore"]
                 .collections["builds"]
                 .client.find_one(res)
@@ -500,7 +521,7 @@ class TestBuild:
     def test_build_completed_removes_pod_in_own_namespace(self, remove_files):
         """The build pod is removed from Pubgrade's namespace."""
         self.setup_with_build()
-        self.app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+        self.app.config.foca.db.dbs["pubgradeStore"].collections[
             "subscriptions"
         ].client = mongomock.MongoClient().db.collection
         os.environ["NAMESPACE"] = "any"
@@ -519,7 +540,7 @@ class TestBuild:
         """A repository's token only completes that repository's builds."""
         self.setup_with_build()
         builds_collection = (
-            self.app.config["FOCA"]
+            self.app.config.foca
             .db.dbs["pubgradeStore"]
             .collections["builds"]
             .client
@@ -672,11 +693,11 @@ class TestPublish:
 
     def setup_method(self):
         """Set up the app with a repository and a matching subscription."""
-        self.app.config["FOCA"] = Config(
+        self.app.config.foca = Config(
             db=MongoConfig(**MONGO_CONFIG),
             endpoints=copy.deepcopy(ENDPOINT_CONFIG),
         )
-        self.app.config["FOCA"].endpoints["builds"]["enabled"] = False
+        self.app.config.foca.endpoints["builds"]["enabled"] = False
         for name in ("repositories", "builds", "subscriptions"):
             self.collection(name).client = mongomock.MongoClient().db.collection
         self.collection("repositories").client.insert_one(
@@ -696,7 +717,7 @@ class TestPublish:
             The collection's configuration, with its client.
         """
         return (
-            self.app.config["FOCA"].db.dbs["pubgradeStore"].collections[name]
+            self.app.config.foca.db.dbs["pubgradeStore"].collections[name]
         )
 
     def publish(self, payload):
@@ -729,7 +750,7 @@ class TestPublish:
         with self.app.app_context():
             build = get_build_info(res["id"])
         assert build["status"] == "SUCCEEDED"
-        assert build["finished_at"] != "NULL"
+        assert build["finished_at"] is not None
         assert build["notifications"][0]["result"] == "delivered"
 
     @patch("requests.request")
@@ -806,7 +827,7 @@ class TestPublish:
     @patch("pubgrade.modules.endpoints.builds.create_build")
     def test_build_rejects_image_without_tag(self, create_build):
         """Also with builds on, images need a tag."""
-        self.app.config["FOCA"].endpoints["builds"]["enabled"] = True
+        self.app.config.foca.endpoints["builds"]["enabled"] = True
         with pytest.raises(InvalidImage):
             self.publish(
                 {
@@ -828,7 +849,7 @@ class TestPublish:
     )
     def test_build_rejects_invalid_images(self, images):
         """Requests without valid image references are rejected."""
-        self.app.config["FOCA"].endpoints["builds"]["enabled"] = True
+        self.app.config.foca.endpoints["builds"]["enabled"] = True
         with pytest.raises(InvalidImage):
             self.publish({**self.payload, "images": images})
 

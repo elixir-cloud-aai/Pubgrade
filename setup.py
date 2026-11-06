@@ -26,16 +26,15 @@ setup(
         "Intended Audience :: Information Technology",
         "Topic :: Scientific/Engineering :: Bio-Informatics",
         "Natural Language :: English",
-        "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.7",
-        "Programming Language :: Python :: 3.8",
-        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.13",
     ],
+    python_requires=">=3.13",
     install_requires=[],
     extras_require={
         "test": [
-            "coverage==7.10.7",
-            "pytest==8.4.2",
+            "coverage==7.17.2",
+            "mongomock==4.3.0",
+            "pytest==9.2.0",
         ],
         # The documentation (`mkdocs.yml`), built with Python 3.13 on Read
         # the Docs (`.readthedocs.yaml`) and in CI

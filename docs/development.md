@@ -7,11 +7,26 @@ conduct](https://github.com/elixir-cloud-aai/.github/blob/main/CODE_OF_CONDUCT.m
 
 ## Tests
 
-`make test` builds the image and runs the unit tests in it, with coverage
-(written to `reports/coverage.xml`; 100% coverage is required): the base image of
-[FOCA](https://github.com/elixir-cloud-aai/foca) pins most of the
-dependencies. Some tests clone a public repository, so they need network
-access.
+`make test` installs the requirements (`requirements.txt`) and the test
+dependencies (`setup.py`) into the active Python environment, which should
+have Python 3.13, the version of the base image, and runs the unit tests with
+coverage (written to `reports/coverage.xml`; 100% coverage is required), e.g.:
+
+```bash
+python3.13 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+PATH="${PWD}/.venv/bin:${PATH}" make test
+```
+
+Some tests clone a public repository, so they need network access.
+
+The app is built on [FOCA](https://foca.readthedocs.io/) 0.21: its
+configuration is `pubgrade/config.yaml`, and `pubgrade/app.py` creates the app
+(`create_app()`). The image serves it with Gunicorn, with FOCA's settings
+and more threads and shutdown time (`pubgrade/gunicorn_config.py`);
+`python -m pubgrade.app` runs Flask's development server instead. FOCA is bumped by hand: the tag and digest of the base image in
+the `Dockerfile` and `foca` in `requirements.txt` together, following FOCA's
+migration guides; `tests/test_image.py` fails if they don't match.
 
 `tests/smoke.sh <base URL>` checks the API of a running Pubgrade with an empty
 database, and `tests/chart.sh` the rendered chart.
@@ -32,7 +47,9 @@ runs on pull requests and pushes to `dev`: the pull request title
 (Conventional Commits, at most 50 characters, as it becomes the commit message
 of the squash merge), lint (the citation metadata in `CITATION.cff`), the
 tests with coverage to Codecov, the chart, the smoke
-and upgrade tests, the documentation, and a scan of the images (report only).
+and upgrade tests, the documentation, and a scan of the images. The scan fails
+on critical and high vulnerabilities that have a fix in the app's image; the
+updater's image, which isn't built on FOCA, is only reported for now.
 The job `CI passed` sums up all other jobs and is the only required check.
 
 Pushes to `dev` publish `elixircloud/pubgrade` and

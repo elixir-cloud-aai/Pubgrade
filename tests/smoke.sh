@@ -32,7 +32,7 @@ check GET /repositories 200 '. == []'
 check POST /repositories 200 'has("id") and has("access_token")' \
   '{"url": "https://github.com/elixir-cloud-aai/Pubgrade.git"}'
 check GET /repositories 200 'length == 1 and (.[0] | has("access_token") | not)'
-check GET /repositories/unknown 404 '.status_code == "404"'
+check GET /repositories/unknown 404 '.status == 404'
 
 # Publish a prebuilt image, with builds switched off by default
 check POST /repositories 200 'has("id")' \
@@ -59,7 +59,7 @@ publish 200 'has("id")' \
 build="$(jq -r .id "${body}")"
 check GET "/repositories/${repository}/builds/${build}" 200 \
   '.status == "SUCCEEDED" and .notifications == []'
-publish 403 '.status_code == "403"' \
+publish 403 '.status == 403' \
   '{"images": [{"name": "org/image:1", "location": "./Dockerfile"}], "head_commit": {"tag": "1"}}'
-publish 400 '.status_code == "400"' \
+publish 400 '.status == 400' \
   '{"images": [{"name": "org/image"}], "head_commit": {"tag": "1"}}'

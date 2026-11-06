@@ -7,7 +7,7 @@ from pubgrade.errors.exceptions import (
     NameNotFound,
 )
 from pubgrade.modules.endpoints.repositories import generate_id
-from flask import current_app
+from foca import get_config
 from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized
 
@@ -31,7 +31,7 @@ def register_user(data: dict):
         RegistrationDisabled: Raised when registration is closed by the
         setting `endpoints.user.registration_enabled`.
     """
-    if not current_app.config["FOCA"].endpoints["user"].get(
+    if not get_config().endpoints["user"].get(
         "registration_enabled", True
     ):
         raise RegistrationDisabled
@@ -43,20 +43,20 @@ def register_user(data: dict):
         raise NameNotFound
 
     db_collection = (
-        current_app.config["FOCA"]
+        get_config()
         .db.dbs["pubgradeStore"]
         .collections["users"]
         .client
     )
-    retries = current_app.config["FOCA"].endpoints["user"]["retries"]
-    id_length: int = current_app.config["FOCA"].endpoints["user"]["uid_length"]
-    id_charset: str = current_app.config["FOCA"].endpoints["user"][
+    retries = get_config().endpoints["user"]["retries"]
+    id_length: int = get_config().endpoints["user"]["uid_length"]
+    id_charset: str = get_config().endpoints["user"][
         "uid_charset"
     ]
-    access_token_length: int = current_app.config["FOCA"].endpoints[
+    access_token_length: int = get_config().endpoints[
         "access_token"
     ]["length"]
-    access_token_charset: str = current_app.config["FOCA"].endpoints[
+    access_token_charset: str = get_config().endpoints[
         "access_token"
     ]["charset"]
     # First try to evaluate python expression like string.ascii_lowercase',
@@ -131,13 +131,13 @@ def delete_user(uid: str, user_access_token: str):
         UserNotFound: Raised when there is no user with specified uid.
     """
     db_collection_subscriptions = (
-        current_app.config["FOCA"]
+        get_config()
         .db.dbs["pubgradeStore"]
         .collections["subscriptions"]
         .client
     )
     db_collection_user = (
-        current_app.config["FOCA"]
+        get_config()
         .db.dbs["pubgradeStore"]
         .collections["users"]
         .client
@@ -173,7 +173,7 @@ def get_users(admin_user_id: str, admin_user_access_token: str):
         in request.
     """
     db_collection_admin_users = (
-        current_app.config["FOCA"]
+        get_config()
         .db.dbs["pubgradeStore"]
         .collections["admin_users"]
         .client
@@ -185,7 +185,7 @@ def get_users(admin_user_id: str, admin_user_access_token: str):
         raise Unauthorized
 
     db_collection = (
-        current_app.config["FOCA"]
+        get_config()
         .db.dbs["pubgradeStore"]
         .collections["users"]
         .client
@@ -218,7 +218,7 @@ def toggle_user_status(
         in request.
     """
     db_collection_admin_users = (
-        current_app.config["FOCA"]
+        get_config()
         .db.dbs["pubgradeStore"]
         .collections["admin_users"]
         .client
@@ -230,7 +230,7 @@ def toggle_user_status(
         raise Unauthorized
 
     db_collection_user = (
-        current_app.config["FOCA"]
+        get_config()
         .db.dbs["pubgradeStore"]
         .collections["users"]
         .client

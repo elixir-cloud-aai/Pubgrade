@@ -4,8 +4,7 @@ version: 2
 # releases); security updates always target the default branch, though
 updates:
   # Dependencies of the app in `requirements.txt` and `setup.py` (test
-  # dependencies), installed on top of the FOCA base image, which pins most
-  # of them
+  # dependencies), installed on top of the FOCA base image
   - package-ecosystem: pip
     directory: /
     schedule:
@@ -15,22 +14,6 @@ updates:
       # FOCA is bumped by hand, together with the base image (see the `docker`
       # entry) and the code that a newer FOCA needs
       - dependency-name: foca
-      # The last versions for Python 3.9, the version of the FOCA base image
-      # that the tests run in (`make test`); lift with the move to a newer FOCA
-      - dependency-name: pytest
-        versions: [">=9"]
-      - dependency-name: coverage
-        versions: [">=7.11"]
-      - dependency-name: gunicorn
-        versions: [">=24"]
-      - dependency-name: kubernetes
-        versions: [">=36"]
-      # Newer versions run `pip install -e` with PEP 517 in `setup.py
-      # develop`, which pip 21.2 of the base image can't do, don't support
-      # Python 3.9, or lack `pkg_resources`, which connexion 2 of FOCA 0.7
-      # imports
-      - dependency-name: setuptools
-        versions: [">=80"]
     groups:
       python-dependencies:
         patterns: ["*"]

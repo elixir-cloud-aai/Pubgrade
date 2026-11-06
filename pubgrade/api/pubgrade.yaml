@@ -1,7 +1,7 @@
 openapi: 3.0.2
 info:
   title: 'ELIXIR Pubgrade Registry API Specification'
-  version: 1.0.0
+  version: 2.0.0
   description: |
     Pubgrade leverages the publish-subscribe (pub/sub) pattern to effectively 
     decouple continuous integration (CI) from continuous deilivery (CD): 
@@ -885,41 +885,41 @@ components:
       description: 'Bad Request
        ([RFC 7231](https://tools.ietf.org/html/rfc7235))'
       content:
-        application/json:
+        application/problem+json:
           schema:
             $ref: '#/components/schemas/Error'
     Unauthorized:
       description: 'Unauthorized
        ([RFC 7235](https://tools.ietf.org/html/rfc7235))'
       content:
-        application/json:
+        application/problem+json:
           schema:
             $ref: '#/components/schemas/Error'
     Forbidden:
       description: 'Forbidden
        ([RFC 7231](https://tools.ietf.org/html/rfc7231))'
       content:
-        application/json:
+        application/problem+json:
           schema:
             $ref: '#/components/schemas/Error'
     NotFound:
       description: 'Not found ([RFC 7231](https://tools.ietf.org/html/rfc7231))'
       content:
-        application/json:
+        application/problem+json:
           schema:
             $ref: '#/components/schemas/Error'
     InternalServerError:
       description: 'Internal server error
        ([RFC 7231](https://tools.ietf.org/html/rfc7231))'
       content:
-        application/json:
+        application/problem+json:
           schema:
             $ref: '#/components/schemas/Error'
     Error:
       description: 'Unexpected error
        ([RFC 7231](https://tools.ietf.org/html/rfc7231))'
       content:
-        application/json:
+        application/problem+json:
           schema:
             $ref: '#/components/schemas/Error'
   schemas:
@@ -948,9 +948,10 @@ components:
               finished_at:
                 type: string
                 format: date-time
+                nullable: true
                 example: 2021-06-11T17:32:28Z
                 description: Timestamp taken when build is finished and ready to
-                 deploy.
+                 deploy; null until then.
               notifications:
                 type: array
                 description: Result of notifying each subscription of the
@@ -1119,7 +1120,7 @@ components:
             clients (e.g. to determine what the original status code was in 
             cases where it has been changed by an intermediary or cache or when 
             message bodies persist without HTTP information).
-          example: '500'
+          example: 500
         title:
           type: string
           description: |

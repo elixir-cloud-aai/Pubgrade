@@ -69,6 +69,50 @@ builds don't work under OpenShift's default restrictions. With builds off,
 requests that need them get a 403, as does
 `PUT /repositories/{id}/builds/{build_id}`.
 
+## Upgrading to FOCA 0.21 (API 2.0.0)
+
+From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA
+0.7 and Python 3.9. The chart and its values stay the same. What changes:
+
+- **Configuration:** a configuration of your own (`pubgrade.configSecret`)
+  needs the changes of FOCA's migration guides; compare it with
+  `pubgrade/config.yaml`. In short: remove `server.environment` and
+  `server.use_reloader`; give `api.specs` as in the image's configuration;
+  replace the section `exceptions` with `mapping:
+  pubgrade.errors.exceptions.exceptions`; set `server.max_content_length`.
+  Unknown or removed settings stop the app at start, with an error naming
+  them. The settings under `endpoints` stay as they are.
+- **Errors** are problem details (see [API](api.md)), with `title`, `status`
+  and `detail` instead of `msg` and `status_code`.
+- **Timestamps** are in UTC with time zone, and `finished_at` of an
+  unfinished build is `null`. At each start, Pubgrade brings stored
+  timestamps into this format (those without time zone count as UTC), as
+  responses are checked against the API; so do responses with builds and
+  subscriptions that the previous version writes during a rolling update.
+  Until it is replaced, the pod of the previous version answers requests
+  for unfinished builds started by the new one with a 500 (`finished_at` is
+  `null`).
+  Other values (not written by Pubgrade) stay as they are, and responses
+  with them fail with a 500, as do subscriptions whose `callback_url` is
+  not a URI with scheme (e.g., `10.0.0.5:8080/update`): subscribe again
+  with a full URL.
+- **Server:** the image serves the app with Gunicorn instead of Flask's
+  development server, still on port 8080, with one worker and 16 threads
+  (`pubgrade/gunicorn_config.py`; change Gunicorn's settings via
+  `GUNICORN_CMD_ARGS`, e.g., `--threads 32`). Each thread serves one request
+  at a time: a publish holds one until its subscribers answer (up to twice
+  `notification_timeout`, plus 5 seconds), and a slow client holds one while
+  it sends its request. Raise `--threads` for many concurrent publishes, and
+  serve Pubgrade behind a proxy that buffers request bodies (as ingress-nginx
+  does by default). On shutdown, Gunicorn lets running requests finish for
+  up to 28 seconds, within Kubernetes' default grace period of 30 seconds;
+  with a `notification_timeout` above 10, a publish may be cut off then. Request bodies larger
+  than 1 MiB are rejected.
+- **Image:** it runs as user 1000 (group 0), and its app files are read-only;
+  any user ID works, e.g., on OpenShift.
+- **MongoDB:** FOCA 0.21 needs MongoDB 4.4 or later; the chart's MongoDB is
+  newer.
+
 ## Moving from chart 0.1
 
 Chart 0.2 can't upgrade a 0.1 release, as its selectors and names changed:

@@ -33,14 +33,14 @@ class TestRepository:
     repository_url = "https://github.com/elixir-cloud-aai/drs-filer"
 
     def setup(self):
-        self.app.config["FOCA"] = Config(
+        self.app.config.foca = Config(
             db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG
         )
-        self.app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+        self.app.config.foca.db.dbs["pubgradeStore"].collections[
             "repositories"
         ].client = mongomock.MongoClient().db.collection
         for repository in MOCK_REPOSITORIES:
-            self.app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+            self.app.config.foca.db.dbs["pubgradeStore"].collections[
                 "repositories"
             ].client.insert_one(repository)
 
@@ -56,7 +56,7 @@ class TestRepository:
     def test_register_repository_closed(self):
         """Registration can be closed by configuration."""
         self.setup()
-        self.app.config["FOCA"].endpoints["repository"][
+        self.app.config.foca.endpoints["repository"][
             "registration_enabled"
         ] = False
         with self.app.app_context():
@@ -75,15 +75,15 @@ class TestRepository:
 
     def test_register_repository_duplicate_key_error(self):
         app = Flask(__name__)
-        app.config["FOCA"] = Config(
+        app.config.foca = Config(
             db=MongoConfig(**MONGO_CONFIG),
             endpoints=ENDPOINT_CONFIG,
         )
         mock_resp = MagicMock(side_effect=DuplicateKeyError(""))
-        app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+        app.config.foca.db.dbs["pubgradeStore"].collections[
             "repositories"
         ].client = MagicMock()
-        app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+        app.config.foca.db.dbs["pubgradeStore"].collections[
             "repositories"
         ].client.insert_one = mock_resp
         request_data = {"url": self.repository_url}
@@ -92,10 +92,10 @@ class TestRepository:
                 register_repository(data=request_data)
 
     def test_get_repositories(self):
-        self.app.config["FOCA"] = Config(
+        self.app.config.foca = Config(
             db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG
         )
-        self.app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+        self.app.config.foca.db.dbs["pubgradeStore"].collections[
             "repositories"
         ].client = mongomock.MongoClient().db.collection
         with self.app.app_context():

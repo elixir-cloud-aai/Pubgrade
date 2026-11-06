@@ -55,7 +55,7 @@ class NameNotFound(BadRequest):
     pass
 
 
-class UserNotVerified(Unauthorized):
+class UserNotVerified(Forbidden):
     """Raised when user with given identifier was not verified."""
 
     pass
@@ -107,103 +107,138 @@ class DeletePodError(InternalServerError):
     pass
 
 
+# Problem details (RFC 9457) of the exceptions, by class (`exceptions.mapping`
+# in the configuration); exceptions that aren't listed get those of their
+# closest listed base class
 exceptions = {
     Exception: {
-        "msg": "An unexpected error occurred.",
-        "status_code": "500",
+        "title": "Internal Server Error",
+        "status": 500,
+        "detail": "An unexpected error occurred.",
     },
     BadRequestProblem: {
-        "msg": "The request is malformed.",
-        "status_code": "400",
+        "title": "Bad Request",
+        "status": 400,
+        "detail": "The request is malformed.",
     },
     BadRequest: {
-        "msg": "The request is malformed.",
-        "status_code": "400",
+        "title": "Bad Request",
+        "status": 400,
+        "detail": "The request is malformed.",
     },
     ExtraParameterProblem: {
-        "msg": "The request is malformed.",
-        "status_code": "400",
+        "title": "Bad Request",
+        "status": 400,
+        "detail": "The request is malformed.",
     },
     Unauthorized: {
-        "msg": "The request is unauthorized.",
-        "status_code": "401",
+        "title": "Unauthorized",
+        "status": 401,
+        "detail": "The request is unauthorized.",
     },
     Forbidden: {
-        "msg": "The requester is not authorized to perform this action.",
-        "status_code": "403",
+        "title": "Forbidden",
+        "status": 403,
+        "detail": "The requester is not authorized to perform this action.",
     },
     NotFound: {
-        "msg": "The requested resource wasn't found.",
-        "status_code": "404",
+        "title": "Not Found",
+        "status": 404,
+        "detail": "The requested resource wasn't found.",
     },
     InternalServerError: {
-        "msg": "An unexpected error occurred",
-        "status_code": "500",
+        "title": "Internal Server Error",
+        "status": 500,
+        "detail": "An unexpected error occurred.",
     },
     RepositoryNotFound: {
-        "msg": "The requested `Repository` is not found.",
-        "status_code": "404",
+        "title": "Not Found",
+        "status": 404,
+        "detail": "The requested `Repository` is not found.",
     },
     BuildNotFound: {
-        "msg": "The requested `Build` is not found.",
-        "status_code": "404",
+        "title": "Not Found",
+        "status": 404,
+        "detail": "The requested `Build` is not found.",
     },
     UserNotFound: {
-        "msg": "User not found.",
-        "status_code": "404",
+        "title": "Not Found",
+        "status": 404,
+        "detail": "User not found.",
     },
     SubscriptionNotFound: {
-        "msg": "Subscription not found for this user.",
-        "status_code": "404",
+        "title": "Not Found",
+        "status": 404,
+        "detail": "Subscription not found for this user.",
     },
     ValidationError: {
-        "msg": "An unexpected error occurred while Mongo read/write/update",
-        "status_code": "500",
+        "title": "Internal Server Error",
+        "status": 500,
+        "detail": "An unexpected error occurred while reading or writing data.",
     },
     GitCommandError: {
-        "msg": "GitCommandError: An expected error occurred while cloning git "
-        "repository.",
-        "status_code": "500",
+        "title": "Internal Server Error",
+        "status": 500,
+        "detail": (
+            "An unexpected error occurred while cloning the Git repository."
+        ),
     },
     OSError: {
-        "msg": "Input/Output operation failed while creating deployment file.",
-        "status_code": "500",
+        "title": "Internal Server Error",
+        "status": 500,
+        "detail": "Input/Output operation failed while creating deployment file.",
     },
     DeletePodError: {
-        "msg": "Unable to delete pod check deployment name and namespace ENV.",
-        "status_code": "500",
+        "title": "Internal Server Error",
+        "status": 500,
+        "detail": (
+            "Unable to delete the pod; check the deployment name and "
+            "namespace."
+        ),
     },
-    CreatePodError: {"msg": "Unable to create pod.", "status_code": "500"},
+    CreatePodError: {
+        "title": "Internal Server Error",
+        "status": 500,
+        "detail": "Unable to create pod.",
+    },
     GitCloningError: {
-        "msg": "Git repository information is wrong",
-        "status_code": "500",
+        "title": "Internal Server Error",
+        "status": 500,
+        "detail": "The Git repository information is wrong.",
     },
     URLNotFound: {
-        "msg": "Repository URL not found in the request.",
-        "status_code": "400",
+        "title": "Bad Request",
+        "status": 400,
+        "detail": "Repository URL not found in the request.",
     },
     NameNotFound: {
-        "msg": "User name not found in the request.",
-        "status_code": "400",
+        "title": "Bad Request",
+        "status": 400,
+        "detail": "User name not found in the request.",
     },
     UserNotVerified: {
-        "msg": "User is not verified by the super user.",
-        "status_code": "403",
+        "title": "Forbidden",
+        "status": 403,
+        "detail": "User is not verified by the super user.",
     },
     BuildsDisabled: {
-        "msg": "Builds are switched off: publish a prebuilt image instead.",
-        "status_code": "403",
+        "title": "Forbidden",
+        "status": 403,
+        "detail": "Builds are switched off: publish a prebuilt image instead.",
     },
     RegistrationDisabled: {
-        "msg": "Registration is closed.",
-        "status_code": "403",
+        "title": "Forbidden",
+        "status": 403,
+        "detail": "Registration is closed.",
     },
     InvalidImage: {
-        "msg": "The request must name exactly one image, with a tag.",
-        "status_code": "400",
+        "title": "Bad Request",
+        "status": 400,
+        "detail": "The request must name exactly one image, with a tag.",
     },
     TooManySubscriptions: {
-        "msg": "The repository has reached its limit of subscriptions.",
-        "status_code": "403",
+        "title": "Forbidden",
+        "status": 403,
+        "detail": "The repository has reached its limit of subscriptions.",
     },
 }

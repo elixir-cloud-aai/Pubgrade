@@ -1,9 +1,9 @@
 from concurrent.futures import ThreadPoolExecutor, wait
-import datetime
 import logging
 from typing import Any, Dict, List, Optional
 
 import requests
+from pubgrade.timestamps import now, repaired_subscription
 from pubgrade.errors.exceptions import (
     RegistrationDisabled,
     RepositoryNotFound,
@@ -16,6 +16,7 @@ from pubgrade.errors.exceptions import (
 )
 from pubgrade.modules.endpoints.repositories import generate_id
 from flask import current_app
+from foca import get_config
 import json
 from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized
@@ -55,33 +56,33 @@ def register_subscription(uid: str, user_access_token: str, data: dict):
         TooManySubscriptions: Raised when the repository has reached the limit
         `endpoints.subscriptions.max_per_repository`.
     """
-    if not current_app.config["FOCA"].endpoints["subscriptions"].get(
+    if not get_config().endpoints["subscriptions"].get(
         "registration_enabled", True
     ):
         raise RegistrationDisabled
     db_collection_subscriptions = (
-        current_app.config["FOCA"]
+        get_config()
         .db.dbs["pubgradeStore"]
         .collections["subscriptions"]
         .client
     )
     db_collection_user = (
-        current_app.config["FOCA"]
+        get_config()
         .db.dbs["pubgradeStore"]
         .collections["users"]
         .client
     )
     db_collection_repositories = (
-        current_app.config["FOCA"]
+        get_config()
         .db.dbs["pubgradeStore"]
         .collections["repositories"]
         .client
     )
-    retries = current_app.config["FOCA"].endpoints["repository"]["retries"]
-    id_length: int = current_app.config["FOCA"].endpoints["repository"][
+    retries = get_config().endpoints["repository"]["retries"]
+    id_length: int = get_config().endpoints["repository"][
         "id_length"
     ]
-    id_charset: str = current_app.config["FOCA"].endpoints["repository"][
+    id_charset: str = get_config().endpoints["repository"][
         "id_charset"
     ]
     try:
@@ -155,7 +156,7 @@ def get_subscriptions(uid: str, user_access_token: str):
         UserNotFound: Raised when there is no user with specified uid.
     """
     db_collection_user = (
-        current_app.config["FOCA"]
+        get_config()
         .db.dbs["pubgradeStore"]
         .collections["users"]
         .client
@@ -197,13 +198,13 @@ def get_subscription_info(
         UserNotFound: Raised when there is no user with specified uid.
     """
     db_collection_user = (
-        current_app.config["FOCA"]
+        get_config()
         .db.dbs["pubgradeStore"]
         .collections["users"]
         .client
     )
     db_collection_subscriptions = (
-        current_app.config["FOCA"]
+        get_config()
         .db.dbs["pubgradeStore"]
         .collections["subscriptions"]
         .client
@@ -224,7 +225,7 @@ def get_subscription_info(
         raise SubscriptionNotFound
     del subscription_object["_id"]
     del subscription_object["access_token"]
-    return subscription_object
+    return repaired_subscription(subscription_object)
 
 
 def delete_subscription(
@@ -249,13 +250,13 @@ def delete_subscription(
         UserNotFound: Raised when there is no user with specified uid.
     """
     db_collection_user = (
-        current_app.config["FOCA"]
+        get_config()
         .db.dbs["pubgradeStore"]
         .collections["users"]
         .client
     )
     db_collection_subscriptions = (
-        current_app.config["FOCA"]
+        get_config()
         .db.dbs["pubgradeStore"]
         .collections["subscriptions"]
         .client
@@ -302,13 +303,13 @@ def notify_subscriptions(
         found.
     """
     db_collection_subscriptions = (
-        current_app.config["FOCA"]
+        get_config()
         .db.dbs["pubgradeStore"]
         .collections["subscriptions"]
         .client
     )
     db_collection_builds = (
-        current_app.config["FOCA"]
+        get_config()
         .db.dbs["pubgradeStore"]
         .collections["builds"]
         .client
@@ -362,9 +363,7 @@ def notify_subscriptions(
     subscription_object["state"] = (
         "Active" if result == "delivered" else "Inactive"
     )
-    subscription_object["updated_at"] = str(
-        datetime.datetime.now().isoformat()
-    )
+    subscription_object["updated_at"] = now()
     db_collection_subscriptions.update_one(
         {"id": subscription_id}, {"$set": subscription_object}
     )
@@ -434,7 +433,7 @@ def notify_all_subscriptions(
             else _notification_result(subscription_id, "failed")
             for future, subscription_id in futures.items()
         ]
-    app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+    app.config.foca.db.dbs["pubgradeStore"].collections[
         "builds"
     ].client.update_one({"id": build_id}, {"$set": {"notifications": results}})
     return results
@@ -446,7 +445,7 @@ def _max_subscriptions() -> int:
     Returns:
         The setting `endpoints.subscriptions.max_per_repository`.
     """
-    return current_app.config["FOCA"].endpoints["subscriptions"].get(
+    return get_config().endpoints["subscriptions"].get(
         "max_per_repository", DEFAULT_MAX_SUBSCRIPTIONS
     )
 
@@ -457,7 +456,7 @@ def _notification_timeout() -> float:
     Returns:
         The setting `endpoints.subscriptions.notification_timeout`, in seconds.
     """
-    return current_app.config["FOCA"].endpoints["subscriptions"].get(
+    return get_config().endpoints["subscriptions"].get(
         "notification_timeout", DEFAULT_NOTIFICATION_TIMEOUT
     )
 
@@ -479,5 +478,5 @@ def _notification_result(
         "subscription_id": subscription_id,
         "result": result,
         "http_status": http_status,
-        "finished_at": datetime.datetime.now().isoformat(),
+        "finished_at": now(),
     }

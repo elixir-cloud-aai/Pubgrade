@@ -1,7 +1,4 @@
-foca==0.7.0
+foca==0.21.0
 gitpython~=3.2.1
-gunicorn==23.0.0
-kubernetes~=17.17.0
-mock~=5.2.0
-setuptools==46.4.0
-yq~=4.4.5
+gunicorn~=26.2.0
+kubernetes~=37.0.2
