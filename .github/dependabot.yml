@@ -1,14 +1,65 @@
 version: 2
-# Dependencies of the app follow with the move to a newer FOCA, whose base
-# image pins most of them
+# Every entry targets `dev` (`target-branch`), which takes all pull
+# requests whatever the default branch is (`main` only moves forward to
+# releases); security updates always target the default branch, though
 updates:
+  # Dependencies of the app in `requirements.txt` and `setup.py` (test
+  # dependencies), installed on top of the FOCA base image, which pins most
+  # of them
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: monthly
+    target-branch: dev
+    ignore:
+      # FOCA is bumped by hand, together with the base image (see the `docker`
+      # entry) and the code that a newer FOCA needs
+      - dependency-name: foca
+      # The last versions for Python 3.9, the version of the FOCA base image
+      # that the tests run in (`make test`); lift with the move to a newer FOCA
+      - dependency-name: pytest
+        versions: [">=9"]
+      - dependency-name: coverage
+        versions: [">=7.11"]
+      # Newer versions don't support Python 3.9 or lack `pkg_resources`, which
+      # connexion 2 of FOCA 0.7 imports
+      - dependency-name: setuptools
+        versions: [">=81"]
+    groups:
+      python-dependencies:
+        patterns: ["*"]
+  # Dependencies of the updater's image (`build-complete-updater/`)
+  - package-ecosystem: pip
+    directory: /build-complete-updater
+    schedule:
+      interval: monthly
+    target-branch: dev
+    groups:
+      updater-dependencies:
+        patterns: ["*"]
+  # Actions in the workflows, including the pins of the shared actions of
+  # `elixir-cloud-aai/.github` (to the commits of its releases,
+  # `@<commit> # vX.Y.Z`)
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
     target-branch: dev
     groups:
-      actions:
+      github-actions:
+        patterns: ["*"]
+  # Base images in the `Dockerfile`s
+  - package-ecosystem: docker
+    directories: [/, /build-complete-updater]
+    schedule:
+      interval: monthly
+    target-branch: dev
+    ignore:
+      # FOCA is bumped by hand, in the base image and `requirements.txt`
+      # together (see the `pip` entry)
+      - dependency-name: elixircloud/foca
+    groups:
+      docker:
         patterns: ["*"]
   # The submodule with Pubgrade-Sidecar, whose documentation is a section of
   # this one (`docs/hooks.py`), at the newest commit of its branch `dev`
