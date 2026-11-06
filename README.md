@@ -143,7 +143,9 @@ configuration, by default 10 seconds, for connecting and for the response). Resu
 are done, are in the field `notifications` of the build
 (`GET /repositories/{repo_id}/builds/{build_id}`): `delivered` for a 2xx
 response, `failed` for another response or none in time, `skipped` if the
-subscription doesn't match the build. A repository takes at most 100
+subscription doesn't match the build. `delivered` means that the subscriber
+accepted the notification: Pubgrade-Sidecar then rolls out in the background,
+and reports the state at `GET /deployment/{deployment-name}`. A repository takes at most 100
 subscriptions (`endpoints.subscriptions.max_per_repository`); further ones get a
 403.
 
@@ -196,6 +198,14 @@ the community.
 (written to `reports/coverage.xml`): the base image of [FOCA][foca] pins most
 of the dependencies. Some tests clone a public repository, so they need network
 access.
+
+`tests/e2e/upgrade.sh` tests the whole path, and needs Docker, Helm and jq: it
+starts a throwaway k3s cluster, installs Pubgrade from its chart, sets up two
+namespaces with a Deployment and a sidecar each, publishes one image and checks
+that both roll out. It also covers an unreachable subscriber and a tag that
+doesn't exist, which takes a few minutes, as sidecars retry first. Sidecars are built from the branch `dev` of
+[Pubgrade-Sidecar](https://github.com/elixir-cloud-aai/Pubgrade-Sidecar); set
+`SIDECAR_IMAGE` to use a local image instead. CI runs this test as well.
 
 [CI](.github/workflows/ci.yml) runs on pull requests and pushes to `dev`. The
 job `CI passed` sums up all other jobs. Pushes to `dev` publish
