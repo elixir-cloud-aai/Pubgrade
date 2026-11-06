@@ -61,3 +61,11 @@ updates:
     groups:
       docker:
         patterns: ["*"]
+  # The submodule with Pubgrade-Sidecar, whose documentation is a section of
+  # this one (`docs/hooks.py`), at the newest commit of its branch `dev`
+  # (`.gitmodules`)
+  - package-ecosystem: gitsubmodule
+    directory: /
+    schedule:
+      interval: monthly
+    target-branch: dev
