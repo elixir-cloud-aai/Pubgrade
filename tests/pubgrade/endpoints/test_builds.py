@@ -1,6 +1,7 @@
 """Tests for /builds endpoint """
 import copy
 import json
+import logging
 import os
 import shutil
 from unittest.mock import patch, MagicMock
@@ -123,6 +124,34 @@ def mocked_create_namespaced_pod_error(
     raise ApiException
 
 
+def mocked_create_namespaced_pod_echo(
+    self, namespace: str, body: Any, **kwargs: Any
+):
+    """Return the created pod, as the Kubernetes API does."""
+    return body
+
+
+def _api_exception_with_body() -> ApiException:
+    """Get an error of the Kubernetes API whose body has a secret."""
+    exc = ApiException(status=422, reason="Unprocessable Entity")
+    exc.body = '{"message": "value pod-secret is invalid"}'
+    return exc
+
+
+def mocked_create_namespaced_pod_error_body(
+    self, namespace: str, body: Any, **kwargs: Any
+):
+    """Fail with a response body that has a secret."""
+    raise _api_exception_with_body()
+
+
+def mocked_delete_namespaced_pod_error_body(
+    self, name: str, namespace: str, **kwargs: Any
+):
+    """Fail with a response body that has a secret."""
+    raise _api_exception_with_body()
+
+
 def mocked_load_kube_config(
     config_file=None,
     context=None,
@@ -193,6 +222,22 @@ class TestBuild:
                 "id" in res
                 and res["id"][: self.id_length] == MOCK_REPOSITORIES[1]["id"]
             )
+
+    @patch(
+        "pubgrade.modules.endpoints.builds.create_build", mocked_create_build
+    )
+    def test_register_builds_logs_no_token(self, caplog):
+        """Log messages don't contain the token for DockerHub."""
+        self.setup()
+        caplog.set_level(logging.DEBUG)
+        with self.app.app_context():
+            register_builds(
+                MOCK_REPOSITORIES[1]["id"],
+                MOCK_REPOSITORIES[1]["access_token"],
+                {**MOCK_BUILD_PAYLOAD, "dockerhub_token": "dockerhub-secret"},
+            )
+        assert caplog.records
+        assert "dockerhub-secret" not in caplog.text
 
     @patch(
         "pubgrade.modules.endpoints.builds.create_build", mocked_create_build
@@ -679,6 +724,49 @@ class TestBuild:
             build_push_image_using_kaniko(builds.template_file)
         del os.environ["NAMESPACE"]
         del os.environ["KUBERNETES_SERVICE_HOST"]
+
+    @patch("kubernetes.config.load_kube_config", mocked_load_cluster_config)
+    @patch(
+        "kubernetes.client.api.core_v1_api.CoreV1Api.create_namespaced_pod",
+        mocked_create_namespaced_pod_echo,
+    )
+    def test_build_push_image_using_kaniko_logs_no_token(self, caplog):
+        """Log messages name the created pod, without its environment."""
+        caplog.set_level(logging.DEBUG)
+        with self.app.app_context():
+            build_push_image_using_kaniko(
+                "pubgrade/modules/endpoints/kaniko/template.yaml"
+            )
+        assert "kaniko" in caplog.text
+        assert "ACCESS_TOKEN" not in caplog.text
+
+    @patch("kubernetes.config.load_kube_config", mocked_load_cluster_config)
+    @patch(
+        "kubernetes.client.api.core_v1_api.CoreV1Api.create_namespaced_pod",
+        mocked_create_namespaced_pod_error_body,
+    )
+    def test_build_push_image_using_kaniko_error_logs_no_body(self, caplog):
+        """Errors of the Kubernetes API are logged by status and reason."""
+        with self.app.app_context():
+            with pytest.raises(CreatePodError):
+                build_push_image_using_kaniko(
+                    "pubgrade/modules/endpoints/kaniko/template.yaml"
+                )
+        assert "422" in caplog.text
+        assert "pod-secret" not in caplog.text
+
+    @patch("kubernetes.client.api.core_v1_api.CoreV1Api", mocked_core_v1_api)
+    @patch(
+        "kubernetes.client.api.core_v1_api.CoreV1Api" ".delete_namespaced_pod",
+        mocked_delete_namespaced_pod_error_body,
+    )
+    def test_delete_pod_error_logs_no_body(self, caplog):
+        """Errors of the Kubernetes API are logged by status and reason."""
+        with self.app.app_context():
+            with pytest.raises(DeletePodError):
+                builds.delete_pod("name", "namespace")
+        assert "422" in caplog.text
+        assert "pod-secret" not in caplog.text
 
 
 class TestPublish:

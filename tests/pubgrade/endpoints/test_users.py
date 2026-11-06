@@ -1,6 +1,7 @@
 """Tests for /users endpoint """
 from unittest.mock import MagicMock
 
+import logging
 import mongomock
 import pytest
 from flask import Flask
@@ -59,6 +60,15 @@ class TestUsers:
             assert "user_access_token" in response
             assert "name" in response
             assert sanitise_text(name) == response["name"]
+
+    def test_register_user_logs_no_token(self, caplog):
+        """Log messages name the new user, without its token."""
+        self.setup()
+        caplog.set_level(logging.DEBUG)
+        with self.app.app_context():
+            response = register_user({"name": "Name"})
+        assert response["uid"] in caplog.text
+        assert response["user_access_token"] not in caplog.text
 
     def test_register_user_closed(self):
         """Registration can be closed by configuration."""

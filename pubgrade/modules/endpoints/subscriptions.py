@@ -106,7 +106,7 @@ def register_subscription(uid: str, user_access_token: str, data: dict):
     ) >= _max_subscriptions():
         raise TooManySubscriptions
     for i in range(retries):
-        logger.debug(f"Trying to insert/update object: try {i}" + str(data))
+        logger.debug(f"Trying to insert/update object: try {i}")
         data["id"] = generate_id(
             charset=id_charset,
             length=id_length,

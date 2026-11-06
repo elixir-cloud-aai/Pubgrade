@@ -164,9 +164,7 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
     if not build_path:
         validate_prebuilt_image(build_data)
     for i in range(retries):
-        logger.debug(
-            f"Trying to insert/update object: try {i}" + str(build_data)
-        )
+        logger.debug(f"Trying to insert/update object: try {i}")
         build_data["id"] = repository_id + generate_id(
             charset=id_charset,
             length=id_length,
@@ -532,15 +530,14 @@ def build_push_image_using_kaniko(deployment_file_location: str):
     with open(deployment_file_location) as f:
         dep = yaml.safe_load(f)
         try:
-            resp = v1.create_namespaced_pod(body=dep, namespace=namespace)
+            v1.create_namespaced_pod(body=dep, namespace=namespace)
         except ApiException as e:
             logger.error(
-                "Exception when calling "
-                "AppsV1Api->create_namespaced_pod: "
-                "%s\n" % e
+                f"Creating pod {dep['metadata']['name']} failed: "
+                f"{e.status} {e.reason}"
             )
             raise CreatePodError
-        logger.info("Deployment created. status='%s'" % resp)
+        logger.info(f"Pod {dep['metadata']['name']} created.")
 
 
 def build_completed(
@@ -651,11 +648,7 @@ def delete_pod(name: str, namespace: str):
         api_response = api_instance.delete_namespaced_pod(name, namespace)
         return api_response
     except ApiException as e:
-        logger.error(
-            "Exception when calling "
-            "AppsV1Api->delete_namespaced_deployment: "
-            "%s\n" % e
-        )
+        logger.error(f"Deleting pod {name} failed: {e.status} {e.reason}")
         raise DeletePodError
 
 

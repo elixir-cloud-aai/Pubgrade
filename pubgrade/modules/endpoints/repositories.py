@@ -103,7 +103,7 @@ def register_repository(data: dict):
     if "_id" in repository_object:
         del repository_object["_id"]
     del repository_object["url"]
-    logger.info(f"Added object with '{repository_object}'.")
+    logger.info(f"Added repository {repository_object['id']}.")
     return repository_object
 
 
