@@ -17,11 +17,11 @@ exclude_docs: |
 hooks:
   - docs/hooks.py
 
-# Files included in pages (see `docs/hooks.py` and `pymdownx.snippets`)
+# Files included in pages: snippets of `README.md` (`pymdownx.snippets`) and
+# the Sidecar's pages (`docs/hooks.py`)
 watch:
   - README.md
   - external/pubgrade-sidecar/docs
-  - external/pubgrade-sidecar/README.md
 
 theme:
   name: material
