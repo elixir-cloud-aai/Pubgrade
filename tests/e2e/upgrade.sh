@@ -90,6 +90,9 @@ spec:
             - {name: ACCESS_TOKEN, value: ${token}}
           ports:
             - {containerPort: 8080}
+          readinessProbe:
+            tcpSocket: {port: 8080}
+            periodSeconds: 2
 ---
 apiVersion: v1
 kind: Service
@@ -146,6 +149,28 @@ wait_for_report() {
   fail "${site}: sidecar didn't report ${status}: ${report}"
 }
 
+# Wait until Pubgrade reaches a site's sidecar at its callback URL, or fail.
+# Pubgrade notifies a subscriber only once, so the sidecar must be reachable
+# from Pubgrade's pod (Python is in its image) before anything is published.
+wait_for_sidecar() {
+  local site="$1" error="" _
+  for _ in $(seq 1 60); do
+    if error="$(k exec --request-timeout=20s --namespace pubgrade deployment/pubgrade -- python -c '
+import sys, urllib.error, urllib.request
+try:
+    urllib.request.urlopen(sys.argv[1], timeout=5)
+except urllib.error.HTTPError as error:
+    # Any answer but a server error will do (e.g. 401 without a token)
+    if error.code >= 500:
+        sys.exit(f"HTTP {error.code}")
+' "http://sidecar.${site}:8080/deployment/target" 2>&1 > /dev/null)"; then
+      return 0
+    fi
+    sleep 2
+  done
+  fail "${site}: Pubgrade can't reach the sidecar: $(tail -n 1 <<< "${error}")"
+}
+
 # Wait until a site runs an image, and print the seconds this took
 wait_for_rollout() {
   local site="$1" image="$2" start="${SECONDS}" _
@@ -200,6 +225,9 @@ for site in "${SITES[@]}"; do
   tokens[${site}]="$(head -c 24 /dev/urandom | base64 | tr -d '/+=')"
   create_site "${site}" "${tokens[${site}]}"
   subscriptions[${site}]="$(subscribe "sidecar.${site}" "${tokens[${site}]}")"
+done
+for site in "${SITES[@]}"; do
+  wait_for_sidecar "${site}"
 done
 unreachable="$(subscribe "nobody.pubgrade" "token")"
 
