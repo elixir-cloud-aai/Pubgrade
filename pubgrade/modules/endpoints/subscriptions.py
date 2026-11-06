@@ -122,6 +122,7 @@ def register_subscription(uid: str, user_access_token: str, data: dict):
                 {"id": data["repository_id"]},
                 {"$push": {"subscription_list": data["id"]}},
             )
+            logger.info(f"Added subscription {data['id']}.")
             break
         except DuplicateKeyError:
             logger.error(

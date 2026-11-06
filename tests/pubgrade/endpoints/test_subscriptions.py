@@ -1,6 +1,6 @@
 """Tests for /subscriptions endpoint """
-import logging
 import json
+import logging
 import threading
 import time
 from unittest.mock import patch, MagicMock
@@ -112,12 +112,12 @@ class TestSubscriptions:
         self.setup()
         caplog.set_level(logging.DEBUG)
         with self.app.app_context():
-            register_subscription(
+            res = register_subscription(
                 MOCK_USER["uid"],
                 MOCK_USER["user_access_token"],
                 {**SUBSCRIPTION_PAYLOAD, "access_token": "subscription-secret"},
             )
-        assert caplog.records
+        assert f"Added subscription {res['subscription_id']}." in caplog.messages
         assert "subscription-secret" not in caplog.text
 
     def test_register_subscription(self):

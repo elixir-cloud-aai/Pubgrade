@@ -177,6 +177,7 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
             build_data["started_at"] = now()
             build_data["status"] = "QUEUED"
             db_collection_builds.insert_one(build_data)
+            logger.info(f"Added build {build_data['id']}.")
             if not build_path:
                 break
             branch = ""
@@ -258,7 +259,7 @@ def get_builds(repository_id: str):
             build_object_list.append(build_data)
     except Exception:
         logger.error(
-            "No build found for given repository identifier. {repository_id}"
+            f"No build found for given repository identifier. {repository_id}"
         )
         raise BuildNotFound
     return build_object_list
@@ -536,7 +537,7 @@ def build_push_image_using_kaniko(deployment_file_location: str):
                 f"Creating pod {dep['metadata']['name']} failed: "
                 f"{e.status} {e.reason}"
             )
-            raise CreatePodError
+            raise CreatePodError from None
         logger.info(f"Pod {dep['metadata']['name']} created.")
 
 
@@ -649,7 +650,7 @@ def delete_pod(name: str, namespace: str):
         return api_response
     except ApiException as e:
         logger.error(f"Deleting pod {name} failed: {e.status} {e.reason}")
-        raise DeletePodError
+        raise DeletePodError from None
 
 
 def trigger_signing_image(dockerhub_token: str,
@@ -672,8 +673,18 @@ def trigger_signing_image(dockerhub_token: str,
     })
     headers = {
         'Accept': 'application/vnd.github+json',
-        'Authorization': 'Bearer {}'.format(os.getenv("GH_ACCESS_TOKEN")),
+        'Authorization': 'Bearer {}'.format(
+            (os.getenv("GH_ACCESS_TOKEN") or "").strip()
+        ),
         'X-GitHub-Api-Version': '2022-11-28',
         'Content-Type': 'application/json'
     }
-    response = requests.request("POST", url, headers=headers, data=payload)
+    try:
+        requests.request("POST", url, headers=headers, data=payload)
+    except requests.exceptions.RequestException as error:
+        # Only the type: messages can quote headers
+        logger.error(
+            f"Triggering the signing of {push_tag} failed: "
+            f"{type(error).__name__}"
+        )
+        raise InternalServerError from None

@@ -4,10 +4,13 @@ import json
 import logging
 import os
 import shutil
+import traceback
 from unittest.mock import patch, MagicMock
 
 import mongomock
 import pytest
+import requests
+import yaml
 from flask import Flask
 from foca.models.config import Config, MongoConfig
 from typing import Any
@@ -231,12 +234,12 @@ class TestBuild:
         self.setup()
         caplog.set_level(logging.DEBUG)
         with self.app.app_context():
-            register_builds(
+            res = register_builds(
                 MOCK_REPOSITORIES[1]["id"],
                 MOCK_REPOSITORIES[1]["access_token"],
                 {**MOCK_BUILD_PAYLOAD, "dockerhub_token": "dockerhub-secret"},
             )
-        assert caplog.records
+        assert f"Added build {res['id']}." in caplog.messages
         assert "dockerhub-secret" not in caplog.text
 
     @patch(
@@ -730,15 +733,31 @@ class TestBuild:
         "kubernetes.client.api.core_v1_api.CoreV1Api.create_namespaced_pod",
         mocked_create_namespaced_pod_echo,
     )
-    def test_build_push_image_using_kaniko_logs_no_token(self, caplog):
+    def test_build_push_image_using_kaniko_logs_no_token(
+        self, caplog, tmp_path, monkeypatch
+    ):
         """Log messages name the created pod, without its environment."""
+        monkeypatch.setattr(
+            builds,
+            "template_file",
+            "pubgrade/modules/endpoints/kaniko/template.yaml",
+        )
+        deployment_file = tmp_path / "build.yaml"
+        create_deployment_YAML(
+            dockerfile_location="Dockerfile",
+            intermediate_registry_path="registry/image",
+            build_context="context",
+            deployment_file_location=str(deployment_file),
+            config_file_location="config.json",
+            project_access_token="project-secret",
+        )
+        assert "project-secret" in deployment_file.read_text()
         caplog.set_level(logging.DEBUG)
         with self.app.app_context():
-            build_push_image_using_kaniko(
-                "pubgrade/modules/endpoints/kaniko/template.yaml"
-            )
-        assert "kaniko" in caplog.text
-        assert "ACCESS_TOKEN" not in caplog.text
+            build_push_image_using_kaniko(str(deployment_file))
+        name = yaml.safe_load(deployment_file.read_text())["metadata"]["name"]
+        assert f"Pod {name} created." in caplog.messages
+        assert "project-secret" not in caplog.text
 
     @patch("kubernetes.config.load_kube_config", mocked_load_cluster_config)
     @patch(
@@ -748,12 +767,17 @@ class TestBuild:
     def test_build_push_image_using_kaniko_error_logs_no_body(self, caplog):
         """Errors of the Kubernetes API are logged by status and reason."""
         with self.app.app_context():
-            with pytest.raises(CreatePodError):
+            with pytest.raises(CreatePodError) as raised:
                 build_push_image_using_kaniko(
                     "pubgrade/modules/endpoints/kaniko/template.yaml"
                 )
-        assert "422" in caplog.text
-        assert "pod-secret" not in caplog.text
+        assert [(r.levelno, r.getMessage()) for r in caplog.records] == [
+            (logging.ERROR, "Creating pod kaniko failed: 422 Unprocessable Entity")
+        ]
+        # FOCA logs the exception with its context
+        assert "pod-secret" not in "".join(
+            traceback.format_exception(raised.value)
+        )
 
     @patch("kubernetes.client.api.core_v1_api.CoreV1Api", mocked_core_v1_api)
     @patch(
@@ -763,10 +787,42 @@ class TestBuild:
     def test_delete_pod_error_logs_no_body(self, caplog):
         """Errors of the Kubernetes API are logged by status and reason."""
         with self.app.app_context():
-            with pytest.raises(DeletePodError):
+            with pytest.raises(DeletePodError) as raised:
                 builds.delete_pod("name", "namespace")
-        assert "422" in caplog.text
-        assert "pod-secret" not in caplog.text
+        assert [(r.levelno, r.getMessage()) for r in caplog.records] == [
+            (logging.ERROR, "Deleting pod name failed: 422 Unprocessable Entity")
+        ]
+        assert "pod-secret" not in "".join(
+            traceback.format_exception(raised.value)
+        )
+
+    @patch("requests.request")
+    def test_trigger_signing_image_error_logs_no_header(
+        self, request, caplog, monkeypatch
+    ):
+        """Failed requests are logged by type: messages can quote headers."""
+        request.side_effect = requests.exceptions.InvalidHeader(
+            "Invalid header value: 'Bearer gh-secret'"
+        )
+        monkeypatch.setenv("GH_ACCESS_TOKEN", " gh-secret\n")
+        self.setup()
+        with self.app.app_context():
+            with pytest.raises(InternalServerError) as raised:
+                builds.trigger_signing_image(
+                    dockerhub_token="dXNlcjpwYXNzd2Q=",
+                    image_path="image",
+                    pull_tag="registry/image:1",
+                    push_tag="image:1",
+                )
+        assert request.call_args.kwargs["headers"]["Authorization"] == (
+            "Bearer gh-secret"
+        )
+        assert caplog.messages == [
+            "Triggering the signing of image:1 failed: InvalidHeader"
+        ]
+        assert "gh-secret" not in "".join(
+            traceback.format_exception(raised.value)
+        )
 
 
 class TestPublish:

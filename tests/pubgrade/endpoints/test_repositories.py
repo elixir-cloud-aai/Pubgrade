@@ -1,7 +1,7 @@
 """Tests for /repositories endpoint """
+import logging
 from unittest.mock import MagicMock
 
-import logging
 import mongomock
 import pytest
 from flask import Flask
