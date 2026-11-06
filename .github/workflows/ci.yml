@@ -1,6 +1,6 @@
 # Everything that must pass on pull requests and pushes to `dev`: the pull
-# request title, the unit tests (coverage to Codecov), the chart, a smoke test
-# of the image, a scan of the images (report only) and, on pushes, push the
+# request title, the unit tests (coverage to Codecov), the chart, the docs, a
+# smoke test of the image, a scan of the images (report only) and, on pushes, push the
 # images by digest (with SBOM and provenance attestations), scan exactly those
 # digests, then attest, sign (Sigstore) and tag them. The gate `passed` ("CI
 # passed") is the only check to require. No `paths:` filters, so that the gate
@@ -98,6 +98,30 @@ jobs:
         run: helm lint helm --strict
       - name: Check rendered chart
         run: tests/chart.sh
+
+  # Builds the documentation (`mkdocs.yml`) as Read the Docs does
+  # (`.readthedocs.yaml`), with the documentation of Pubgrade-Sidecar from the
+  # submodule `external/pubgrade-sidecar` (see `docs/hooks.py`)
+  docs:
+    name: Docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+      # Python version of Read the Docs (`.readthedocs.yaml`)
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - name: Install dependencies
+        run: python -m pip install ".[docs]"
+      # Fails on warnings, e.g., of broken links, anchors and references
+      - name: Build documentation
+        run: mkdocs build --strict
 
   # Starts the image with MongoDB, under an arbitrary user ID as on OpenShift;
   # the container's name is the host in `pubgrade/config.yaml`
@@ -291,7 +315,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     if: ${{ github.event_name == 'push' }}
-    needs: [test, chart, smoke, upgrade, push, scan]
+    needs: [test, chart, docs, smoke, upgrade, push, scan]
     # Docker Hub secrets; the environment only allows branch `dev`
     environment: dev-images
     permissions:
@@ -394,7 +418,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     if: always()
-    needs: [title, test, chart, smoke, upgrade, push, scan, publish]
+    needs: [title, test, chart, docs, smoke, upgrade, push, scan, publish]
     permissions: {}
     steps:
       - name: Check results of all jobs
