@@ -1,0 +1,23 @@
+{{- if include "pubgrade.routeEnabled" . }}
+{{- $hostName := required "hostName must be set if an OpenShift Route is created" .Values.hostName }}
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: pubgrade
+  {{- with .Values.pubgrade.route.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  host: {{ $hostName | quote }}
+  port:
+    targetPort: http
+  tls:
+    insecureEdgeTerminationPolicy: Redirect
+    termination: edge
+  to:
+    kind: Service
+    name: pubgrade-service
+    weight: 100
+  wildcardPolicy: None
+{{- end }}

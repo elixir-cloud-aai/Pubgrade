@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pubgrade
+spec:
+  replicas: {{ .Values.pubgrade.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "pubgrade.selectorLabels" "app" | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "pubgrade.selectorLabels" "app" | nindent 8 }}
+    spec:
+      {{- if .Values.builds.enabled }}
+      serviceAccountName: pubgrade
+      {{- else }}
+      automountServiceAccountToken: false
+      {{- end }}
+      containers:
+        - name: pubgrade
+          image: {{ .Values.pubgrade.image | quote }}
+          imagePullPolicy: {{ .Values.pubgrade.imagePullPolicy }}
+          securityContext:
+            {{- include "pubgrade.securityContext" . | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.pubgrade.port }}
+          readinessProbe:
+            httpGet:
+              path: /ui/
+              port: http
+            periodSeconds: 10
+          {{- with .Values.pubgrade.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          env:
+            # Takes precedence over the host in the configuration
+            - name: MONGO_HOST
+              value: mongodb
+            - name: MONGO_PORT
+              value: {{ .Values.mongodb.port | quote }}
+            {{- if .Values.builds.enabled }}
+            {{- $secret := required "builds.existingSecret must be set if builds are enabled" .Values.builds.existingSecret }}
+            - name: NAMESPACE
+              value: {{ .Release.Namespace }}
+            - name: PV_NAME
+              value: pubgrade-builds
+            - name: BASE_DIR
+              value: /pubgrade_temp_files
+            - name: PUBGRADE_URL
+              value: {{ required "builds.pubgradeUrl must be set if builds are enabled" .Values.builds.pubgradeUrl | quote }}
+            - name: GH_ACCESS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: gh_access_token
+            - name: COSIGN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: cosign_password
+            - name: COSIGN_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: cosign_private_key
+            - name: INTERMEDIATE_REGISTRY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: intermediate_registry_token
+            {{- end }}
+          {{- if or .Values.builds.enabled .Values.pubgrade.configSecret }}
+          volumeMounts:
+            {{- if .Values.pubgrade.configSecret }}
+            - name: config
+              mountPath: /app/pubgrade/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            {{- end }}
+            {{- if .Values.builds.enabled }}
+            - name: builds
+              mountPath: /pubgrade_temp_files
+            {{- end }}
+          {{- end }}
+      {{- if or .Values.builds.enabled .Values.pubgrade.configSecret }}
+      volumes:
+        {{- if .Values.pubgrade.configSecret }}
+        - name: config
+          secret:
+            secretName: {{ .Values.pubgrade.configSecret }}
+        {{- end }}
+        {{- if .Values.builds.enabled }}
+        - name: builds
+          persistentVolumeClaim:
+            claimName: pubgrade-builds
+        {{- end }}
+      {{- end }}

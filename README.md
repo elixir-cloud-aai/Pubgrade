@@ -22,11 +22,49 @@ Currently supported features:
 
 ## Installation
 
+The Helm chart in `helm/` installs Pubgrade and a MongoDB on Kubernetes or
+OpenShift, into any namespace, without special rights. Install one release per
+namespace, as resource names are fixed.
+
 1. Install and setup [kubernetes][kubernetes-install].
 2. Install [Helm][helm-install].
-3. Modify helm/values.yaml.
-4. Create a namespace. `kubectl create namespace pubgrade`
-5. Create deployment using helm. `helm install pubgrade helm/ -n pubgrade`
+3. Create a namespace: `kubectl create namespace pubgrade`
+4. Copy `pubgrade/config.yaml`, add your admin users with new tokens under
+   `endpoints.subscriptions.admin_users`, and store it in a Secret:
+   `kubectl create secret generic pubgrade-config -n pubgrade --from-file=config.yaml`.
+   Secrets don't belong in values files. Admin users are the only ones who can
+   verify other users. After changing the Secret, restart Pubgrade: the database
+   then follows the list of admin users.
+5. Install: `helm install pubgrade helm/ -n pubgrade --set pubgrade.configSecret=pubgrade-config --set hostName=<host name>`
+
+The service is exposed by a Route if the cluster serves Routes (OpenShift; TLS
+at the router); on other clusters, enable it with
+`--set pubgrade.ingress.enabled=true`, which requests a certificate from
+[cert-manager][cert-manager] by default. See `helm/values.yaml` for all values.
+Pubgrade's pods run as any user ID in group 0, with no fixed ID, as OpenShift
+assigns its own.
+
+Builds are off by default. To let Pubgrade build images, set
+`endpoints.builds.enabled` in the configuration and `builds.enabled` in the
+chart, which must match, with the other values under `builds`; this adds an
+updater, a shared volume and rights to manage pods in the namespace. The volume
+needs a storage class with `ReadWriteMany` (`builds.volume.storageClass`). Build
+pods run as root, so builds don't work under OpenShift's default restrictions.
+
+### Moving from chart 0.1
+
+Chart 0.2 can't upgrade a 0.1 release, as its selectors and names changed:
+
+- Remove the old release and install anew. MongoDB's volume has a new name and a
+  newer major version, so its data doesn't carry over: register repositories and
+  subscriptions again.
+- Values were renamed: `pubgrade_webserver` to `pubgrade`, `pubgrade_mongodb` to
+  `mongodb`, `pubgrade_build_complete_updater` to `builds.updater`,
+  `pubgrade_url` to `builds.pubgradeUrl`, and the Ingress's `url` to `hostName`.
+- The configuration in the image has no admin users any more, and no debug mode:
+  bring your own, with new tokens, in a Secret (step 4).
+- The Secret `pubgrade-secret` is gone: with builds on, create your own
+  (`builds.existingSecret`).
 
 ## Usage
 
@@ -74,6 +112,9 @@ curl --location --request POST 'http://<host_url>:<host_port>/subscriptions' \
 }'
 ```
 
+   Pubgrade sends `access_token` to `callback_url`, so use `https` for anything
+   outside the cluster.
+
 5. Publish an image. (The repository's CI builds and pushes the image, then
    calls this)
 
@@ -102,7 +143,9 @@ configuration, by default 10 seconds, for connecting and for the response). Resu
 are done, are in the field `notifications` of the build
 (`GET /repositories/{repo_id}/builds/{build_id}`): `delivered` for a 2xx
 response, `failed` for another response or none in time, `skipped` if the
-subscription doesn't match the build. A repository takes at most 100
+subscription doesn't match the build. `delivered` means that the subscriber
+accepted the notification: Pubgrade-Sidecar then rolls out in the background,
+and reports the state at `GET /deployment/{deployment-name}`. A repository takes at most 100
 subscriptions (`endpoints.subscriptions.max_per_repository`); further ones get a
 403.
 
@@ -156,6 +199,14 @@ the community.
 of the dependencies. Some tests clone a public repository, so they need network
 access.
 
+`tests/e2e/upgrade.sh` tests the whole path, and needs Docker, Helm and jq: it
+starts a throwaway k3s cluster, installs Pubgrade from its chart, sets up two
+namespaces with a Deployment and a sidecar each, publishes one image and checks
+that both roll out. It also covers an unreachable subscriber and a tag that
+doesn't exist, which takes a few minutes, as sidecars retry first. Sidecars are built from the branch `dev` of
+[Pubgrade-Sidecar](https://github.com/elixir-cloud-aai/Pubgrade-Sidecar); set
+`SIDECAR_IMAGE` to use a local image instead. CI runs this test as well.
+
 [CI](.github/workflows/ci.yml) runs on pull requests and pushes to `dev`. The
 job `CI passed` sums up all other jobs. Pushes to `dev` publish
 `elixircloud/pubgrade` and `elixircloud/pubgrade-updater`, signed with Sigstore
@@ -196,6 +247,7 @@ proposal, question etc.
 [badge-license]: https://img.shields.io/badge/license-Apache%202.0-blue.svg
 [badge-url-build-status]: https://github.com/elixir-cloud-aai/Pubgrade/actions/workflows/ci.yml
 [contributing]: https://github.com/elixir-cloud-aai/elixir-cloud-aai/blob/dev/CONTRIBUTING.md
+[cert-manager]: https://cert-manager.io/
 [elixir-cloud]: https://github.com/elixir-cloud-aai/elixir-cloud-aai
 [elixir-cloud-registry]: https://cloud-registry.rahtiapp.fi/ga4gh/registry/v1/ui/
 [helm-install]: https://helm.sh/docs/intro/install/

@@ -22,13 +22,16 @@ COPY --chown=1000:1000 ./ /app
 ## Remove this with the move to a newer FOCA
 RUN cd /app \
   && python setup.py develop \
-  && chmod g+w /app/pubgrade/api/ \
+  && chgrp -R 0 /app/pubgrade/api/ \
+  && chmod -R g+rwX /app/pubgrade/api/ \
   && pip install -r requirements.txt \
   && pip install --no-deps pymongo==3.13.0
 
 
-RUN mkdir /pubgrade_temp_files && chown 1000 /pubgrade_temp_files
+RUN mkdir /pubgrade_temp_files && chown 1000:0 /pubgrade_temp_files && chmod g+rwX /pubgrade_temp_files
 
+## OpenShift starts containers under an arbitrary user ID in group 0: the API
+## directory (FOCA writes the modified specification there) is writable for it
 USER 1000
 
 CMD ["bash", "-c", "cd /app/pubgrade; python app.py"]
