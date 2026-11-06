@@ -1,13 +1,13 @@
 # Everything that must pass on pull requests and pushes to `dev`: the pull
-# request title, the unit tests (coverage to Codecov), the chart, a smoke test
-# of the image, a scan of the images (report only) and, on pushes, push the
-# images by digest (with SBOM and provenance attestations), scan exactly those
-# digests, then attest, sign (Sigstore) and tag them. The gate `passed` ("CI
-# passed") is the only check to require. No `paths:` filters, so that the gate
-# always reports; skip jobs with `if:` instead (and allow the skip in the
-# gate). Runs also when a pull request is edited, so that the title check
-# follows the title; all jobs run then, as a run that skipped the tests would
-# report "CI passed" for the commit
+# request title, lint (the citation metadata), the unit tests (coverage to
+# Codecov), the chart, a smoke test of the image, a scan of the images (report
+# only) and, on pushes, push the images by digest (with SBOM and provenance
+# attestations), scan exactly those digests, then attest, sign (Sigstore) and
+# tag them. The gate `passed` ("CI passed") is the only check to require.
+# No `paths:` filters, so that the gate always reports; skip jobs with `if:`
+# instead (and allow the skip in the gate). Runs also when a pull request is
+# edited, so that the title check follows the title; all jobs run then, as a
+# run that skipped the tests would report "CI passed" for the commit
 
 name: CI
 on:
@@ -58,6 +58,26 @@ jobs:
     steps:
       - name: Check PR title
         uses: elixir-cloud-aai/.github/actions/pr-title@743e82d290a53768454999e413756a924e383259 # v1.0.0
+
+  # More checks follow with the move to `pyproject.toml` and ruff (#38)
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      # In its own environment, as cffconvert pins an old jsonschema; its
+      # dependencies resolve within its own bounds. 2.0.0 is the latest stable
+      # release (not bumped by Dependabot; update manually)
+      - name: Validate citation metadata
+        run: pipx run --spec cffconvert==2.0.0 cffconvert --validate -i CITATION.cff
 
   # In the image, as the FOCA base image pins most of the dependencies
   test:
@@ -273,7 +293,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     if: ${{ github.event_name == 'push' }}
-    needs: [test, chart, smoke, push, scan]
+    needs: [lint, test, chart, smoke, push, scan]
     # Docker Hub secrets; the environment only allows branch `dev`
     environment: dev-images
     permissions:
@@ -376,7 +396,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     if: always()
-    needs: [title, test, chart, smoke, push, scan, publish]
+    needs: [title, lint, test, chart, smoke, push, scan, publish]
     permissions: {}
     steps:
       - name: Check results of all jobs
