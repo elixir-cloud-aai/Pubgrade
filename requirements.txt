@@ -1,7 +1,7 @@
 foca==0.7.0
-gitpython~=3.1.18
-gunicorn==22.0.0
+gitpython~=3.2.1
+gunicorn==23.0.0
 kubernetes~=17.17.0
-mock~=4.0.3
+mock~=5.2.0
 setuptools==46.4.0
-yq~=2.12.2
+yq~=4.4.5
