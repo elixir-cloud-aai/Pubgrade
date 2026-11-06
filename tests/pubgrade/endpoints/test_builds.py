@@ -1,4 +1,6 @@
 """Tests for /builds endpoint """
+import copy
+import json
 import os
 import shutil
 from unittest.mock import patch, MagicMock
@@ -14,6 +16,8 @@ from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized, InternalServerError
 
 from pubgrade.errors.exceptions import (
+    BuildsDisabled,
+    InvalidImage,
     RepositoryNotFound,
     BuildNotFound,
     CreatePodError,
@@ -21,6 +25,7 @@ from pubgrade.errors.exceptions import (
     GitCloningError,
 )
 from pubgrade.modules.endpoints.builds import (
+    IMAGE_WITH_TAG,
     register_builds,
     get_builds,
     get_build_info,
@@ -85,8 +90,8 @@ def mocked_delete_namespaced_pod_error(
     raise ApiException
 
 
-def mocked_request_api(method, url, data, headers):
-    return "successful"
+def mocked_request_api(method, url, data, headers, **kwargs):
+    return MagicMock(status_code=200)
 
 
 def mocked_load_cluster_config(
@@ -490,6 +495,36 @@ class TestBuild:
             assert data["status"] == "SUCCEEDED"
             assert res["id"] == MOCK_REPOSITORY_2["build_list"][0]
 
+    def test_build_completed_build_of_other_repository(self):
+        """A repository's token only completes that repository's builds."""
+        self.setup_with_build()
+        builds_collection = (
+            self.app.config["FOCA"]
+            .db.dbs["pubgradeStore"]
+            .collections["builds"]
+            .client
+        )
+        builds_collection.insert_one({"id": "other", "status": "QUEUED"})
+        with self.app.app_context():
+            with pytest.raises(BuildNotFound):
+                build_completed(
+                    MOCK_REPOSITORY_2["id"],
+                    "other",
+                    MOCK_REPOSITORY_2["access_token"],
+                )
+        assert builds_collection.find_one({"id": "other"})["status"] == "QUEUED"
+
+    def test_build_completed_listed_build_is_gone(self):
+        """A build listed at the repository, but no longer stored, isn't found."""
+        self.setup()
+        with self.app.app_context():
+            with pytest.raises(BuildNotFound):
+                build_completed(
+                    MOCK_REPOSITORY_2["id"],
+                    MOCK_REPOSITORY_2["build_list"][0],
+                    MOCK_REPOSITORY_2["access_token"],
+                )
+
     def test_build_completed_build_not_found(self):
         self.setup_with_build()
         with self.app.app_context():
@@ -603,3 +638,201 @@ class TestBuild:
             build_push_image_using_kaniko(builds.template_file)
         del os.environ["NAMESPACE"]
         del os.environ["KUBERNETES_SERVICE_HOST"]
+
+
+class TestPublish:
+    """Tests for publishing prebuilt images, with builds switched off."""
+
+    app = Flask(__name__)
+    repository = MOCK_REPOSITORY_2
+    payload = {
+        "images": [{"name": "elixircloud/tesk-api:v1.2.0"}],
+        "head_commit": {"tag": "v1.2.0"},
+    }
+
+    def setup_method(self):
+        """Set up the app with a repository and a matching subscription."""
+        self.app.config["FOCA"] = Config(
+            db=MongoConfig(**MONGO_CONFIG),
+            endpoints=copy.deepcopy(ENDPOINT_CONFIG),
+        )
+        self.app.config["FOCA"].endpoints["builds"]["enabled"] = False
+        for name in ("repositories", "builds", "subscriptions"):
+            self.collection(name).client = mongomock.MongoClient().db.collection
+        self.collection("repositories").client.insert_one(
+            copy.deepcopy(self.repository)
+        )
+        self.collection("subscriptions").client.insert_one(
+            {**MOCK_SUBSCRIPTION_INFO, "type": "tag", "value": "*"}
+        )
+
+    def collection(self, name):
+        """Get the configuration of a collection.
+
+        Args:
+            name: Name of the collection.
+
+        Returns:
+            The collection's configuration, with its client.
+        """
+        return (
+            self.app.config["FOCA"].db.dbs["pubgradeStore"].collections[name]
+        )
+
+    def publish(self, payload):
+        """Publish an image.
+
+        Args:
+            payload: Request data.
+
+        Returns:
+            The response, which is the build's identifier.
+        """
+        with self.app.app_context():
+            return register_builds(
+                self.repository["id"],
+                self.repository["access_token"],
+                copy.deepcopy(payload),
+            )
+
+    @patch("pubgrade.modules.endpoints.builds.create_build")
+    @patch("requests.request")
+    def test_publish(self, request, create_build):
+        """Subscribers get the image, and nothing gets built."""
+        request.return_value = MagicMock(status_code=200)
+        res = self.publish(self.payload)
+        create_build.assert_not_called()
+        assert json.loads(request.call_args[1]["data"]) == {
+            "image_name": "elixircloud/tesk-api",
+            "tag": "v1.2.0",
+        }
+        with self.app.app_context():
+            build = get_build_info(res["id"])
+        assert build["status"] == "SUCCEEDED"
+        assert build["finished_at"] != "NULL"
+        assert build["notifications"][0]["result"] == "delivered"
+
+    @patch("requests.request")
+    def test_publish_failed_notification(self, request):
+        """A failed notification shows in the build's status."""
+        request.return_value = MagicMock(status_code=500)
+        res = self.publish(self.payload)
+        with self.app.app_context():
+            assert get_build_info(res["id"])["status"] == "FAILED"
+
+    def test_publish_without_subscriptions(self):
+        """A repository without subscriptions has nothing to notify."""
+        self.collection("repositories").client.update_one(
+            {"id": self.repository["id"]},
+            {"$unset": {"subscription_list": ""}},
+        )
+        res = self.publish(self.payload)
+        with self.app.app_context():
+            build = get_build_info(res["id"])
+        assert build["status"] == "SUCCEEDED"
+        assert build["notifications"] == []
+
+    @pytest.mark.parametrize(
+        "extra",
+        [
+            {"dockerhub_token": "token"},
+            {"images": [{"name": "org/image:1", "location": "./Dockerfile"}]},
+        ],
+    )
+    def test_publish_rejects_build_requests(self, extra):
+        """Requests that ask for a build are rejected."""
+        with pytest.raises(BuildsDisabled):
+            self.publish({**self.payload, **extra})
+
+    @pytest.mark.parametrize(
+        "images",
+        [
+            [],
+            [{"name": "org/image:1"}, {"name": "org/other:1"}],
+            [{"name": "org/image"}],
+            [{"name": "registry.example.org:5000/image"}],
+            [{"name": "org/image@sha256:abc"}],
+            [{"name": "org/image:1 --flag"}],
+        ],
+    )
+    def test_publish_rejects_invalid_images(self, images):
+        """Exactly one image with a tag is required."""
+        with pytest.raises(InvalidImage):
+            self.publish({**self.payload, "images": images})
+
+    @patch("requests.request")
+    def test_publish_registry_with_port(self, request):
+        """A registry's port isn't mistaken for a tag."""
+        request.return_value = MagicMock(status_code=200)
+        self.publish(
+            {
+                **self.payload,
+                "images": [{"name": "registry.example.org:5000/image:1"}],
+            }
+        )
+        assert json.loads(request.call_args[1]["data"]) == {
+            "image_name": "registry.example.org:5000/image",
+            "tag": "1",
+        }
+
+    def test_publish_unauthorized_before_validation(self):
+        """A wrong token gets a 401, whatever the request is."""
+        with self.app.app_context():
+            with pytest.raises(Unauthorized):
+                register_builds(
+                    self.repository["id"], "wrong", {"images": []}
+                )
+
+    @patch("pubgrade.modules.endpoints.builds.create_build")
+    def test_build_rejects_image_without_tag(self, create_build):
+        """Also with builds on, images need a tag."""
+        self.app.config["FOCA"].endpoints["builds"]["enabled"] = True
+        with pytest.raises(InvalidImage):
+            self.publish(
+                {
+                    **self.payload,
+                    "images": [{"name": "org/image", "location": "./Dockerfile"}],
+                }
+            )
+        create_build.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "images",
+        [
+            [],
+            [{"location": "./Dockerfile"}],
+            [{"name": "Org/image:1"}],
+            [{"name": "org/image:1:2"}],
+            [{"name": "registry.example.org/Org/image:1"}],
+        ],
+    )
+    def test_build_rejects_invalid_images(self, images):
+        """Requests without valid image references are rejected."""
+        self.app.config["FOCA"].endpoints["builds"]["enabled"] = True
+        with pytest.raises(InvalidImage):
+            self.publish({**self.payload, "images": images})
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "image:1",
+            "org/image:1.0-rc_1",
+            "registry.example.org/org/image:1",
+            "registry.example.org:5000/org/image:1",
+            "registry:5000/org/image:1",
+            "localhost/org/image:1",
+        ],
+    )
+    def test_image_with_tag_accepts_references(self, name):
+        """Valid references pass, with or without a registry."""
+        assert IMAGE_WITH_TAG.fullmatch(name)
+
+    def test_build_completed_rejected(self):
+        """`PUT` on a build is rejected."""
+        with self.app.app_context():
+            with pytest.raises(BuildsDisabled):
+                build_completed(
+                    self.repository["id"],
+                    "build",
+                    self.repository["access_token"],
+                )

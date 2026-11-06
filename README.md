@@ -74,7 +74,8 @@ curl --location --request POST 'http://<host_url>:<host_port>/subscriptions' \
 }'
 ```
 
-5. Register build. (CI should be configured to call this automatically)
+5. Publish an image. (The repository's CI builds and pushes the image, then
+   calls this)
 
 ```bash
     curl --location --request POST 'http://<host_url>:<host_port>/repositories/{repo_id}/builds' \
@@ -83,16 +84,42 @@ curl --location --request POST 'http://<host_url>:<host_port>/subscriptions' \
 --data-raw '{
     "images": [
         {
-            "name": "<image_name>",
-            "location": "<docker_file_location>"
+            "name": "<image_name>:<image_tag>"
        }
     ],
     "head_commit": {
-        "branch": "<branch_name>"
-   },
-    "dockerhub_token": "<echo -n USER:PASSWD | base64>"
+        "tag": "<tag_name>"
+   }
 }'
 ```
+
+A subscription's `value` must equal the `tag` or `branch` of `head_commit`; the
+value `*` matches any of them, e.g., every new tag.
+
+Pubgrade notifies all subscriptions of the repository at the same time, with a
+timeout per call (`endpoints.subscriptions.notification_timeout` in the
+configuration, by default 10 seconds, for connecting and for the response). Results per subscription, once all calls
+are done, are in the field `notifications` of the build
+(`GET /repositories/{repo_id}/builds/{build_id}`): `delivered` for a 2xx
+response, `failed` for another response or none in time, `skipped` if the
+subscription doesn't match the build. A repository takes at most 100
+subscriptions (`endpoints.subscriptions.max_per_repository`); further ones get a
+403.
+
+### Configuration
+
+Settings under `endpoints` in the configuration (`pubgrade/config.yaml`):
+
+- `builds.enabled` (default: off): with this on, Pubgrade clones the repository
+  and builds the image, and step 5 also needs a `location` for the image and a
+  `dockerhub_token`. With this off, such requests get a 403, as does
+  `PUT /repositories/{repo_id}/builds/{build_id}`.
+- `repository.registration_enabled`, `user.registration_enabled` and
+  `subscriptions.registration_enabled` (default: on): switch these off once
+  repositories, users and subscriptions are set up. Further registrations then
+  get a 403.
+
+### Queries
 
 List available repositories.
 

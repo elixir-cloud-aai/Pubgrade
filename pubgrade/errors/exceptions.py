@@ -19,6 +19,12 @@ class RepositoryNotFound(NotFound):
     pass
 
 
+class TooManySubscriptions(Forbidden):
+    """Raised when a repository has reached its limit of subscriptions."""
+
+    pass
+
+
 class BuildNotFound(NotFound):
     """Raised when object with given build identifier was not found."""
 
@@ -55,15 +61,26 @@ class UserNotVerified(Unauthorized):
     pass
 
 
-class MongoError(InternalServerError):
-    """Raised when Mongo operations raise an Unexpected error."""
+class BuildsDisabled(Forbidden):
+    """Raised when a request needs the build path, which is switched off."""
 
     pass
 
 
-class RequestNotSent(InternalServerError):
-    """Raised when something unexpected happen while requesting side-car
-    service for deploying updates."""
+class RegistrationDisabled(Forbidden):
+    """Raised when registration is closed by configuration."""
+
+    pass
+
+
+class InvalidImage(BadRequest):
+    """Raised when a request doesn't name exactly one image with a tag."""
+
+    pass
+
+
+class MongoError(InternalServerError):
+    """Raised when Mongo operations raise an Unexpected error."""
 
     pass
 
@@ -157,10 +174,6 @@ exceptions = {
         "status_code": "500",
     },
     CreatePodError: {"msg": "Unable to create pod.", "status_code": "500"},
-    RequestNotSent: {
-        "msg": "Unable to update deployment.",
-        "status_code": "500",
-    },
     GitCloningError: {
         "msg": "Git repository information is wrong",
         "status_code": "500",
@@ -175,6 +188,22 @@ exceptions = {
     },
     UserNotVerified: {
         "msg": "User is not verified by the super user.",
+        "status_code": "403",
+    },
+    BuildsDisabled: {
+        "msg": "Builds are switched off: publish a prebuilt image instead.",
+        "status_code": "403",
+    },
+    RegistrationDisabled: {
+        "msg": "Registration is closed.",
+        "status_code": "403",
+    },
+    InvalidImage: {
+        "msg": "The request must name exactly one image, with a tag.",
+        "status_code": "400",
+    },
+    TooManySubscriptions: {
+        "msg": "The repository has reached its limit of subscriptions.",
         "status_code": "403",
     },
 }

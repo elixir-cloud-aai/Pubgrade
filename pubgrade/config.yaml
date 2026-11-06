@@ -84,10 +84,14 @@ log:
 # Custom app configuration
 endpoints:
     repository:
+        # Switch off after setup to close registration
+        registration_enabled: True
         id_charset: [string.ascii_lowercase, string.digits , '.' , '-']
         id_length: 6
         retries: 3
     user:
+        # Switch off after setup to close registration
+        registration_enabled: True
         uid_charset: [string.ascii_lowercase, string.digits , '.' , '-']
         uid_length: 6
         retries: 3
@@ -95,6 +99,14 @@ endpoints:
         charset: [ string.ascii_lowercase, string.digits , '.' , '-' ]
         length: 32
     subscriptions:
+      # Switch off after setup to close registration
+      registration_enabled: True
+      # Seconds for each call to a subscriber, to connect and for the response.
+      # Publishing waits for this, so with both, keep it below the time limit
+      # of the Route or Ingress (e.g., 30 seconds by default on OpenShift)
+      notification_timeout: 10
+      # Each subscriber of a repository gets its own thread when publishing
+      max_per_repository: 100
       admin_users:
         - name: 'Akash'
           uid: 'akash.saini'
@@ -103,5 +115,9 @@ endpoints:
           uid: 'alvaro.gonzalez'
           user_access_token: 'c42fhg44e3d0'
     builds:
+        # Off: `POST /repositories/{id}/builds` takes a prebuilt image from the
+        # repository's own CI and notifies the subscriptions. On: Pubgrade
+        # clones the repository and builds the image; needs the settings below
+        enabled: False
         gh_action_path: "akash2237778/pubgrade-signer"
         intermediate_registery_format: "cloud-registry.2.rahtiapp.fi/pubgrade/{}:1h"

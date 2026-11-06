@@ -8,7 +8,11 @@ from foca.models.config import MongoConfig, Config
 from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import InternalServerError, Unauthorized
 
-from pubgrade.errors.exceptions import UserNotFound, NameNotFound
+from pubgrade.errors.exceptions import (
+    NameNotFound,
+    RegistrationDisabled,
+    UserNotFound,
+)
 from pubgrade.modules.endpoints.users import (
     register_user,
     get_users,
@@ -55,6 +59,16 @@ class TestUsers:
             assert "user_access_token" in response
             assert "name" in response
             assert sanitise_text(name) == response["name"]
+
+    def test_register_user_closed(self):
+        """Registration can be closed by configuration."""
+        self.setup()
+        self.app.config["FOCA"].endpoints["user"][
+            "registration_enabled"
+        ] = False
+        with self.app.app_context():
+            with pytest.raises(RegistrationDisabled):
+                register_user({"name": "Name"})
 
     def test_register_user_keyerror(self):
         self.setup()

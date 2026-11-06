@@ -239,7 +239,11 @@ paths:
       summary: 'Register new build for repository.'
       description: Register a new build for already registered repository. 
         Ideally this endpoint is directly called by continuous integration (CI) 
-        pipelines. This endpoint is also responsible to trigger build at pubgrade.
+        pipelines. With builds switched off (the default), the request names one
+        prebuilt image with a tag and no `location` or `dockerhub_token`, and
+        Pubgrade notifies the repository's subscriptions of it; the build's
+        `notifications` hold the results. With builds switched on, this endpoint
+        triggers a build at Pubgrade.
       operationId: postBuild
       tags:
         - builds
@@ -375,7 +379,8 @@ paths:
           $ref: '#/components/responses/Error'
     put:
       summary: 'Update build info to pubgrade'
-      description: Used by kaniko pod to update build complete info at pubgrade. 
+      description: Used by kaniko pod to update build complete info at pubgrade.
+        Returns 403 with builds switched off.
       operationId: updateBuild
       tags:
         - builds
@@ -946,10 +951,47 @@ components:
                 example: 2021-06-11T17:32:28Z
                 description: Timestamp taken when build is finished and ready to
                  deploy.
+              notifications:
+                type: array
+                description: Result of notifying each subscription of the
+                 repository, once all of them are done.
+                items:
+                  $ref: '#/components/schemas/Notification'
             required:
               - status
               - started_at
               - finished_at
+    Notification:
+      type: object
+      description: Result of notifying one subscription of a build.
+      properties:
+        subscription_id:
+          type: string
+          description: Identifier of the subscription.
+          example: subscription123
+        result:
+          type: string
+          enum:
+            - delivered
+            - failed
+            - skipped
+          description: "`delivered`: the subscriber responded with a 2xx status.
+           `failed`: it responded with another status, or didn't respond in
+           time. `skipped`: the subscription doesn't match the build, or no
+           longer exists."
+        http_status:
+          type: integer
+          nullable: true
+          description: Status of the subscriber's response, if any.
+          example: 200
+        finished_at:
+          type: string
+          format: date-time
+          description: Time at which the notification finished.
+      required:
+        - subscription_id
+        - result
+        - finished_at
     BuildRegister:
       type: object
       description: Describes schema for registering build
@@ -1039,7 +1081,8 @@ components:
             example: tag
         value:
             type: string
-            description: Value to match with type of `head_commit`.
+            description: Value to match with type of `head_commit`; `*` matches
+              any value of the type.
             example: dev
     RepositoryListItem:
       description: Schema used to show at `GET /repositories` for repositories.
