@@ -44,3 +44,9 @@ def test_image_serves_app_with_gunicorn() -> None:
     assert "python:foca.gunicorn_config" in args
     assert args[-1] == "pubgrade.app:create_app()"
     assert gunicorn_config.bind == ["0.0.0.0:8080"]
+
+
+def test_image_runs_as_unprivileged_user() -> None:
+    """The image runs as the FOCA image's user, not as root."""
+    users = re.findall(r"^USER (\S+)$", _dockerfile(), re.MULTILINE)
+    assert users[-1] == "1000"

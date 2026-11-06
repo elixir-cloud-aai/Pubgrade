@@ -56,7 +56,10 @@ def repair_timestamps(
 ) -> int:
     """Bring the stored timestamps of builds and subscriptions into the format.
 
-    Runs at each start; documents already in the format are left alone.
+    Runs at each start; documents already in the format are left alone, and
+    values that aren't timestamps without time zone stay as they are (their
+    responses fail validation). Concurrent runs are safe, as each update
+    sets the same values.
 
     Args:
         builds: Collection of builds (`started_at`, `finished_at` and

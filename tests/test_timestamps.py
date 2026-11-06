@@ -35,6 +35,12 @@ def test_repair_timestamps() -> None:
                 "finished_at": None,
             },
             {"id": "unknown", "started_at": "yesterday"},
+            {
+                "id": "zoned",
+                "started_at": "2026-01-02T03:04:05Z",
+                "finished_at": "2026-01-02T04:04:05.5+01:00",
+                "status": "SUCCEEDED",
+            },
         ]
     )
     subscriptions.insert_many(
@@ -54,6 +60,13 @@ def test_repair_timestamps() -> None:
     ]
     assert builds.find_one({"id": "new"})["started_at"].endswith("+00:00")
     assert builds.find_one({"id": "unknown"})["started_at"] == "yesterday"
+    zoned = builds.find_one({"id": "zoned"}, {"_id": 0})
+    assert zoned == {
+        "id": "zoned",
+        "started_at": "2026-01-02T03:04:05Z",
+        "finished_at": "2026-01-02T04:04:05.5+01:00",
+        "status": "SUCCEEDED",
+    }
     assert (
         subscriptions.find_one({"id": "old"})["updated_at"]
         == "2026-01-02T03:04:05+00:00"

@@ -87,7 +87,8 @@ From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA
 - **Timestamps** are in UTC with time zone, and `finished_at` of an
   unfinished build is `null`. At each start, Pubgrade brings stored
   timestamps into this format (those without time zone count as UTC), as
-  responses are checked against the API.
+  responses are checked against the API. Other values (not written by Pubgrade)
+  stay as they are, and responses with them fail with a 500.
 - **Server:** the image serves the app with Gunicorn instead of Flask's
   development server, still on port 8080; change Gunicorn's settings via
   `GUNICORN_CMD_ARGS`. Request bodies larger than 1 MiB are rejected.

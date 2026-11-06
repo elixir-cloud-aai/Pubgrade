@@ -55,7 +55,7 @@ class NameNotFound(BadRequest):
     pass
 
 
-class UserNotVerified(Unauthorized):
+class UserNotVerified(Forbidden):
     """Raised when user with given identifier was not verified."""
 
     pass
@@ -149,7 +149,7 @@ exceptions = {
     InternalServerError: {
         "title": "Internal Server Error",
         "status": 500,
-        "detail": "An unexpected error occurred",
+        "detail": "An unexpected error occurred.",
     },
     RepositoryNotFound: {
         "title": "Not Found",
@@ -174,14 +174,13 @@ exceptions = {
     ValidationError: {
         "title": "Internal Server Error",
         "status": 500,
-        "detail": "An unexpected error occurred while Mongo read/write/update",
+        "detail": "An unexpected error occurred while reading or writing data.",
     },
     GitCommandError: {
         "title": "Internal Server Error",
         "status": 500,
         "detail": (
-            "GitCommandError: An expected error occurred while cloning git "
-            "repository."
+            "An unexpected error occurred while cloning the Git repository."
         ),
     },
     OSError: {
@@ -192,7 +191,10 @@ exceptions = {
     DeletePodError: {
         "title": "Internal Server Error",
         "status": 500,
-        "detail": "Unable to delete pod check deployment name and namespace ENV.",
+        "detail": (
+            "Unable to delete the pod; check the deployment name and "
+            "namespace."
+        ),
     },
     CreatePodError: {
         "title": "Internal Server Error",
@@ -202,7 +204,7 @@ exceptions = {
     GitCloningError: {
         "title": "Internal Server Error",
         "status": 500,
-        "detail": "Git repository information is wrong",
+        "detail": "The Git repository information is wrong.",
     },
     URLNotFound: {
         "title": "Bad Request",
