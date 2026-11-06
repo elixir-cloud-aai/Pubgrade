@@ -8,7 +8,7 @@ conduct](https://github.com/elixir-cloud-aai/.github/blob/main/CODE_OF_CONDUCT.m
 ## Tests
 
 `make test` builds the image and runs the unit tests in it, with coverage
-(written to `reports/coverage.xml`; 100% are required): the base image of
+(written to `reports/coverage.xml`; 100% coverage is required): the base image of
 [FOCA](https://github.com/elixir-cloud-aai/foca) pins most of the
 dependencies. Some tests clone a public repository, so they need network
 access.
@@ -81,3 +81,9 @@ python -m venv .venv
 ```
 
 The build fails on warnings, e.g. of broken links.
+
+## Versioning
+
+The project follows [semantic versioning](https://semver.org/). It has no
+releases yet and is in beta, so the API may change without notice; use the
+image tags `dev` or `sha-<commit>` (see [CI](#ci)).

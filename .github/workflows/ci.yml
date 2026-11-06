@@ -1,13 +1,13 @@
 # Everything that must pass on pull requests and pushes to `dev`: the pull
 # request title, the unit tests (coverage to Codecov), the chart, the docs, a
-# smoke test of the image, a scan of the images (report only) and, on pushes, push the
-# images by digest (with SBOM and provenance attestations), scan exactly those
-# digests, then attest, sign (Sigstore) and tag them. The gate `passed` ("CI
-# passed") is the only check to require. No `paths:` filters, so that the gate
-# always reports; skip jobs with `if:` instead (and allow the skip in the
-# gate). Runs also when a pull request is edited, so that the title check
-# follows the title; all jobs run then, as a run that skipped the tests would
-# report "CI passed" for the commit
+# smoke test of the image, a scan of the images (report only) and, on pushes,
+# push the images by digest (with SBOM and provenance attestations), scan
+# exactly those digests, then attest, sign (Sigstore) and tag them. The gate
+# `passed` ("CI passed") is the only check to require. No `paths:` filters,
+# so that the gate always reports; skip jobs with `if:` instead (and allow the
+# skip in the gate). Runs also when a pull request is edited, so that the title
+# check follows the title; all jobs run then, as a run that skipped the tests
+# would report "CI passed" for the commit
 
 name: CI
 on:

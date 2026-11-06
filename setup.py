@@ -1,9 +1,6 @@
 from setuptools import setup, find_packages
 from pubgrade import __version__
 
-with open("README.md", "r") as fh:
-    long_description = fh.read()
-
 setup(
     name="pubgrade",
     version=__version__,
@@ -16,8 +13,6 @@ setup(
         "updates, which can then autonomously decide what to do with "
         "them. "
     ),
-    long_description=long_description,
-    long_description_content_type="text/markdown",
     license="Apache License 2.0",
     url="https://github.com/elixir-cloud-aai/Pubgrade.git",
     packages=find_packages(),

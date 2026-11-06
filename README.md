@@ -35,12 +35,17 @@ Helm chart in [`helm/`][helm], development, and Pubgrade-Sidecar.
 
 <!-- --8<-- [start:quick-start] -->
 Install Pubgrade and a MongoDB into a namespace of a Kubernetes or OpenShift
-cluster with [Helm](https://helm.sh/docs/intro/install/), with your copy of
-the configuration (`pubgrade/config.yaml`, with your admin users) in a Secret:
+cluster with [Helm](https://helm.sh/docs/intro/install/), from a checkout of
+this repository, with your copy of the configuration (`pubgrade/config.yaml`,
+with your admin users) in a Secret. Keep that copy outside the checkout, so
+that its tokens don't end up in Git or in images you build:
 
 ```bash
+git clone https://github.com/elixir-cloud-aai/Pubgrade.git && cd Pubgrade
+cp pubgrade/config.yaml ~/pubgrade-config.yaml  # then add your admin users
 kubectl create namespace pubgrade
-kubectl create secret generic pubgrade-config -n pubgrade --from-file=config.yaml
+kubectl create secret generic pubgrade-config -n pubgrade \
+  --from-file=config.yaml="${HOME}/pubgrade-config.yaml"
 helm install pubgrade helm/ -n pubgrade \
   --set pubgrade.configSecret=pubgrade-config --set hostName=<host name>
 ```

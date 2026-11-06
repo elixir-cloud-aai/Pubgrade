@@ -223,3 +223,6 @@ tags
 .vscode/
 *.modified.yaml
 .idea/*
+
+# A deployment's configuration, with its tokens (see the README)
+/config.yaml

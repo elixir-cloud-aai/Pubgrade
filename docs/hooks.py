@@ -2,15 +2,16 @@
 
 Pubgrade-Sidecar keeps its documentation in its own repository (`docs/`, with
 its own `mkdocs.yml` and a strict build in its CI). This site includes it as
-the section "Pubgrade-Sidecar", from the Git submodule `external/pubgrade-sidecar`,
-pinned to a commit of the Sidecar's branch `dev` (Dependabot proposes updates
-monthly; see "Documentation" in `docs/development.md`):
+the section "Pubgrade-Sidecar", from the Git submodule
+`external/pubgrade-sidecar`, pinned to a commit of the Sidecar's branch `dev`
+(Dependabot proposes updates monthly; see "Documentation" in
+`docs/development.md`):
 
-- The Sidecar's pages are added under `sidecar/`, in the order of the `nav` of
-  its `mkdocs.yml`, as the last section of this site's navigation.
-- Snippets of its pages (`--8<-- "<file>"`) are read from the submodule, not
-  from this repository, e.g., its `README.md`.
-- "Edit this page" links of its pages point to its repository.
+- The Sidecar's pages are added under `sidecar/` (the Sidecar's own links and
+  `site_url` point there), in the order of the `nav` of its `mkdocs.yml`, as
+  the last section of this site's navigation.
+- Its pages must be self-contained: snippets (`pymdownx.snippets`) would be
+  read from this repository, not the Sidecar's, so the build fails on any.
 
 Its code reference (mkdocstrings) finds the Sidecar's package through the
 `paths` of the Python handler in `mkdocs.yml`.
@@ -18,7 +19,7 @@ Its code reference (mkdocstrings) finds the Sidecar's package through the
 
 from pathlib import Path
 import re
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from mkdocs.config.defaults import MkDocsConfig
 from mkdocs.exceptions import PluginError
@@ -32,13 +33,11 @@ SIDECAR = Path("external/pubgrade-sidecar")
 PREFIX = "sidecar/"
 # Title of the Sidecar's section in the navigation
 SECTION = "Pubgrade-Sidecar"
-# Base URL for editing the Sidecar's pages
-EDIT_URL = "https://github.com/elixir-cloud-aai/Pubgrade-Sidecar/edit/dev/docs/"
+# Markers of `pymdownx.snippets` in any of its forms (e.g. `--8<-- "file"`,
+# `-8<- 'file'`, or a block of file names between two markers)
+SNIPPET = re.compile(r"^\s*-+8<-+", re.MULTILINE)
 
-# Snippet lines of `pymdownx.snippets`, e.g. `--8<-- "README.md:usage"`
-SNIPPET = re.compile(r'^(\s*--8<--\s+")(?!/)', re.MULTILINE)
-
-NavItem = Union[str, Dict[str, Any]]
+NavItem = str | dict[str, Any]
 
 
 def _docs_dir() -> Path:
@@ -96,7 +95,7 @@ def on_config(config: MkDocsConfig) -> MkDocsConfig:
     _docs_dir()
     with open(SIDECAR / "mkdocs.yml", encoding="utf-8") as stream:
         sidecar_config = yaml_load(stream)
-    nav: Optional[List[NavItem]] = sidecar_config.get("nav")
+    nav: list[NavItem] | None = sidecar_config.get("nav")
     if not nav:
         raise PluginError(f"{SIDECAR}/mkdocs.yml has no `nav`")
     config.nav = list(config.nav or []) + [{SECTION: [_prefix(i) for i in nav]}]
@@ -129,7 +128,7 @@ def on_files(files: Files, config: MkDocsConfig) -> Files:
 def on_page_markdown(
     markdown: str, page: Page, config: MkDocsConfig, files: Files
 ) -> str:
-    """Read the snippets of the Sidecar's pages from the submodule.
+    """Fail on snippets in the Sidecar's pages, which would resolve here.
 
     Args:
         markdown: The page's Markdown.
@@ -138,10 +137,14 @@ def on_page_markdown(
         files: The site's files.
 
     Returns:
-        The Markdown, with the snippet paths of the Sidecar's pages pointing
-        into the submodule; other pages unchanged.
+        The Markdown, unchanged.
+
+    Raises:
+        PluginError: If a page of the Sidecar includes snippets.
     """
-    if not page.file.src_uri.startswith(PREFIX):
-        return markdown
-    page.edit_url = EDIT_URL + page.file.src_uri[len(PREFIX):]
-    return SNIPPET.sub(rf"\g<1>{SIDECAR.as_posix()}/", markdown)
+    if page.file.src_uri.startswith(PREFIX) and SNIPPET.search(markdown):
+        raise PluginError(
+            f"{page.file.src_uri}: snippets are not supported in the pages of "
+            "Pubgrade-Sidecar, as they would be read from this repository"
+        )
+    return markdown

@@ -16,8 +16,9 @@ fixed.
    add your admin users with new tokens under
    `endpoints.subscriptions.admin_users` (see [Configuration](#configuration)),
    and store it in a Secret:
-   `kubectl create secret generic pubgrade-config -n pubgrade --from-file=config.yaml`.
-   Secrets don't belong in values files.
+   `kubectl create secret generic pubgrade-config -n pubgrade --from-file=config.yaml=<your copy>`.
+   Secrets don't belong in values files, nor in the checkout, from where they
+   would end up in Git or in images you build.
 4. Install:
    `helm install pubgrade helm/ -n pubgrade --set pubgrade.configSecret=pubgrade-config --set hostName=<host name>`
 
