@@ -30,7 +30,8 @@ built from the branch `dev` of
 [CI](https://github.com/elixir-cloud-aai/Pubgrade/blob/dev/.github/workflows/ci.yml)
 runs on pull requests and pushes to `dev`: the pull request title
 (Conventional Commits, at most 50 characters, as it becomes the commit message
-of the squash merge), the tests with coverage to Codecov, the chart, the smoke
+of the squash merge), lint (the citation metadata in `CITATION.cff`), the
+tests with coverage to Codecov, the chart, the smoke
 and upgrade tests, the documentation, and a scan of the images (report only).
 The job `CI passed` sums up all other jobs and is the only required check.
 

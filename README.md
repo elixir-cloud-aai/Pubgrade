@@ -53,6 +53,15 @@ helm install pubgrade helm/ -n pubgrade \
 Then open the API's web interface at `https://<host name>/ui/`.
 <!-- --8<-- [end:quick-start] -->
 
+## Citation
+
+<!-- --8<-- [start:citation] -->
+If you use Pubgrade, please cite it with the metadata in
+[`CITATION.cff`](https://github.com/elixir-cloud-aai/Pubgrade/blob/dev/CITATION.cff):
+on GitHub, "Cite this repository" in the sidebar of the repository formats it
+as APA or BibTeX.
+<!-- --8<-- [end:citation] -->
+
 ## Contributing
 
 Contributions are welcome! See [Development][docs-development] in the

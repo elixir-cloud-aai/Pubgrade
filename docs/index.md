@@ -21,6 +21,10 @@
 - [Pubgrade-Sidecar](sidecar/index.md): the subscriber that updates the image
   of a Kubernetes Deployment, documented in its own repository.
 
+## Citation
+
+--8<-- "README.md:citation"
+
 ## License
 
 This project is covered by the [Apache License
