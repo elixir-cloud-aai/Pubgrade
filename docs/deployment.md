@@ -69,6 +69,33 @@ builds don't work under OpenShift's default restrictions. With builds off,
 requests that need them get a 403, as does
 `PUT /repositories/{id}/builds/{build_id}`.
 
+## Upgrading to FOCA 0.21 (API 2.0.0)
+
+From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA
+0.7 and Python 3.9. The chart and its values stay the same. What changes:
+
+- **Configuration:** a configuration of your own (`pubgrade.configSecret`)
+  needs the changes of FOCA's migration guides; compare it with
+  `pubgrade/config.yaml`. In short: remove `server.environment` and
+  `server.use_reloader`; give `api.specs` as in the image's configuration;
+  replace the section `exceptions` with `mapping:
+  pubgrade.errors.exceptions.exceptions`; set `server.max_content_length`.
+  Unknown or removed settings stop the app at start, with an error naming
+  them. The settings under `endpoints` stay as they are.
+- **Errors** are problem details (see [API](api.md)), with `title`, `status`
+  and `detail` instead of `msg` and `status_code`.
+- **Timestamps** are in UTC with time zone, and `finished_at` of an
+  unfinished build is `null`. At each start, Pubgrade brings stored
+  timestamps into this format (those without time zone count as UTC), as
+  responses are checked against the API.
+- **Server:** the image serves the app with Gunicorn instead of Flask's
+  development server, still on port 8080; change Gunicorn's settings via
+  `GUNICORN_CMD_ARGS`. Request bodies larger than 1 MiB are rejected.
+- **Image:** it runs as user 1000 (group 0), and its app files are read-only;
+  any user ID works, e.g., on OpenShift.
+- **MongoDB:** FOCA 0.21 needs MongoDB 4.4 or later; the chart's MongoDB is
+  newer.
+
 ## Moving from chart 0.1
 
 Chart 0.2 can't upgrade a 0.1 release, as its selectors and names changed:

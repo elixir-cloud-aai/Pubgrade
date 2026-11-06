@@ -31,3 +31,23 @@ Registrations are open until they are closed in the
 [configuration](deployment.md#configuration). The specification is the
 reference for the request and response bodies and the headers that carry the
 tokens. See [Usage](usage.md) for the typical flow.
+
+Since version 2.0.0 of the API, errors are
+[problem details](https://www.rfc-editor.org/rfc/rfc9457)
+(`application/problem+json`), with `title`, `status` (an integer) and
+`detail`, e.g.:
+
+```json
+{
+  "title": "Not Found",
+  "status": 404,
+  "detail": "The requested `Repository` is not found."
+}
+```
+
+For invalid requests, `detail` tells what is wrong. Before, errors had `msg`
+and `status_code` (a string) instead. Request bodies larger than 1 MiB are
+rejected with `413`. Timestamps (`started_at`, `finished_at` and
+`updated_at`) are in UTC with time zone (e.g.,
+`2026-11-06T14:04:04.619000+00:00`), and `finished_at` of a build is `null`
+until it has finished (before: `"NULL"`).
