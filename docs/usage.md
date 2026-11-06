@@ -57,8 +57,9 @@ curl --request POST '<base URL>/subscriptions' \
 Pubgrade sends `access_token` to `callback_url` with each notification, so use
 `https` for anything outside the cluster. A subscription's `value` must equal
 the `tag` or `branch` of a published image; the value `*` matches any of them,
-e.g. every new tag. A repository takes at most 100 subscriptions
-(`endpoints.subscriptions.max_per_repository`); further ones get a 403.
+e.g. every new tag. A repository takes at most 100 subscriptions by default
+(the deployment can change this with
+`endpoints.subscriptions.max_per_repository`); further ones get a 403.
 
 ## Publish an image
 
