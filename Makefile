@@ -18,9 +18,11 @@ build: ## Builds two container images (main-service, build-complete-updater).
 
 test: ## Runs unit tests in the image (FOCA's base image pins the dependencies), shows coverage and writes coverage.xml.
 	docker build -t pubgrade:test .
+	mkdir -p reports
 	docker run --rm --user 0 --workdir /app --volume "$(CURDIR)/reports:/reports" pubgrade:test sh -c \
-		"pip install --quiet --editable '.[test]' && coverage run -m pytest && coverage report -m \
-		&& coverage xml -o /reports/coverage.xml && chown -R $(shell id -u):$(shell id -g) /reports"
+		"pip install --quiet --editable '.[test]' && coverage run -m pytest; status=\$$?; \
+		coverage xml -o /reports/coverage.xml; chown -R $(shell id -u):$(shell id -g) /reports; \
+		[ \$$status -eq 0 ] && coverage report -m"
 
 install-pubgrade: # build ## Install pubgrade on cluster using helm.
 #	kubectl create namespace $(APP_NAME) --dry-run=client -o yaml | kubectl apply -f -

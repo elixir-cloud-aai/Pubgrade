@@ -1,11 +1,13 @@
 # Everything that must pass on pull requests and pushes to `dev`: the pull
 # request title, the unit tests (coverage to Codecov), the chart, a smoke test
-# of the image, a scan of the images and, on pushes, push the images by
-# digest (with SBOM and provenance attestations), scan exactly those digests,
-# then attest, sign (Sigstore) and tag them. The gate `passed` ("CI passed") is the only
-# check to require. No `paths:` filters, so that the gate always reports; skip
-# jobs with `if:` instead (and allow the skip in the gate). Runs also when a
-# pull request is edited, so that the title check follows the title
+# of the image, a scan of the images (report only) and, on pushes, push the
+# images by digest (with SBOM and provenance attestations), scan exactly those
+# digests, then attest, sign (Sigstore) and tag them. The gate `passed` ("CI
+# passed") is the only check to require. No `paths:` filters, so that the gate
+# always reports; skip jobs with `if:` instead (and allow the skip in the
+# gate). Runs also when a pull request is edited, so that the title check
+# follows the title; all jobs run then, as a run that skipped the tests would
+# report "CI passed" for the commit
 
 name: CI
 on:
@@ -166,8 +168,8 @@ jobs:
           persist-credentials: false
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      # OCI labels with the commit and source; the tags are set by `publish`,
-      # after the scan
+      # OCI labels with the commit, source and version (`dev`), shared by
+      # both images; the tags are set by `publish`, after the scan
       - name: Generate image labels
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
