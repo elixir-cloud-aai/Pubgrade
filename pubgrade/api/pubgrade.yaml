@@ -239,7 +239,11 @@ paths:
       summary: 'Register new build for repository.'
       description: Register a new build for already registered repository. 
         Ideally this endpoint is directly called by continuous integration (CI) 
-        pipelines. This endpoint is also responsible to trigger build at pubgrade.
+        pipelines. With builds switched off (the default), the request names one
+        prebuilt image with a tag and no `location` or `dockerhub_token`, and
+        Pubgrade notifies the repository's subscriptions of it; the build's
+        `notifications` hold the results. With builds switched on, this endpoint
+        triggers a build at Pubgrade.
       operationId: postBuild
       tags:
         - builds
@@ -375,7 +379,8 @@ paths:
           $ref: '#/components/responses/Error'
     put:
       summary: 'Update build info to pubgrade'
-      description: Used by kaniko pod to update build complete info at pubgrade. 
+      description: Used by kaniko pod to update build complete info at pubgrade.
+        Returns 403 with builds switched off.
       operationId: updateBuild
       tags:
         - builds
@@ -1076,7 +1081,8 @@ components:
             example: tag
         value:
             type: string
-            description: Value to match with type of `head_commit`.
+            description: Value to match with type of `head_commit`; `*` matches
+              any value of the type.
             example: dev
     RepositoryListItem:
       description: Schema used to show at `GET /repositories` for repositories.
