@@ -94,7 +94,7 @@ MOCK_BUILD_INFO = {
     },
     "dockerhub_token": "dXNlcjpwYXNzd2Q=",
     "id": "eiic.gngdgrs",
-    "finished_at": "NULL",
+    "finished_at": None,
     "started_at": "2021-08-04T17:40:58.344809",
     "status": "QUEUED",
 }
@@ -105,7 +105,7 @@ MOCK_BUILD_INFO_2 = {
     "head_commit": {"tag": "0.4.2"},
     "dockerhub_token": "dockerhub token",
     "id": "eiic.gnabmns",
-    "finished_at": "NULL",
+    "finished_at": None,
     "started_at": "2021-08-04T17:40:58.344809",
     "status": "QUEUED",
 }

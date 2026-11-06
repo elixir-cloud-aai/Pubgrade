@@ -10,7 +10,9 @@ import mongomock
 import pytest
 import yaml
 
-from pubgrade.app import create_admin_user
+from foca import Foca
+
+from pubgrade.app import CONFIG_FILE, create_admin_user
 from tests.mock_data import ENDPOINT_CONFIG, MONGO_CONFIG
 
 
@@ -29,8 +31,18 @@ def test_no_debug_mode(config: Dict[str, Any]) -> None:
     """Debug and development settings are off."""
     assert config["server"]["debug"] is False
     assert config["server"]["testing"] is False
-    assert config["server"]["use_reloader"] is False
-    assert config["server"]["environment"] == "production"
+
+
+def test_request_bodies_limited(config: Dict[str, Any]) -> None:
+    """Request bodies are limited in size."""
+    assert config["server"]["max_content_length"] == 1048576
+
+
+def test_valid_for_foca() -> None:
+    """FOCA accepts the configuration, with errors as problem details."""
+    foca = Foca(config_file=CONFIG_FILE)
+    assert foca.conf.exceptions.mapping == "pubgrade.errors.exceptions.exceptions"
+    assert foca.conf.api.specs
 
 
 def test_no_users(config: Dict[str, Any]) -> None:
@@ -49,7 +61,7 @@ def test_builds_off(config: Dict[str, Any]) -> None:
 def test_admin_users_follow_configuration() -> None:
     """Tokens get replaced, and users missing in the configuration removed."""
     app = Flask(__name__)
-    app.config["FOCA"] = Config(
+    app.config.foca = Config(
         db=MongoConfig(**MONGO_CONFIG),
         endpoints={
             **ENDPOINT_CONFIG,
@@ -68,7 +80,7 @@ def test_admin_users_follow_configuration() -> None:
             {"name": "B", "uid": "b", "user_access_token": "gone"},
         ]
     )
-    app.config["FOCA"].db.dbs["pubgradeStore"].collections[
+    app.config.foca.db.dbs["pubgradeStore"].collections[
         "admin_users"
     ].client = collection
     create_admin_user(SimpleNamespace(app=app))

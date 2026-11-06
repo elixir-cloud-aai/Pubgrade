@@ -1,13 +1,17 @@
 # FOCA configuration. Defaults that are safe to publish in the image: deployments
 # mount their own copy, with their admin users (see the README). The environment
 # variable MONGO_HOST takes precedence over `db.host`
+# `host` and `port` apply to the development server (`python -m pubgrade.app`)
+# only: the image serves the app with Gunicorn on port 8080 (FOCA's
+# `foca.gunicorn_config`)
 server:
     host: '0.0.0.0'
     port: 8080
     debug: False
-    environment: production
     testing: False
-    use_reloader: False
+    # Size limit of request bodies, in bytes (1 MiB); larger requests are
+    # rejected with `413 Content Too Large` before they are read
+    max_content_length: 1048576
 
 db:
     host: mongodb
@@ -46,24 +50,23 @@ db:
                           options:
                             'unique': True
 
+# API specifications, by name; paths are relative to this file
 api:
     specs:
-        - path:
-            - api/pubgrade.yaml
-          append: null
-          add_operation_fields:
-              x-openapi-router-controller: pubgrade.modules.server
-          connexion:
-              strict_validation: True
-              validate_responses: True
-              options:
-                  swagger_ui: True
-                  serve_spec: True
+        pubgrade:
+            path: api/pubgrade.yaml
+            add_operation_fields:
+                x-openapi-router-controller: pubgrade.modules.server
+            connexion:
+                strict_validation: True
+                validate_responses: True
+                options:
+                    swagger_ui: True
+                    serve_spec: True
 
+# Errors are returned as problem details (RFC 9457)
 exceptions:
-     required_members: [['msg'], ['status_code']]
-     status_member: ['status_code']
-     exceptions: pubgrade.errors.exceptions.exceptions
+    mapping: pubgrade.errors.exceptions.exceptions
 
 log:
     version: 1
