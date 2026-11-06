@@ -21,6 +21,10 @@ updates:
         versions: [">=9"]
       - dependency-name: coverage
         versions: [">=7.11"]
+      # Newer versions don't support Python 3.9 or lack `pkg_resources`, which
+      # connexion 2 of FOCA 0.7 imports
+      - dependency-name: setuptools
+        versions: [">=81"]
     groups:
       python-dependencies:
         patterns: ["*"]
