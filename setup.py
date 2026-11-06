@@ -40,7 +40,7 @@ setup(
     extras_require={
         "test": [
             "coverage==7.10.7",
-            "pytest==8.4.2",
+            "pytest==9.0.3",
         ],
     },
 )
