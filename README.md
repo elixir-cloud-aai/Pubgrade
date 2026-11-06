@@ -13,6 +13,7 @@
 [![Build_status][badge-build-status]][badge-url-build-status]
 [![Docs][badge-docs]][badge-url-docs]
 [![Coverage][badge-coverage]][badge-url-coverage]
+[![Python][badge-python]][badge-url-python]
 [![GitHub_tag][badge-github-tag]][badge-url-github-tag]
 [![Docker_image][badge-docker]][badge-url-docker]
 
@@ -79,12 +80,14 @@ This project is covered by the [Apache License 2.0][badge-url-license], also
 [badge-docs]: <https://img.shields.io/readthedocs/pubgrade>
 [badge-github-tag]: <https://img.shields.io/github/v/tag/elixir-cloud-aai/Pubgrade?color=C39BD3>
 [badge-license]: <https://img.shields.io/badge/license-Apache%202.0-blue.svg>
+[badge-python]: <https://img.shields.io/badge/python-3.9-blue.svg>
 [badge-url-build-status]: <https://github.com/elixir-cloud-aai/Pubgrade/actions/workflows/ci.yml?query=branch%3Adev>
 [badge-url-coverage]: <https://codecov.io/gh/elixir-cloud-aai/Pubgrade?branch=dev>
 [badge-url-docker]: <https://hub.docker.com/r/elixircloud/pubgrade/tags>
 [badge-url-docs]: <https://pubgrade.readthedocs.io/en/latest/>
 [badge-url-github-tag]: <https://github.com/elixir-cloud-aai/Pubgrade/releases>
 [badge-url-license]: <https://www.apache.org/licenses/LICENSE-2.0>
+[badge-url-python]: <https://github.com/elixir-cloud-aai/Pubgrade/blob/dev/Dockerfile>
 [code-of-conduct]: <https://github.com/elixir-cloud-aai/.github/blob/main/CODE_OF_CONDUCT.md>
 [contributing]: <https://github.com/elixir-cloud-aai/.github/blob/main/CONTRIBUTING.md>
 [docs]: <https://pubgrade.readthedocs.io/en/latest/>
