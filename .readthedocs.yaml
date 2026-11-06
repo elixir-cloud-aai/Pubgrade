@@ -1,0 +1,28 @@
+# Read the Docs configuration file
+# See https://docs.readthedocs.io/en/stable/config-file/v2.html for details
+
+version: 2
+
+build:
+  os: ubuntu-24.04
+  tools:
+    # The documentation's Python version, as in CI's `docs` job (the app's
+    # image uses another one; the build doesn't import the app)
+    python: "3.13"
+
+# The documentation of Pubgrade-Sidecar is a section of this one, from the
+# submodule `external/pubgrade-sidecar` (see `docs/hooks.py`)
+submodules:
+  include: all
+
+mkdocs:
+  configuration: mkdocs.yml
+  # Fail on all warnings to avoid broken links and references
+  fail_on_warning: true
+
+python:
+  install:
+    - method: pip
+      path: .
+      extra_requirements:
+        - docs

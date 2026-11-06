@@ -1,0 +1,4 @@
+[submodule "external/pubgrade-sidecar"]
+	path = external/pubgrade-sidecar
+	url = https://github.com/elixir-cloud-aai/Pubgrade-Sidecar.git
+	branch = dev

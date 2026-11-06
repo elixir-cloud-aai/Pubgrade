@@ -21,10 +21,16 @@ updates:
         versions: [">=9"]
       - dependency-name: coverage
         versions: [">=7.11"]
-      # Newer versions don't support Python 3.9 or lack `pkg_resources`, which
-      # connexion 2 of FOCA 0.7 imports
+      - dependency-name: gunicorn
+        versions: [">=24"]
+      - dependency-name: kubernetes
+        versions: [">=36"]
+      # Newer versions run `pip install -e` with PEP 517 in `setup.py
+      # develop`, which pip 21.2 of the base image can't do, don't support
+      # Python 3.9, or lack `pkg_resources`, which connexion 2 of FOCA 0.7
+      # imports
       - dependency-name: setuptools
-        versions: [">=81"]
+        versions: [">=80"]
     groups:
       python-dependencies:
         patterns: ["*"]
@@ -61,3 +67,11 @@ updates:
     groups:
       docker:
         patterns: ["*"]
+  # The submodule with Pubgrade-Sidecar, whose documentation is a section of
+  # this one (`docs/hooks.py`), at the newest commit of its branch `dev`
+  # (`.gitmodules`)
+  - package-ecosystem: gitsubmodule
+    directory: /
+    schedule:
+      interval: monthly
+    target-branch: dev
