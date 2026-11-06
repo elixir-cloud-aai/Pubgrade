@@ -109,7 +109,7 @@ def register_user(data: dict):
     if "_id" in user_object:
         del user_object["_id"]
         # del user_object['isVerified']
-    logger.info(f"Added object with '{user_object}'.")
+    logger.info(f"Added user {user_object['uid']}.")
     return user_object
 
 

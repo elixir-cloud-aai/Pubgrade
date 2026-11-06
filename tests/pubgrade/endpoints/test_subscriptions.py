@@ -1,5 +1,6 @@
 """Tests for /subscriptions endpoint """
 import json
+import logging
 import threading
 import time
 from unittest.mock import patch, MagicMock
@@ -105,6 +106,19 @@ class TestSubscriptions:
         self.app.config.foca.db.dbs["pubgradeStore"].collections[
             "subscriptions"
         ].client.insert_one(MOCK_SUBSCRIPTION_INFO)
+
+    def test_register_subscription_logs_no_token(self, caplog):
+        """Log messages don't contain the subscription's token."""
+        self.setup()
+        caplog.set_level(logging.DEBUG)
+        with self.app.app_context():
+            res = register_subscription(
+                MOCK_USER["uid"],
+                MOCK_USER["user_access_token"],
+                {**SUBSCRIPTION_PAYLOAD, "access_token": "subscription-secret"},
+            )
+        assert f"Added subscription {res['subscription_id']}." in caplog.messages
+        assert "subscription-secret" not in caplog.text
 
     def test_register_subscription(self):
         self.setup()

@@ -1,4 +1,5 @@
 """Tests for /repositories endpoint """
+import logging
 from unittest.mock import MagicMock
 
 import mongomock
@@ -52,6 +53,15 @@ class TestRepository:
             assert "id" in res
             assert "access_token" in res
             assert isinstance(res, dict)
+
+    def test_register_repository_logs_no_token(self, caplog):
+        """Log messages name the new repository, without its token."""
+        self.setup()
+        caplog.set_level(logging.DEBUG)
+        with self.app.app_context():
+            res = register_repository(data={"url": self.repository_url})
+        assert res["id"] in caplog.text
+        assert res["access_token"] not in caplog.text
 
     def test_register_repository_closed(self):
         """Registration can be closed by configuration."""

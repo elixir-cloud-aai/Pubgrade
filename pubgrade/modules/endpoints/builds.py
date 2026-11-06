@@ -164,9 +164,7 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
     if not build_path:
         validate_prebuilt_image(build_data)
     for i in range(retries):
-        logger.debug(
-            f"Trying to insert/update object: try {i}" + str(build_data)
-        )
+        logger.debug(f"Trying to insert/update object: try {i}")
         build_data["id"] = repository_id + generate_id(
             charset=id_charset,
             length=id_length,
@@ -179,6 +177,7 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
             build_data["started_at"] = now()
             build_data["status"] = "QUEUED"
             db_collection_builds.insert_one(build_data)
+            logger.info(f"Added build {build_data['id']}.")
             if not build_path:
                 break
             branch = ""
@@ -260,7 +259,7 @@ def get_builds(repository_id: str):
             build_object_list.append(build_data)
     except Exception:
         logger.error(
-            "No build found for given repository identifier. {repository_id}"
+            f"No build found for given repository identifier. {repository_id}"
         )
         raise BuildNotFound
     return build_object_list
@@ -531,16 +530,13 @@ def build_push_image_using_kaniko(deployment_file_location: str):
     # deployment file.
     with open(deployment_file_location) as f:
         dep = yaml.safe_load(f)
+        name = (dep.get("metadata") or {}).get("name")
         try:
-            resp = v1.create_namespaced_pod(body=dep, namespace=namespace)
+            v1.create_namespaced_pod(body=dep, namespace=namespace)
         except ApiException as e:
-            logger.error(
-                "Exception when calling "
-                "AppsV1Api->create_namespaced_pod: "
-                "%s\n" % e
-            )
-            raise CreatePodError
-        logger.info("Deployment created. status='%s'" % resp)
+            logger.error(f"Creating pod {name} failed: {e.status} {e.reason}")
+            raise CreatePodError from None
+        logger.info(f"Pod {name} created.")
 
 
 def build_completed(
@@ -651,12 +647,8 @@ def delete_pod(name: str, namespace: str):
         api_response = api_instance.delete_namespaced_pod(name, namespace)
         return api_response
     except ApiException as e:
-        logger.error(
-            "Exception when calling "
-            "AppsV1Api->delete_namespaced_deployment: "
-            "%s\n" % e
-        )
-        raise DeletePodError
+        logger.error(f"Deleting pod {name} failed: {e.status} {e.reason}")
+        raise DeletePodError from None
 
 
 def trigger_signing_image(dockerhub_token: str,
@@ -679,8 +671,19 @@ def trigger_signing_image(dockerhub_token: str,
     })
     headers = {
         'Accept': 'application/vnd.github+json',
-        'Authorization': 'Bearer {}'.format(os.getenv("GH_ACCESS_TOKEN")),
+        'Authorization': 'Bearer {}'.format(
+            (os.getenv("GH_ACCESS_TOKEN") or "").strip()
+        ),
         'X-GitHub-Api-Version': '2022-11-28',
         'Content-Type': 'application/json'
     }
-    response = requests.request("POST", url, headers=headers, data=payload)
+    try:
+        requests.request("POST", url, headers=headers, data=payload)
+    except requests.exceptions.RequestException as error:
+        # Log only the type: messages of requests can quote the Authorization
+        # header
+        logger.error(
+            f"Triggering the signing of {push_tag} failed: "
+            f"{type(error).__name__}"
+        )
+        raise InternalServerError from None
