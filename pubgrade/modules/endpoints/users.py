@@ -1,6 +1,7 @@
 import logging
 
 from pubgrade.errors.exceptions import (
+    RegistrationDisabled,
     UserNotFound,
     InternalServerError,
     NameNotFound,
@@ -27,7 +28,13 @@ def register_user(data: dict):
         NameNotFound: Raised when request data does not have name string.
         InternalServerError: Raised when it's unable to create unique
         identifier for the user_object.
+        RegistrationDisabled: Raised when registration is closed by the
+        setting `endpoints.user.registration_enabled`.
     """
+    if not current_app.config["FOCA"].endpoints["user"].get(
+        "registration_enabled", True
+    ):
+        raise RegistrationDisabled
     user_object = {}
 
     try:

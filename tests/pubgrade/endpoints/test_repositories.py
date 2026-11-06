@@ -11,7 +11,11 @@ import string
 from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized, InternalServerError
 
-from pubgrade.errors.exceptions import URLNotFound, RepositoryNotFound
+from pubgrade.errors.exceptions import (
+    RegistrationDisabled,
+    RepositoryNotFound,
+    URLNotFound,
+)
 from pubgrade.modules.endpoints.repositories import (
     register_repository,
     get_repositories,
@@ -48,6 +52,16 @@ class TestRepository:
             assert "id" in res
             assert "access_token" in res
             assert isinstance(res, dict)
+
+    def test_register_repository_closed(self):
+        """Registration can be closed by configuration."""
+        self.setup()
+        self.app.config["FOCA"].endpoints["repository"][
+            "registration_enabled"
+        ] = False
+        with self.app.app_context():
+            with pytest.raises(RegistrationDisabled):
+                register_repository(data={"url": self.repository_url})
 
     def test_register_repository_url_not_found(self):
         self.setup()
