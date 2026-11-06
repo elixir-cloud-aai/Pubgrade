@@ -1,12 +1,52 @@
 version: 2
-# Dependencies of the app follow with the move to a newer FOCA, whose base
-# image pins most of them
+# Every entry targets `dev` (`target-branch`), which takes all pull
+# requests whatever the default branch is (`main` only moves forward to
+# releases); security updates always target the default branch, though
 updates:
+  # Dependencies of the app in `requirements.txt`, installed on top of the
+  # FOCA base image, which pins most of them
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: monthly
+    target-branch: dev
+    ignore:
+      # FOCA is bumped by hand, together with the base image (see the `docker`
+      # entry) and the code that a newer FOCA needs
+      - dependency-name: foca
+    groups:
+      python-dependencies:
+        patterns: ["*"]
+  # Dependencies of the updater's image (`build-complete-updater/`)
+  - package-ecosystem: pip
+    directory: /build-complete-updater
+    schedule:
+      interval: monthly
+    target-branch: dev
+    groups:
+      updater-dependencies:
+        patterns: ["*"]
+  # Actions in the workflows, including the pins of the shared actions of
+  # `elixir-cloud-aai/.github` (to the commits of its releases,
+  # `@<commit> # vX.Y.Z`)
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
     target-branch: dev
     groups:
-      actions:
+      github-actions:
+        patterns: ["*"]
+  # Base images in the `Dockerfile`s
+  - package-ecosystem: docker
+    directories: [/, /build-complete-updater]
+    schedule:
+      interval: monthly
+    target-branch: dev
+    ignore:
+      # FOCA is bumped by hand, in the base image and `requirements.txt`
+      # together (see the `pip` entry)
+      - dependency-name: elixircloud/foca
+    groups:
+      docker:
         patterns: ["*"]
