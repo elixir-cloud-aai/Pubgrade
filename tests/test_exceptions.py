@@ -3,8 +3,16 @@
 import inspect
 from typing import Type
 
+from foca import Foca
+from foca.errors.exceptions import build_problem
 import pytest
-from werkzeug.exceptions import HTTPException
+from werkzeug.exceptions import (
+    HTTPException,
+    MethodNotAllowed,
+    RequestEntityTooLarge,
+)
+
+from pubgrade.app import CONFIG_FILE
 
 from pubgrade.errors import exceptions as module
 from pubgrade.errors.exceptions import exceptions
@@ -45,3 +53,27 @@ def test_problem_details_complete() -> None:
 def test_status_matches_exception(cls: Type[HTTPException]) -> None:
     """Responses have the status of the exception that was raised."""
     assert _problem(cls)["status"] == cls.code
+
+
+@pytest.mark.parametrize(
+    "exc, status",
+    [
+        (RequestEntityTooLarge(), 413),
+        (MethodNotAllowed(), 405),
+        (module.UserNotVerified(), 403),
+        (KeyError(), 500),
+    ],
+)
+def test_response_status(exc: BaseException, status: int) -> None:
+    """FOCA answers with the status of the exception, 500 for unknown ones.
+
+    Exceptions of werkzeug that aren't listed (e.g., a body over the limit)
+    keep their status rather than falling back to `Exception`'s.
+
+    Args:
+        exc: Exception raised.
+        status: Expected status of the response.
+    """
+    conf = Foca(config_file=CONFIG_FILE).conf.exceptions
+    problem, code = build_problem(exc, conf)
+    assert code == problem["status"] == status

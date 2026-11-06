@@ -89,6 +89,9 @@ From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA
   timestamps into this format (those without time zone count as UTC), as
   responses are checked against the API; so do responses with builds and
   subscriptions that the previous version writes during a rolling update.
+  Until it is replaced, the pod of the previous version answers requests
+  for unfinished builds started by the new one with a 500 (`finished_at` is
+  `null`).
   Other values (not written by Pubgrade) stay as they are, and responses
   with them fail with a 500, as do subscriptions whose `callback_url` is
   not a URI with scheme (e.g., `10.0.0.5:8080/update`): subscribe again
