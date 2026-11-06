@@ -90,6 +90,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The Python version of the base image in the `Dockerfile`
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
       - name: Run unit tests with coverage
         run: make test
       # Upload errors fail the workflow only on pushes, because pull requests
@@ -268,10 +273,11 @@ jobs:
   # Scans each image with Trivy (shared action
   # `elixir-cloud-aai/.github/actions/scan-image`): for pull requests a local
   # build, for pushes exactly the digest pushed by `push` (public, so pulling
-  # it needs no login), in a job without credentials. Report only (an
-  # artifact, no alerts, never failing), as the old base image has many
-  # findings: this job can't pass as a gate before the move to a newer FOCA.
-  # Accepted findings go into `.trivyignore.yaml`
+  # it needs no login), in a job without credentials, with a report as an
+  # artifact. Fails on critical and high vulnerabilities that have a fix in
+  # the app's image (`fail` in the matrix); the updater's image, which isn't
+  # built on FOCA, is reported only for now. Accepted findings go into
+  # `.trivyignore.yaml`
   scan:
     name: Scan image (${{ matrix.image }})
     # For pull requests, `push` is skipped
@@ -285,8 +291,10 @@ jobs:
         include:
           - image: pubgrade
             file: Dockerfile
+            fail: "true"
           - image: pubgrade-updater
             file: build-complete-updater/Dockerfile
+            fail: "false"
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -321,7 +329,7 @@ jobs:
           category: ${{ matrix.image }}
           upload: "false"
           report: "true"
-          fail: "false"
+          fail: ${{ matrix.fail }}
 
   # Attests the build provenance of the pushed digests (GitHub artifact
   # attestation, also pushed to the registry), signs them with Sigstore
