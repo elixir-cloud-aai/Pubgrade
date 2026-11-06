@@ -24,9 +24,9 @@ test: ## Runs unit tests in the image (FOCA's base image pins the dependencies),
 		coverage xml -o /reports/coverage.xml; chown -R $(shell id -u):$(shell id -g) /reports; \
 		[ \$$status -eq 0 ] && coverage report -m"
 
-install-pubgrade: # build ## Install pubgrade on cluster using helm.
+install-pubgrade: # build ## Install pubgrade on cluster using helm (values in HELM_ARGS, see the README).
 #	kubectl create namespace $(APP_NAME) --dry-run=client -o yaml | kubectl apply -f -
-	helm upgrade --install $(APP_NAME) helm/ -n $(APP_NAME)
+	helm upgrade --install $(APP_NAME) helm/ -n $(APP_NAME) $(HELM_ARGS)
 
 uninstall-pubgrade: ## Uninstall pubgrade.
 	helm delete $(APP_NAME) -n $(APP_NAME)

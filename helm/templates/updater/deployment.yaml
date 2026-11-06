@@ -1,0 +1,32 @@
+{{- if .Values.builds.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pubgrade-updater
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "pubgrade.selectorLabels" "updater" | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "pubgrade.selectorLabels" "updater" | nindent 8 }}
+    spec:
+      serviceAccountName: pubgrade
+      containers:
+        - name: updater
+          image: {{ .Values.builds.updater.image | quote }}
+          imagePullPolicy: {{ .Values.builds.updater.imagePullPolicy }}
+          securityContext:
+            {{- include "pubgrade.securityContext" . | nindent 12 }}
+          {{- with .Values.builds.updater.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          env:
+            - name: NAMESPACE
+              value: {{ .Release.Namespace }}
+            - name: BROKER_URL
+              value: {{ .Values.builds.pubgradeUrl | quote }}
+{{- end }}

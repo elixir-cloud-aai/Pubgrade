@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: pubgrade-service
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "pubgrade.selectorLabels" "app" | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.pubgrade.port }}
+      targetPort: http

@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb
+spec:
+  replicas: 1
+  # The volume can only be mounted by one MongoDB at a time
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "pubgrade.selectorLabels" "mongodb" | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "pubgrade.selectorLabels" "mongodb" | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: mongodb
+          image: {{ .Values.mongodb.image | quote }}
+          imagePullPolicy: {{ .Values.mongodb.imagePullPolicy }}
+          args: ["--port", {{ .Values.mongodb.port | quote }}]
+          ports:
+            - name: mongodb
+              containerPort: {{ .Values.mongodb.port }}
+          {{- with .Values.mongodb.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: /data/db
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: mongodb
