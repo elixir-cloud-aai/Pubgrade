@@ -946,10 +946,47 @@ components:
                 example: 2021-06-11T17:32:28Z
                 description: Timestamp taken when build is finished and ready to
                  deploy.
+              notifications:
+                type: array
+                description: Result of notifying each subscription of the
+                 repository, once all of them are done.
+                items:
+                  $ref: '#/components/schemas/Notification'
             required:
               - status
               - started_at
               - finished_at
+    Notification:
+      type: object
+      description: Result of notifying one subscription of a build.
+      properties:
+        subscription_id:
+          type: string
+          description: Identifier of the subscription.
+          example: subscription123
+        result:
+          type: string
+          enum:
+            - delivered
+            - failed
+            - skipped
+          description: "`delivered`: the subscriber responded with a 2xx status.
+           `failed`: it responded with another status, or didn't respond in
+           time. `skipped`: the subscription doesn't match the build, or no
+           longer exists."
+        http_status:
+          type: integer
+          nullable: true
+          description: Status of the subscriber's response, if any.
+          example: 200
+        finished_at:
+          type: string
+          format: date-time
+          description: Time at which the notification finished.
+      required:
+        - subscription_id
+        - result
+        - finished_at
     BuildRegister:
       type: object
       description: Describes schema for registering build
