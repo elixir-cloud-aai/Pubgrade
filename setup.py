@@ -1,9 +1,6 @@
 from setuptools import setup, find_packages
 from pubgrade import __version__
 
-with open("README.md", "r") as fh:
-    long_description = fh.read()
-
 setup(
     name="pubgrade",
     version=__version__,
@@ -16,8 +13,6 @@ setup(
         "updates, which can then autonomously decide what to do with "
         "them. "
     ),
-    long_description=long_description,
-    long_description_content_type="text/markdown",
     license="Apache License 2.0",
     url="https://github.com/elixir-cloud-aai/Pubgrade.git",
     packages=find_packages(),
@@ -41,6 +36,17 @@ setup(
         "test": [
             "coverage==7.10.7",
             "pytest==8.4.2",
+        ],
+        # The documentation (`mkdocs.yml`), built with Python 3.13 on Read
+        # the Docs (`.readthedocs.yaml`) and in CI
+        "docs": [
+            "griffelib>=2.4,<3",
+            "mkdocs>=1.6.1,<2",
+            "mkdocs-autorefs>=1.4.4,<2",
+            "mkdocs-material>=9.7.7,<10",
+            "mkdocstrings>=1.0.8,<2",
+            "mkdocstrings-python>=2.0.10,<3",
+            "pymdown-extensions>=12.3,<13",
         ],
     },
 )
