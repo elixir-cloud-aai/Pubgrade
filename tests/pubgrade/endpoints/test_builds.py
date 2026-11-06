@@ -59,10 +59,6 @@ def mocked_create_build(
     return "working fine"
 
 
-def mocked_build_push_image_using_kaniko(deployment_file_location):
-    return 0
-
-
 def mocked_remove_files(dir_location: str, pod_name: str, namespace: str):
     return "removed"
 
@@ -89,8 +85,8 @@ def mocked_delete_namespaced_pod_error(
     raise ApiException
 
 
-def mocked_request_api(method, url, data, headers):
-    return "successful"
+def mocked_request_api(method, url, data, headers, **kwargs):
+    return MagicMock(status_code=200)
 
 
 def mocked_load_cluster_config(
@@ -427,15 +423,16 @@ class TestBuild:
             shutil.rmtree("./build123")
 
     def test_create_dockerhub_config_file(self):
-        create_dockerhub_config_file("token", "config.json")
+        self.setup()
+        with self.app.app_context():
+            create_dockerhub_config_file("token", "config.json")
         assert os.path.isfile("config.json")
         os.remove("config.json")
 
     @patch(
-        "pubgrade.modules.endpoints.builds." "build_push_image_using_kaniko",
-        mocked_build_push_image_using_kaniko,
+        "pubgrade.modules.endpoints.builds." "build_push_image_using_kaniko"
     )
-    def test_create_build(self):
+    def test_create_build(self, push_image):
         builds.template_file = (
             "pubgrade/modules/endpoints/kaniko" "/template.yaml"
         )
@@ -444,16 +441,25 @@ class TestBuild:
         f = open("basedir/drs-filer/Dockerfile", "w")
         f.write("test dockerfile")
         f.close()
-        create_build(
-            repo_url=self.repository_url,
-            branch="dev",
-            commit="122c34d",
-            base_dir="basedir",
-            build_id="build123",
-            dockerfile_location="basedir/drs-filer/Dockerfile",
-            intermediate_registry_path="test_intermediate_registry_path",
-            dockerhub_token="dockerhub_token",
-            project_access_token="access_token",
+        self.setup()
+        with self.app.app_context():
+            create_build(
+                repo_url=self.repository_url,
+                branch="dev",
+                commit="122c34d",
+                base_dir="basedir",
+                build_id="build123",
+                dockerfile_location="basedir/drs-filer/Dockerfile",
+                intermediate_registry_path="test_intermediate_registry_path",
+                dockerhub_token="dockerhub_token",
+                project_access_token="access_token",
+            )
+        deployment_file = "basedir/build123/build123.yaml"
+        assert os.path.isfile(deployment_file)
+        assert os.path.isfile("basedir/build123/config.json")
+        assert os.path.isdir("basedir/build123/drs-filer/.git")
+        push_image.assert_called_once_with(
+            deployment_file_location=deployment_file
         )
         shutil.rmtree("basedir")
 
@@ -483,6 +489,36 @@ class TestBuild:
             )
             assert data["status"] == "SUCCEEDED"
             assert res["id"] == MOCK_REPOSITORY_2["build_list"][0]
+
+    def test_build_completed_build_of_other_repository(self):
+        """A repository's token only completes that repository's builds."""
+        self.setup_with_build()
+        builds_collection = (
+            self.app.config["FOCA"]
+            .db.dbs["pubgradeStore"]
+            .collections["builds"]
+            .client
+        )
+        builds_collection.insert_one({"id": "other", "status": "QUEUED"})
+        with self.app.app_context():
+            with pytest.raises(BuildNotFound):
+                build_completed(
+                    MOCK_REPOSITORY_2["id"],
+                    "other",
+                    MOCK_REPOSITORY_2["access_token"],
+                )
+        assert builds_collection.find_one({"id": "other"})["status"] == "QUEUED"
+
+    def test_build_completed_listed_build_is_gone(self):
+        """A build listed at the repository, but no longer stored, isn't found."""
+        self.setup()
+        with self.app.app_context():
+            with pytest.raises(BuildNotFound):
+                build_completed(
+                    MOCK_REPOSITORY_2["id"],
+                    MOCK_REPOSITORY_2["build_list"][0],
+                    MOCK_REPOSITORY_2["access_token"],
+                )
 
     def test_build_completed_build_not_found(self):
         self.setup_with_build()

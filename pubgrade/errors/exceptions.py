@@ -19,6 +19,12 @@ class RepositoryNotFound(NotFound):
     pass
 
 
+class TooManySubscriptions(Forbidden):
+    """Raised when a repository has reached its limit of subscriptions."""
+
+    pass
+
+
 class BuildNotFound(NotFound):
     """Raised when object with given build identifier was not found."""
 
@@ -57,13 +63,6 @@ class UserNotVerified(Unauthorized):
 
 class MongoError(InternalServerError):
     """Raised when Mongo operations raise an Unexpected error."""
-
-    pass
-
-
-class RequestNotSent(InternalServerError):
-    """Raised when something unexpected happen while requesting side-car
-    service for deploying updates."""
 
     pass
 
@@ -157,10 +156,6 @@ exceptions = {
         "status_code": "500",
     },
     CreatePodError: {"msg": "Unable to create pod.", "status_code": "500"},
-    RequestNotSent: {
-        "msg": "Unable to update deployment.",
-        "status_code": "500",
-    },
     GitCloningError: {
         "msg": "Git repository information is wrong",
         "status_code": "500",
@@ -175,6 +170,10 @@ exceptions = {
     },
     UserNotVerified: {
         "msg": "User is not verified by the super user.",
+        "status_code": "403",
+    },
+    TooManySubscriptions: {
+        "msg": "The repository has reached its limit of subscriptions.",
         "status_code": "403",
     },
 }
