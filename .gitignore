@@ -183,6 +183,9 @@ venv.bak/
 [Ll]ib64
 [Ll]ocal
 [Ss]cripts
+# Not the release scripts and their tests
+!/scripts/
+!/tests/scripts/
 pyvenv.cfg
 pip-selfcheck.json
 
