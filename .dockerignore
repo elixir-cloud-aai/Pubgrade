@@ -11,5 +11,13 @@
 **/*.egg-info
 src
 venv/
-# Ignore CI-related files and dirs
-.travis.yml
+# Not needed at runtime
+helm/
+
+# Never put secrets into the image
+**/.env*
+!**/.env.example
+.venv
+
+# Test reports
+reports/

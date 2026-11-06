@@ -3,8 +3,9 @@ pubgrade_url: "https://pubgrade.dyn.cloud.e-infra.cz"
 
 pubgrade_build_complete_updater:
   replicaCount: 1
-  image: "akash7778/pubgrade-updater"  # This will be moved to elixir-cloud-aai
-  imagePullPolicy: IfNotPresent
+  # `dev` follows the branch; pin `sha-<commit>` to control upgrades
+  image: elixircloud/pubgrade-updater:dev
+  imagePullPolicy: Always
 
 
 
@@ -32,8 +33,9 @@ pubgrade_mongodb:
 pubgrade_webserver:
   serviceAccountName: pubgrade
   replicaCount: 3
-  imagePullPolicy: IfNotPresent
-  image: akash7778/pubgrade:test_build_1  # This will be moved to elixir-cloud-aai
+  imagePullPolicy: Always
+  # `dev` follows the branch; pin `sha-<commit>` to control upgrades
+  image: elixircloud/pubgrade:dev
   port: 8080
   portType: NodePort
 

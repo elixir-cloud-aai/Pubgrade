@@ -7,9 +7,9 @@ from foca.models.config import Config
 from foca.models.config import MongoConfig
 
 try:
-    from unittest.mock import patch  # Python 3 @UnresolvedImport
+    from unittest.mock import MagicMock, patch  # Python 3 @UnresolvedImport
 except Exception:
-    from mock import patch
+    from mock import MagicMock, patch
 
 from pubgrade.errors.exceptions import RepositoryNotFound
 from pubgrade.modules.server import (
@@ -52,8 +52,8 @@ user_access_token = "c42a6d44e3d0"
 uid = "9fe2c4e93f654fdbb24c02b15259716c"
 
 
-def mocked_request_api(method, url, data, headers):
-    return "successful"
+def mocked_request_api(method, url, data, headers, **kwargs):
+    return MagicMock(status_code=200)
 
 
 def test_getRepositories():

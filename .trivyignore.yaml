@@ -1,0 +1,5 @@
+# Vulnerabilities accepted in the Docker image (`Dockerfile`), which the scan in
+# CI ignores: each with the reason (`statement`) and an expiry date
+# (`expired_at`). See
+# https://trivy.dev/latest/docs/configuration/filtering/#trivyignoreyaml
+vulnerabilities: []
