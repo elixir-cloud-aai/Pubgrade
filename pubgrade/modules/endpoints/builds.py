@@ -14,7 +14,7 @@ from kubernetes.client import ApiException
 from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized
 
-from pubgrade.timestamps import now
+from pubgrade.timestamps import now, repaired_build
 from pubgrade.errors.exceptions import (
     BuildsDisabled,
     InvalidImage,
@@ -295,7 +295,7 @@ def get_build_info(build_id: str):
         )
         del build_object["id"]
         build_object.pop("dockerhub_token", None)
-        return build_object
+        return repaired_build(build_object)
     except StopIteration:
         raise BuildNotFound
 

@@ -50,3 +50,9 @@ def test_image_runs_as_unprivileged_user() -> None:
     """The image runs as the FOCA image's user, not as root."""
     users = re.findall(r"^USER (\S+)$", _dockerfile(), re.MULTILINE)
     assert users[-1] == "1000"
+
+
+def test_image_serves_with_more_threads() -> None:
+    """Long requests (publishes, slow clients) don't take all threads."""
+    assert re.search(r'^ENV GUNICORN_CMD_ARGS="--threads 16"$', _dockerfile(), re.M)
+    assert gunicorn_config.threads < 16

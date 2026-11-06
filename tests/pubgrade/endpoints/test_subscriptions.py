@@ -302,6 +302,24 @@ class TestSubscriptions:
             assert "id" in res
             assert res["state"] == "Inactive"
 
+    def test_get_subscription_info_old_format(self):
+        """Subscriptions written by the previous version get a time zone."""
+        self.setup()
+        self.insert_subscription()
+        self.app.config.foca.db.dbs["pubgradeStore"].collections[
+            "subscriptions"
+        ].client.update_one(
+            {"id": MOCK_SUBSCRIPTION_INFO["id"]},
+            {"$set": {"updated_at": "2026-01-02T03:04:05"}},
+        )
+        with self.app.app_context():
+            res = get_subscription_info(
+                MOCK_USER["uid"],
+                MOCK_USER["user_access_token"],
+                MOCK_SUBSCRIPTION_INFO["id"],
+            )
+        assert res["updated_at"] == "2026-01-02T03:04:05+00:00"
+
     def test_get_subscription_info_subscription_not_found(self):
         self.setup()
         with self.app.app_context():

@@ -54,9 +54,12 @@ RUN mkdir /pubgrade_temp_files && chown 1000:0 /pubgrade_temp_files \
 
 WORKDIR /app
 USER 1000
+ENV GUNICORN_CMD_ARGS="--threads 16"
 
 ## Serve with Gunicorn (FOCA's settings for containers, `foca.gunicorn_config`:
-## port 8080, one worker with threads; override them via `GUNICORN_CMD_ARGS`).
+## port 8080, one worker with threads; override them via `GUNICORN_CMD_ARGS`),
+## with 16 threads instead of 4: a publish holds its thread until the
+## subscribers answer, and a slow client while it sends its request
 ## Each worker creates the app, and Gunicorn exits if that fails.
 ## `python -m pubgrade.app` runs Flask's development server instead
 CMD ["gunicorn", "--config", "python:foca.gunicorn_config", \

@@ -87,11 +87,21 @@ From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA
 - **Timestamps** are in UTC with time zone, and `finished_at` of an
   unfinished build is `null`. At each start, Pubgrade brings stored
   timestamps into this format (those without time zone count as UTC), as
-  responses are checked against the API. Other values (not written by Pubgrade)
-  stay as they are, and responses with them fail with a 500.
+  responses are checked against the API; so do responses with builds and
+  subscriptions that the previous version writes during a rolling update.
+  Other values (not written by Pubgrade) stay as they are, and responses
+  with them fail with a 500, as do subscriptions whose `callback_url` is
+  not a URI with scheme (e.g., `10.0.0.5:8080/update`): subscribe again
+  with a full URL.
 - **Server:** the image serves the app with Gunicorn instead of Flask's
-  development server, still on port 8080; change Gunicorn's settings via
-  `GUNICORN_CMD_ARGS`. Request bodies larger than 1 MiB are rejected.
+  development server, still on port 8080, with one worker and 16 threads
+  (`GUNICORN_CMD_ARGS=--threads 16`; set the variable to change Gunicorn's
+  settings). Each thread serves one request at a time: a publish holds one
+  until its subscribers answer (up to twice `notification_timeout`), and a
+  slow client holds one while it sends its request. Raise `--threads` for
+  many concurrent publishes, and serve Pubgrade behind a proxy that buffers
+  request bodies (as ingress-nginx does by default). Request bodies larger
+  than 1 MiB are rejected.
 - **Image:** it runs as user 1000 (group 0), and its app files are read-only;
   any user ID works, e.g., on OpenShift.
 - **MongoDB:** FOCA 0.21 needs MongoDB 4.4 or later; the chart's MongoDB is

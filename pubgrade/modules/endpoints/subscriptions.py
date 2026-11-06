@@ -3,7 +3,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 import requests
-from pubgrade.timestamps import now
+from pubgrade.timestamps import now, repaired_subscription
 from pubgrade.errors.exceptions import (
     RegistrationDisabled,
     RepositoryNotFound,
@@ -225,7 +225,7 @@ def get_subscription_info(
         raise SubscriptionNotFound
     del subscription_object["_id"]
     del subscription_object["access_token"]
-    return subscription_object
+    return repaired_subscription(subscription_object)
 
 
 def delete_subscription(

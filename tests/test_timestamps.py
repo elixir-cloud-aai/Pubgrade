@@ -1,10 +1,16 @@
 """Tests for the timestamps of stored objects."""
 
 import datetime
+from typing import Any, Dict, List
 
 import mongomock
 
-from pubgrade.timestamps import now, repair_timestamps
+from pubgrade.timestamps import (
+    now,
+    repair_timestamps,
+    repaired_build,
+    repaired_subscription,
+)
 
 
 def test_now_has_time_zone() -> None:
@@ -74,3 +80,83 @@ def test_repair_timestamps() -> None:
     assert "updated_at" not in subscriptions.find_one({"id": "never"})
     # Nothing left to repair on the next start
     assert repair_timestamps(builds, subscriptions) == 0
+
+
+class _WrittenMeanwhile:
+    """A collection whose documents change between the repair's read and write.
+
+    Stands in for an instance of the previous version that writes a build or
+    subscription while the repair runs.
+    """
+
+    def __init__(self, collection: Any, change: Dict[str, Any]) -> None:
+        """Wrap a collection.
+
+        Args:
+            collection: The collection.
+            change: Values set on all documents after the read.
+        """
+        self.collection = collection
+        self.change = change
+
+    def find(self, *args: Any) -> List[Dict[str, Any]]:
+        """Read documents, then let them change.
+
+        Args:
+            *args: Arguments of `find()`.
+
+        Returns:
+            The documents as read.
+        """
+        documents = list(self.collection.find(*args))
+        self.collection.update_many({}, {"$set": self.change})
+        return documents
+
+    def update_one(self, *args: Any) -> Any:
+        """Update a document.
+
+        Args:
+            *args: Arguments of `update_one()`.
+
+        Returns:
+            The result of the update.
+        """
+        return self.collection.update_one(*args)
+
+
+def test_repair_keeps_concurrent_writes() -> None:
+    """Values written after the repair read them are kept."""
+    client = mongomock.MongoClient()
+    builds = client.db.builds
+    subscriptions = client.db.subscriptions
+    builds.insert_one({"id": "b", "finished_at": "NULL", "status": "RUNNING"})
+    subscriptions.insert_one({"id": "s", "updated_at": "2026-01-02T03:04:05"})
+    finished = "2026-01-02T03:05:00+00:00"
+    assert (
+        repair_timestamps(
+            _WrittenMeanwhile(builds, {"finished_at": finished}),
+            _WrittenMeanwhile(subscriptions, {"updated_at": finished}),
+        )
+        == 0
+    )
+    assert builds.find_one({"id": "b"})["finished_at"] == finished
+    assert subscriptions.find_one({"id": "s"})["updated_at"] == finished
+
+
+def test_repaired_build_and_subscription() -> None:
+    """Returned objects get repaired copies, without changing the stored."""
+    build = {
+        "started_at": "2026-01-02T03:04:05",
+        "finished_at": "NULL",
+        "notifications": [{"result": "delivered"}],
+    }
+    assert repaired_build(build) == {
+        "started_at": "2026-01-02T03:04:05+00:00",
+        "finished_at": None,
+        "notifications": [{"result": "delivered"}],
+    }
+    assert build["finished_at"] == "NULL"
+    assert repaired_build({"status": "RUNNING"}) == {"status": "RUNNING"}
+    assert repaired_subscription({"updated_at": "2026-01-02T03:04:05"}) == {
+        "updated_at": "2026-01-02T03:04:05+00:00"
+    }

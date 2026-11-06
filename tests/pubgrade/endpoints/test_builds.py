@@ -306,6 +306,27 @@ class TestBuild:
             assert "started_at" in res
             assert "branch" in res["head_commit"]
 
+    def test_get_build_info_old_format(self):
+        """Builds written by the previous version get timestamps with zone."""
+        self.setup()
+        self.app.config.foca.db.dbs["pubgradeStore"].collections[
+            "builds"
+        ].client.insert_one(
+            {
+                **MOCK_BUILD_INFO,
+                "started_at": "2026-01-02T03:04:05",
+                "finished_at": "NULL",
+                "notifications": [{"finished_at": "2026-01-02T03:04:06"}],
+            }
+        )
+        with self.app.app_context():
+            res = get_build_info(MOCK_BUILD_INFO["id"])
+        assert res["started_at"] == "2026-01-02T03:04:05+00:00"
+        assert res["finished_at"] is None
+        assert res["notifications"] == [
+            {"finished_at": "2026-01-02T03:04:06+00:00"}
+        ]
+
     def test_get_build_info_build_not_found(self):
         self.setup_with_build()
         with self.app.app_context():
