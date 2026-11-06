@@ -1,12 +1,12 @@
 """Check that the app and the chart have the version of a release.
 
-The release workflow (`.github/workflows/release.yml`) releases the image and
-the chart together, with one version: the tag `vX.Y.Z` must match
+The release workflow (`.github/workflows/release.yml`) releases the images
+and the chart together, with one version: the tag `vX.Y.Z` must match
 `__version__` in `pubgrade/__init__.py` and `appVersion` in `helm/Chart.yaml`,
 and the chart's `version` must be the SemVer form of it (e.g., `1.2.3-rc1` for
-`1.2.3rc1`). The release-prep pull request sets
-them (see "Versioning and releases" in `docs/development.md`). Errors are
-printed as GitHub annotations to standard error.
+`1.2.3rc1`). The release-prep pull request sets them (see "Versioning and
+releases" in `docs/development.md`). Errors are printed as GitHub annotations
+to standard error.
 
 Usage:
     `check_versions.py <version> <chart_version>`, as `release_version.py

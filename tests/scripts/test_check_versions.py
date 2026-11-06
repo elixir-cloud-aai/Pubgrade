@@ -55,8 +55,12 @@ def _repo(tmp_path: Path, version: str, chart_version: str, app: str) -> Path:
     return tmp_path
 
 
-def test_repository_versions_are_consistent() -> None:
-    """The repository's own files have one version for app and chart."""
+def test_repository_has_versions() -> None:
+    """The repository's own files have the versions the release checks.
+
+    The chart's `version` matches only after the release-prep pull request
+    (see "Versioning and releases" in `docs/development.md`).
+    """
     app = (ROOT / "pubgrade/__init__.py").read_text(encoding="utf-8")
     chart = (ROOT / "helm/Chart.yaml").read_text(encoding="utf-8")
     version = check_versions.app_version(app)

@@ -19,11 +19,13 @@
 # failed jobs reuses the digests already pushed (and scans them again if a
 # scan failed); a full re-run of a release that was already published moves
 # its image tags to the new digests before it fails at the release (whose
-# assets can't change), so re-run failed jobs only. Release notes are GitHub's generated notes (for a
-# first release, built by `scripts/release_notes.py first`), edited by hand
-# into the agreed format after publishing (the notes of immutable releases
-# stay editable). Release tags are immutable (tag ruleset). Until 1.0.0, all
-# releases are GitHub pre-releases (but stable ones still move `latest`).
+# assets can't change), so re-run failed jobs only. Release notes are
+# GitHub's generated notes (for a first release, built by
+# `scripts/release_notes.py first`), edited by hand into the agreed format
+# after publishing (the notes of immutable releases stay editable). Release
+# tags are immutable (tag ruleset). Until 1.0.0, all releases are GitHub
+# pre-releases (but stable ones still move `latest`). The images are spelled
+# out in `push`, `scan` and `publish`; keep them in sync.
 
 name: Release
 
@@ -149,8 +151,9 @@ jobs:
       # (checked above). Its values name the images with their tags
       # (`elixircloud/pubgrade:dev` on `dev`), so the packaged chart defaults
       # to the images of the release (tag `X.Y.Z`), also in forks that
-      # publish to another organization (`DOCKERHUB_ORG`); `values.yaml` of a
-      # copy is rewritten by yq, as in `scripts/` only the stdlib is used
+      # publish to another organization (`DOCKERHUB_ORG`). yq rewrites
+      # `values.yaml` in a copy of the chart (the scripts use only the
+      # stdlib, without a YAML parser)
       - name: Package chart
         id: chart
         env:
