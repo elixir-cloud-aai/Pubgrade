@@ -1,0 +1,40 @@
+cff-version: 1.2.0
+message: >-
+  If you use this software, please cite it using the metadata from this file.
+  Authors are listed by the number of lines they committed, then by the
+  number of their commits; equal contributors, if any, are listed
+  alphabetically by family name and marked with an asterisk (*) after their
+  family names.
+title: Pubgrade
+abstract: >-
+  Pubgrade (Publish-Upgrade) is a publish-subscribe service that notifies
+  deployments of new images of the software they run. A repository's CI
+  publishes a new image to Pubgrade, which notifies all deployments that
+  subscribed to the repository's tag or branch at the same time and records
+  the result per subscriber; Pubgrade-Sidecar, next to a Kubernetes
+  Deployment, then updates its image. It is built with FOCA and deployed to
+  Kubernetes or OpenShift with its Helm chart.
+type: software
+authors:
+  - given-names: Akash
+    family-names: Saini
+  - given-names: Alexander
+    family-names: Kanitz
+    orcid: "https://orcid.org/0000-0002-3468-0652"
+    affiliation: >-
+      Biozentrum, University of Basel, Basel, Switzerland; SIB Swiss Institute
+      of Bioinformatics, Lausanne, Switzerland
+  - given-names: Alvaro
+    family-names: Gonzalez
+  - given-names: Kostis
+    family-names: Zagganas
+repository-code: "https://github.com/elixir-cloud-aai/Pubgrade"
+url: "https://pubgrade.readthedocs.io/"
+keywords:
+  - continuous delivery
+  - publish-subscribe
+  - Kubernetes
+  - REST API
+  - OpenAPI
+  - FOCA
+license: Apache-2.0
