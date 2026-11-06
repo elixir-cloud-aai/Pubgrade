@@ -13,6 +13,9 @@ src
 venv/
 # Not needed at runtime
 helm/
+docs/
+external/
+mkdocs.yml
 
 # Never put secrets into the image
 **/.env*
