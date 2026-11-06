@@ -194,23 +194,35 @@ the community.
 
 ## Development
 
-`make test` builds the image and runs the unit tests in it, with coverage: the
-base image of [FOCA][foca] pins most of the dependencies. Some tests clone a
-public repository, so they need network access.
+`make test` builds the image and runs the unit tests in it, with coverage
+(written to `reports/coverage.xml`): the base image of [FOCA][foca] pins most
+of the dependencies. Some tests clone a public repository, so they need network
+access.
 
 `tests/e2e/upgrade.sh` tests the whole path, and needs Docker, Helm and jq: it
 starts a throwaway k3s cluster, installs Pubgrade from its chart, sets up two
 namespaces with a Deployment and a sidecar each, publishes one image and checks
 that both roll out. It also covers an unreachable subscriber and a tag that
-doesn't exist, which takes a few minutes, as sidecars retry first. Sidecars are built from the branch `master` of
+doesn't exist, which takes a few minutes, as sidecars retry first. Sidecars are built from the branch `dev` of
 [Pubgrade-Sidecar](https://github.com/elixir-cloud-aai/Pubgrade-Sidecar); set
 `SIDECAR_IMAGE` to use a local image instead. CI runs this test as well.
 
 [CI](.github/workflows/ci.yml) runs on pull requests and pushes to `dev`. The
 job `CI passed` sums up all other jobs. Pushes to `dev` publish
-`elixircloud/pubgrade` and `elixircloud/pubgrade-updater`, tagged `dev`,
-`sha-<commit>` and `<YYYYMMDD>`. The tag `latest` stays as it is until there are
-releases, so use one of these instead.
+`elixircloud/pubgrade` and `elixircloud/pubgrade-updater`, signed with Sigstore
+and tagged `dev` and `sha-<commit>`. The tag `latest` stays as it is until there
+are releases, so use one of these instead. Publishing runs in the environment
+`dev-images` (branch `dev` only), with the Docker Hub secrets `DOCKERHUB_LOGIN`
+and `DOCKERHUB_TOKEN`; the variable `DOCKERHUB_ORG` sets the Docker Hub
+organization (by default `elixircloud`), and the secret `CODECOV_TOKEN` is for
+the coverage report. Verify an image's signature with
+[cosign](https://docs.sigstore.dev/cosign/):
+
+```bash
+cosign verify elixircloud/pubgrade:dev \
+  --certificate-identity-regexp '^https://github\.com/elixir-cloud-aai/Pubgrade/\.github/workflows/ci\.yml@refs/heads/dev$' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
 
 ## Versioning
 

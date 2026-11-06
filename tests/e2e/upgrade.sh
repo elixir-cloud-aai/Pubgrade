@@ -4,7 +4,7 @@
 # Needs Docker, Helm and jq; removes everything afterwards.
 #
 # Variables: SIDECAR_IMAGE (a local image, by default built from the branch
-# `master` of Pubgrade-Sidecar), and those of `cluster.sh`.
+# `dev` of Pubgrade-Sidecar), and those of `cluster.sh`.
 #
 # Usage: tests/e2e/upgrade.sh
 
@@ -13,7 +13,7 @@ set -euo pipefail
 # shellcheck source=tests/e2e/cluster.sh
 source "$(dirname "$0")/cluster.sh"
 
-SIDECAR_REPO="https://github.com/elixir-cloud-aai/Pubgrade-Sidecar.git#master"
+SIDECAR_REPO="https://github.com/elixir-cloud-aai/Pubgrade-Sidecar.git#dev"
 # A small image on Docker Hub that stays up, as the sidecar checks that tags
 # exist there
 IMAGE=rancher/mirrored-pause
