@@ -59,10 +59,6 @@ def mocked_create_build(
     return "working fine"
 
 
-def mocked_build_push_image_using_kaniko(deployment_file_location):
-    return 0
-
-
 def mocked_remove_files(dir_location: str, pod_name: str, namespace: str):
     return "removed"
 
@@ -427,15 +423,16 @@ class TestBuild:
             shutil.rmtree("./build123")
 
     def test_create_dockerhub_config_file(self):
-        create_dockerhub_config_file("token", "config.json")
+        self.setup()
+        with self.app.app_context():
+            create_dockerhub_config_file("token", "config.json")
         assert os.path.isfile("config.json")
         os.remove("config.json")
 
     @patch(
-        "pubgrade.modules.endpoints.builds." "build_push_image_using_kaniko",
-        mocked_build_push_image_using_kaniko,
+        "pubgrade.modules.endpoints.builds." "build_push_image_using_kaniko"
     )
-    def test_create_build(self):
+    def test_create_build(self, push_image):
         builds.template_file = (
             "pubgrade/modules/endpoints/kaniko" "/template.yaml"
         )
@@ -444,16 +441,25 @@ class TestBuild:
         f = open("basedir/drs-filer/Dockerfile", "w")
         f.write("test dockerfile")
         f.close()
-        create_build(
-            repo_url=self.repository_url,
-            branch="dev",
-            commit="122c34d",
-            base_dir="basedir",
-            build_id="build123",
-            dockerfile_location="basedir/drs-filer/Dockerfile",
-            intermediate_registry_path="test_intermediate_registry_path",
-            dockerhub_token="dockerhub_token",
-            project_access_token="access_token",
+        self.setup()
+        with self.app.app_context():
+            create_build(
+                repo_url=self.repository_url,
+                branch="dev",
+                commit="122c34d",
+                base_dir="basedir",
+                build_id="build123",
+                dockerfile_location="basedir/drs-filer/Dockerfile",
+                intermediate_registry_path="test_intermediate_registry_path",
+                dockerhub_token="dockerhub_token",
+                project_access_token="access_token",
+            )
+        deployment_file = "basedir/build123/build123.yaml"
+        assert os.path.isfile(deployment_file)
+        assert os.path.isfile("basedir/build123/config.json")
+        assert os.path.isdir("basedir/build123/drs-filer/.git")
+        push_image.assert_called_once_with(
+            deployment_file_location=deployment_file
         )
         shutil.rmtree("basedir")
 

@@ -37,4 +37,10 @@ setup(
         "Programming Language :: Python :: 3.9",
     ],
     install_requires=[],
+    extras_require={
+        "test": [
+            "coverage==7.10.7",
+            "pytest==8.4.2",
+        ],
+    },
 )
