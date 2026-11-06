@@ -3,8 +3,9 @@ version: 2
 # requests whatever the default branch is (`main` only moves forward to
 # releases); security updates always target the default branch, though
 updates:
-  # Dependencies of the app in `requirements.txt`, installed on top of the
-  # FOCA base image, which pins most of them
+  # Dependencies of the app in `requirements.txt` and `setup.py` (test
+  # dependencies), installed on top of the FOCA base image, which pins most
+  # of them
   - package-ecosystem: pip
     directory: /
     schedule:
@@ -14,6 +15,12 @@ updates:
       # FOCA is bumped by hand, together with the base image (see the `docker`
       # entry) and the code that a newer FOCA needs
       - dependency-name: foca
+      # The last versions for Python 3.9, the version of the FOCA base image
+      # that the tests run in (`make test`); lift with the move to a newer FOCA
+      - dependency-name: pytest
+        versions: [">=9"]
+      - dependency-name: coverage
+        versions: [">=7.11"]
     groups:
       python-dependencies:
         patterns: ["*"]
