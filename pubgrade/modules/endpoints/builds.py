@@ -682,7 +682,8 @@ def trigger_signing_image(dockerhub_token: str,
     try:
         requests.request("POST", url, headers=headers, data=payload)
     except requests.exceptions.RequestException as error:
-        # Only the type: messages can quote headers
+        # Log only the type: messages of requests can quote the Authorization
+        # header
         logger.error(
             f"Triggering the signing of {push_tag} failed: "
             f"{type(error).__name__}"

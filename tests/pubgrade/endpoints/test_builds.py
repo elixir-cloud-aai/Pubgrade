@@ -772,7 +772,10 @@ class TestBuild:
                     "pubgrade/modules/endpoints/kaniko/template.yaml"
                 )
         assert [(r.levelno, r.getMessage()) for r in caplog.records] == [
-            (logging.ERROR, "Creating pod kaniko failed: 422 Unprocessable Entity")
+            (
+                logging.ERROR,
+                "Creating pod kaniko failed: 422 Unprocessable Entity",
+            )
         ]
         # FOCA logs the exception with its context
         assert "pod-secret" not in "".join(
@@ -790,7 +793,10 @@ class TestBuild:
             with pytest.raises(DeletePodError) as raised:
                 builds.delete_pod("name", "namespace")
         assert [(r.levelno, r.getMessage()) for r in caplog.records] == [
-            (logging.ERROR, "Deleting pod name failed: 422 Unprocessable Entity")
+            (
+                logging.ERROR,
+                "Deleting pod name failed: 422 Unprocessable Entity",
+            )
         ]
         assert "pod-secret" not in "".join(
             traceback.format_exception(raised.value)

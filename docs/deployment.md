@@ -58,7 +58,8 @@ from the Secret given by `pubgrade.configSecret`. The environment variable
 Log messages name repositories, users, subscriptions, builds and pods by
 their identifiers; they contain no access tokens or other credentials.
 Failed calls to the Kubernetes API are logged with status and reason, and
-failed requests to GitHub with the type of the error.
+requests to GitHub that fail (e.g., no connection) with the type of the
+error; responses of GitHub are not checked.
 
 ## Builds
 
