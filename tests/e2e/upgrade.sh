@@ -90,6 +90,9 @@ spec:
             - {name: ACCESS_TOKEN, value: ${token}}
           ports:
             - {containerPort: 8080}
+          readinessProbe:
+            tcpSocket: {port: 8080}
+            periodSeconds: 2
 ---
 apiVersion: v1
 kind: Service
@@ -146,24 +149,24 @@ wait_for_report() {
   fail "${site}: sidecar didn't report ${status}: ${report}"
 }
 
-# Wait until Pubgrade reaches a site's sidecar at its callback URL, or fail:
-# the sidecar's pod is ready before its server listens, and Pubgrade notifies
-# only once
+# Wait until Pubgrade reaches a site's sidecar at its callback URL, or fail.
+# Pubgrade notifies a subscriber only once, so the sidecar must be reachable
+# from Pubgrade's pod (Python is in its image) before anything is published.
 wait_for_sidecar() {
-  local site="$1" _
+  local site="$1" error="" _
   for _ in $(seq 1 60); do
-    if k exec --namespace pubgrade deployment/pubgrade -- python -c '
+    if error="$(k exec --request-timeout=20s --namespace pubgrade deployment/pubgrade -- python -c '
 import sys, urllib.error, urllib.request
 try:
     urllib.request.urlopen(sys.argv[1], timeout=5)
 except urllib.error.HTTPError:
     pass  # any response will do
-' "http://sidecar.${site}:8080/deployment/target" > /dev/null 2>&1; then
+' "http://sidecar.${site}:8080/deployment/target" 2>&1 > /dev/null)"; then
       return 0
     fi
     sleep 2
   done
-  fail "${site}: Pubgrade can't reach the sidecar"
+  fail "${site}: Pubgrade can't reach the sidecar: $(tail -n 1 <<< "${error}")"
 }
 
 # Wait until a site runs an image, and print the seconds this took
