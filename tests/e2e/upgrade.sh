@@ -159,8 +159,10 @@ wait_for_sidecar() {
 import sys, urllib.error, urllib.request
 try:
     urllib.request.urlopen(sys.argv[1], timeout=5)
-except urllib.error.HTTPError:
-    pass  # any response will do
+except urllib.error.HTTPError as error:
+    # Any answer but a server error will do (e.g. 401 without a token)
+    if error.code >= 500:
+        sys.exit(f"HTTP {error.code}")
 ' "http://sidecar.${site}:8080/deployment/target" 2>&1 > /dev/null)"; then
       return 0
     fi
