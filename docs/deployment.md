@@ -164,13 +164,17 @@ push), by default in the key `intermediate_registry_token` of
 `endpoints.builds.intermediate_registery_format` of the app's configuration
 (a path with `{}` for the image's name) still works, and takes precedence
 over the chart values if it is set; without a tag in it, each build
-gets the tag `build-<build ID>`.
+gets the tag `build-<build ID>`, and with one (e.g., `ttl.sh/{}:1h`), the
+image name gets a suffix derived from the build ID, so that each build has
+its own image there.
 
 The signing workflow (`endpoints.builds.gh_action_path`) then pulls the
 image from the intermediate registry, signs it and pushes it to its final
 name. It logs in to Docker Hub only, with the request's `dockerhub_token`:
-with builds on, images are still published to Docker Hub (and the
-intermediate registry must be one that the workflow can pull from).
+with builds on, images are still published to Docker Hub, so the names of
+the images to build must be Docker Hub names (e.g., `org/app:1.0`, not
+`harbor.example.org/project/app:1.0`), and the intermediate registry must
+be one that the workflow can pull from.
 
 ## Upgrading to FOCA 0.21 (API 2.0.0)
 
@@ -237,7 +241,8 @@ From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA
   takes precedence. Images whose name has a registry host or no namespace
   (e.g., `harbor.example.org/project/app`, `app`) are built under their
   last name part, `app`, and the tag `build-<build ID>` (unless
-  `intermediate_registery_format` has a tag), so that builds of images with
+  `intermediate_registery_format` has a tag; then the name gets a suffix
+  derived from the build ID), so that builds of images with
   the same name no longer replace each other's image before it is signed;
   before, a registry host broke the build. The
   credentials of a Docker Hub intermediate registry are stored under

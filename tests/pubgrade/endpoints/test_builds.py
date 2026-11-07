@@ -1,6 +1,7 @@
 """Tests for /builds endpoint."""
 
 import copy
+import hashlib
 import json
 import logging
 import os
@@ -566,10 +567,9 @@ class TestBuild:
         create.assert_called_once()
         assert create.call_args.kwargs["branch"] == branch
         assert create.call_args.kwargs["commit"] == commit
-        assert (
-            create.call_args.kwargs["intermediate_registry_path"]
-            == "ttl.sh/test-updater:1h"
-        )
+        path = create.call_args.kwargs["intermediate_registry_path"]
+        assert path.startswith("ttl.sh/test-updater-")
+        assert path.endswith(":1h")
 
     @pytest.mark.parametrize(
         "image",
@@ -589,10 +589,9 @@ class TestBuild:
             self.app.app_context(),
         ):
             start_build(build, self.repository_url, "access_token")
-        assert (
-            create.call_args.kwargs["intermediate_registry_path"]
-            == "ttl.sh/test-updater:1h"
-        )
+        path = create.call_args.kwargs["intermediate_registry_path"]
+        assert path.startswith("ttl.sh/test-updater-")
+        assert path.endswith(":1h")
 
     @pytest.mark.parametrize(
         "head_commit",
@@ -2280,8 +2279,12 @@ def test_config_file_for_intermediate_registry(
 @pytest.mark.parametrize(
     "configured,image,expected",
     [
-        # A tag in the setting stays
-        ("ttl.sh/{}:1h", "org/app:1", "ttl.sh/app:1h"),
+        # A tag in the setting stays; the name is the build's own then
+        (
+            "ttl.sh/{}:1h",
+            "org/app:1",
+            "ttl.sh/app-" + hashlib.sha256(b"repo.b1").hexdigest()[:16] + ":1h",
+        ),
         ("", "harbor.example.org/project/app:1", "docker.io/org/app:build-repo.b1"),
         ("registry:5000/{}", "app:1", "registry:5000/app:build-repo.b1"),
     ],

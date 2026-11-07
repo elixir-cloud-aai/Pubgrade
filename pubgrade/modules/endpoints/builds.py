@@ -1,6 +1,7 @@
 """Registration of builds and publication of images."""
 
 import base64
+import hashlib
 import json
 import logging
 import os
@@ -116,9 +117,11 @@ def intermediate_image(image: str, build_id: str) -> str:
     """Get the image that a build pushes to the intermediate registry.
 
     The build pod pushes it there, and the signing workflow pulls it from
-    there. Unless the path of the intermediate registry has a tag, the tag is
-    `build-<build ID>`, so that builds of images with the same name don't
-    replace each other's image before it is signed.
+    there. Each build has its own image, so that builds of images with the
+    same name (also of other repositories) don't replace each other's image
+    before it is signed: unless the path of the intermediate registry has a
+    tag (e.g., the lifetime on ttl.sh), the tag is `build-<build ID>`;
+    otherwise the name gets a suffix derived from the build ID.
 
     Args:
         image: Name of the image to build, with its tag.
@@ -127,10 +130,13 @@ def intermediate_image(image: str, build_id: str) -> str:
     Returns:
         The image in the intermediate registry, with its tag.
     """
-    path = intermediate_registry_format().format(image_basename(image))
-    if ":" not in path.rsplit("/", 1)[-1]:
-        path = f"{path}:build-{build_id}"
-    return path
+    path_format = intermediate_registry_format()
+    name = image_basename(image)
+    if ":" not in path_format.rsplit("/", 1)[-1]:
+        return f"{path_format.format(name)}:build-{build_id}"
+    # Build IDs may have characters that names can't have in a row
+    suffix = hashlib.sha256(build_id.encode("utf-8")).hexdigest()[:16]
+    return path_format.format(f"{name}-{suffix}")
 
 
 def registry_auth_key(path: str) -> str:
@@ -731,13 +737,16 @@ def create_deployment_YAML(
 def create_dockerhub_config_file(
     dockerhub_token: str, config_file_location: str
 ) -> None:
-    """Create dockerhub config file.
+    """Create the Docker configuration file of a build pod.
+
+    It holds the credentials of the intermediate registry (base64 of
+    `<user>:<password>`, from `INTERMEDIATE_REGISTRY_TOKEN`), under the key
+    that Docker's clients look up for it (see `registry_auth_key`).
 
     Args:
-        dockerhub_token (str): Base 64 encoded USER:PASSWORD to access
-        dockerhub to push image `echo -n USER:PASSWD | base64`
-        config_file_location (str): Location to create Dockerhub config file,
-        it contains dockerhub access token.
+        dockerhub_token: Unused; the token for Docker Hub goes to the signing
+            workflow instead.
+        config_file_location: Path of the file to create.
     """
     registry = registry_auth_key(intermediate_registry_format())
     token = os.getenv("INTERMEDIATE_REGISTRY_TOKEN")
