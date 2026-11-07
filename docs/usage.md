@@ -91,6 +91,29 @@ Results per subscription, once all calls are done, are in the field
 - `failed`: another response, or none in time.
 - `skipped`: the subscription doesn't match the build.
 
+## Cancel a build
+
+The repository's access token also allows withdrawing a build, e.g., one
+published by mistake:
+
+```bash
+curl --request DELETE '<base URL>/repositories/<repository ID>/builds/<build ID>' \
+  --header 'X-Project-Access-Token: <repository access token>'
+```
+
+The build is kept and stays listed, with the status `CANCELED`; `finished_at`
+is set if it hadn't finished. With builds switched on, a build that is still
+running is stopped (see [Builds](deployment.md#builds)): it doesn't succeed,
+and no one is notified of it. Finished builds are only marked. Deployments
+that have been notified keep what they pulled: Pubgrade doesn't notify them
+again, undeploy anything or delete images from a registry. To roll
+deployments back or forward, publish the image they should run as a new
+build. A build that is canceled already gets a 409, an unknown one a 404.
+
+Builds can't be changed: to publish a corrected image, publish it as a new
+build. `PUT /repositories/<repository ID>/builds/<build ID>` is Pubgrade's
+internal callback for finished build pods, not a way to change a build.
+
 ## Change or delete a repository
 
 The repository's access token also allows changing its URL; the repository

@@ -15,7 +15,8 @@ DELETE  /repositories/{id}                      the repository
 GET     /repositories/{id}/builds               anyone
 POST    /repositories/{id}/builds               the repository: publish an image
 GET     /repositories/{id}/builds/{build_id}    anyone
-PUT     /repositories/{id}/builds/{build_id}    the repository, with builds on only
+PUT     /repositories/{id}/builds/{build_id}    internal: build pods report completion
+DELETE  /repositories/{id}/builds/{build_id}    the repository: cancel a build
 POST    /users/register                         anyone, while registration is open
 DELETE  /users/register                         the user
 GET     /users                                  admins
@@ -30,6 +31,14 @@ DELETE  /subscriptions/{subscription_id}        the subscription's user
 `PUT /repositories/{id}` changes only the repository's URL. `DELETE
 /repositories/{id}` also deletes the repository's builds and subscriptions
 (see [Usage](usage.md#change-or-delete-a-repository)).
+
+`DELETE /repositories/{id}/builds/{build_id}` withdraws a build: it is kept,
+with the status `CANCELED` (see [Usage](usage.md#cancel-a-build)); a
+repeated request gets `409 Conflict`. Builds can't be changed: a changed
+build is a new `POST /repositories/{id}/builds`. `PUT
+/repositories/{id}/builds/{build_id}` is the internal callback with which
+build pods report their completion (with builds switched on only, else
+`403`); for a canceled build, it gets a `409`.
 
 Registrations are open until they are closed in the
 [configuration](deployment.md#configuration). The specification is the
