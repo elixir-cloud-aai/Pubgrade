@@ -23,6 +23,7 @@ from pubgrade.errors.exceptions import (
     CreatePodError,
     DeletePodError,
     GitCloningError,
+    GitRefNotFound,
     InternalServerError,
     InvalidImage,
     RepositoryNotFound,
@@ -39,6 +40,9 @@ BASE_DIR = os.getenv("BASE_DIR", "/pubgrade_temp_files")
 # Seconds to connect to GitHub and for its response, when triggering the
 # signing of an image
 REQUEST_TIMEOUT = 30
+
+# An abbreviated or full commit hash (SHA-1 or SHA-256)
+COMMIT_HASH = re.compile(r"[0-9a-fA-F]{4,64}")
 
 # An image with a tag (no digest), optionally with a registry and its port,
 # following Docker's rules for references
@@ -104,6 +108,10 @@ def register_builds(
 
     With builds switched off (`endpoints.builds.enabled`), the request names a
     prebuilt image, and the repository's subscriptions are notified of it.
+    With builds switched on, a build that can't start (e.g., of an unknown
+    branch) is removed again: only builds whose identifier the client got are
+    kept. Until then, while the repository is cloned, the build is listed as
+    `QUEUED`.
 
     Args:
         repository_id (str): Identifier for repository.
@@ -124,6 +132,8 @@ def register_builds(
         InvalidImage: Raised when there is no image, an image isn't a valid
         reference with a tag, or a request for a prebuilt image doesn't name
         exactly one.
+        GitRefNotFound: Raised when the branch, tag or commit to build isn't
+        in the repository.
     """
     db_collection_builds = collection("builds")
     db_collection_repositories = collection("repositories")
@@ -163,35 +173,6 @@ def register_builds(
             build_data["status"] = "QUEUED"
             db_collection_builds.insert_one(build_data)
             logger.info("Added build %s.", build_data["id"])
-            if not build_path:
-                break
-            branch = ""
-            commit_sha = ""
-            try:
-                branch = build_data["head_commit"]["branch"]
-                try:
-                    commit_sha = build_data["head_commit"]["commit_sha"]
-                except KeyError:
-                    commit_sha = ""
-            except KeyError:
-                commit_sha = build_data["head_commit"]["tag"]
-            intermediate_registry_format = endpoints()["builds"][
-                "intermediate_registery_format"
-            ]
-            intermediate_registry_path = intermediate_registry_format.format(
-                build_data["images"][0]["name"].split("/")[1].split(":")[0]
-            )
-            create_build(
-                repo_url=data_from_db["url"],
-                branch=branch,
-                commit=commit_sha,
-                base_dir=BASE_DIR,
-                build_id=build_data["id"],
-                dockerfile_location=build_data["images"][0]["location"],
-                intermediate_registry_path=intermediate_registry_path,
-                dockerhub_token=build_data["dockerhub_token"],
-                project_access_token=access_token,
-            )
             break
         except DuplicateKeyError:
             logger.error(
@@ -210,7 +191,81 @@ def register_builds(
             build_data["images"][0]["name"],
             data_from_db.get("subscription_list", []),
         )
+        return {"id": build_data["id"]}
+    try:
+        start_build(build_data, data_from_db["url"], access_token)
+    except CreatePodError:
+        # The pod may have been created nonetheless, and reports to the build
+        raise
+    except Exception:
+        # The client gets an error instead of the build's identifier, so the
+        # build is not kept; the client gets the original error even if this
+        # fails. The repository's list goes first: a listed build that is
+        # missing would break the listing of the repository's builds.
+        try:
+            db_collection_repositories.update_one(
+                {"id": repository_id}, {"$pull": {"build_list": build_data["id"]}}
+            )
+            db_collection_builds.delete_one({"id": build_data["id"]})
+        except Exception as error:
+            logger.error(
+                "Removing build %s, which could not start, failed: %s",
+                build_data["id"],
+                type(error).__name__,
+            )
+        else:
+            logger.info("Removed build %s, which could not start.", build_data["id"])
+        raise
     return {"id": build_data["id"]}
+
+
+def start_build(build_data: dict[str, Any], repo_url: str, access_token: str) -> None:
+    """Start a registered build.
+
+    Args:
+        build_data (dict): The build, as registered.
+        repo_url (str): URL of the repository.
+        access_token (str): Access token of the repository.
+
+    Raises:
+        GitRefNotFound: Raised when the branch, tag or commit isn't in the
+            repository.
+        GitCloningError: Raised when cloning or checking out the repository
+            fails.
+    """
+    head_commit = build_data["head_commit"]
+    if "branch" in head_commit:
+        branch = head_commit["branch"]
+        commit_sha = head_commit.get("commit_sha")
+        # An empty `commit_sha` would build the branch's head
+        if commit_sha == "":
+            raise GitRefNotFound
+        commit_sha = commit_sha or ""
+        name = branch
+    else:
+        branch = ""
+        commit_sha = head_commit["tag"]
+        name = commit_sha
+    # An empty branch or tag would build the repository's default branch
+    if name == "":
+        raise GitRefNotFound
+    intermediate_registry_format = endpoints()["builds"][
+        "intermediate_registery_format"
+    ]
+    intermediate_registry_path = intermediate_registry_format.format(
+        build_data["images"][0]["name"].split("/")[1].split(":")[0]
+    )
+    create_build(
+        repo_url=repo_url,
+        branch=branch,
+        commit=commit_sha,
+        base_dir=BASE_DIR,
+        build_id=build_data["id"],
+        dockerfile_location=build_data["images"][0]["location"],
+        intermediate_registry_path=intermediate_registry_path,
+        dockerhub_token=build_data["dockerhub_token"],
+        project_access_token=access_token,
+    )
 
 
 def get_builds(repository_id: str) -> list[dict[str, Any]]:
@@ -286,6 +341,9 @@ def create_build(
 ) -> None:
     """Create build and push to DockerHub.
 
+    If the build can't start, its directory is removed again, unless creating
+    its pod failed: the pod may have been created nonetheless.
+
     Args:
         repo_url (str): URL of git repository to be cloned.
         branch (str): Branch of git repository used for checkout to build
@@ -304,6 +362,9 @@ def create_build(
     Raises:
         InternalServerError: If the build's directory would be outside
             `base_dir`.
+        GitRefNotFound: If the branch, tag or commit isn't in the
+            repository.
+        CreatePodError: If creating the build's pod failed.
     """
     # Build identifiers are generated, but keep the files of a build in
     # `base_dir` regardless
@@ -316,33 +377,65 @@ def create_build(
     deployment_file_location = f"{base_dir}/{build_id}/{build_id}.yaml"
     config_file_location = os.path.join(build_dir, "config.json")
 
-    # Clone project repository.
-    clone_path = git_clone_and_checkout(
-        repo_url=repo_url,
-        branch=branch,
-        commit=commit,
-        base_dir=base_dir,
-        build_id=build_id,
-    )
+    try:
+        # Clone project repository.
+        clone_path = git_clone_and_checkout(
+            repo_url=repo_url,
+            branch=branch,
+            commit=commit,
+            base_dir=base_dir,
+            build_id=build_id,
+        )
 
-    # Create kaniko deployment file.
-    create_deployment_YAML(
-        f"{clone_path}/{dockerfile_location}",
-        intermediate_registry_path,
-        clone_path,
-        deployment_file_location,
-        f"{build_id}/config.json",
-        project_access_token,
-    )
+        # Create kaniko deployment file.
+        create_deployment_YAML(
+            f"{clone_path}/{dockerfile_location}",
+            intermediate_registry_path,
+            clone_path,
+            deployment_file_location,
+            f"{build_id}/config.json",
+            project_access_token,
+        )
 
-    # Create dockerhub config file
-    create_dockerhub_config_file(
-        dockerhub_token=dockerhub_token,
-        config_file_location=config_file_location,
-    )
+        # Create dockerhub config file
+        create_dockerhub_config_file(
+            dockerhub_token=dockerhub_token,
+            config_file_location=config_file_location,
+        )
+    except Exception:
+        # No pod uses the files of a build that didn't start
+        remove_build_dir(build_dir, build_id)
+        raise
 
-    # Create kaniko deployment to build and publish image.
-    build_push_image_using_kaniko(deployment_file_location=deployment_file_location)
+    # Create kaniko deployment to build and publish image. The pod may have
+    # been created even if this fails (e.g., a lost response), so the build's
+    # files are kept
+    try:
+        build_push_image_using_kaniko(deployment_file_location=deployment_file_location)
+    except CreatePodError:
+        raise
+    except Exception as error:
+        logger.error(
+            "Creating the pod of build %s failed: %s", build_id, type(error).__name__
+        )
+        raise CreatePodError from None
+
+
+def remove_build_dir(build_dir: str, build_id: str) -> None:
+    """Remove the directory of a build that didn't start, if there is one.
+
+    Args:
+        build_dir: Directory of the build.
+        build_id: Identifier of the build.
+    """
+    try:
+        shutil.rmtree(build_dir)
+    except FileNotFoundError:
+        pass
+    except OSError as error:
+        logger.error(
+            "Removing the files of build %s failed: %s", build_id, type(error).__name__
+        )
 
 
 def git_clone_and_checkout(
@@ -363,24 +456,76 @@ def git_clone_and_checkout(
 
     Raises:
         GitCloningError: Raised when there is problem while cloning repository.
+        GitRefNotFound: Raised when the branch, or the tag or commit, isn't in
+            the repository.
     """
     repo_name = repo_url.split("/")[4].split(".", maxsplit=1)[0]
     clone_path = f"{base_dir}/{build_id}/{repo_name}"
     try:
-        # Check if head commit is branch or tag.
-        if branch != "":
-            # If branch is specified.
-            repo = Repo.clone_from(repo_url, clone_path, branch=branch)
-        else:
-            # If tag is specified.
-            repo = Repo.clone_from(repo_url, clone_path)
-        # Checkout only if tag or commit sha is specified, otherwise stay at
-        # HEAD of branch.
-        if commit != "":
-            repo.git.checkout(commit)
-        return clone_path
+        repo = Repo.clone_from(repo_url, clone_path)
     except GitCommandError:
         raise GitCloningError from None
+    # Look the branch and the tag or commit up before checking them out, so
+    # that unknown ones are told apart from other errors. Only exact names of
+    # branches and tags, and hexadecimal commit hashes, are accepted: no
+    # options and no revision expressions (e.g. `dev~1`)
+    remote_branch = f"refs/remotes/origin/{branch}"
+    try:
+        if branch != "":
+            # `origin/HEAD` is a remote ref, but not a branch
+            if branch == "HEAD" or branch.startswith("-"):
+                raise GitRefNotFound
+            repo.git.show_ref("--verify", "--quiet", remote_branch)
+        target = ""
+        if commit != "":
+            # With a branch, `commit` is a `commit_sha`, not a tag
+            target = resolve_tag_or_commit(repo, commit, tags=branch == "")
+    except GitCommandError as error:
+        # Git's lookups exit with 1 for unknown (and ambiguous) names
+        if error.status == 1:
+            raise GitRefNotFound from None
+        raise GitCloningError from None
+    try:
+        if branch != "":
+            repo.git.checkout("-B", branch, remote_branch)
+        # Check out the tag or commit, if any, else stay at the branch's head
+        if target != "":
+            repo.git.checkout(target)
+    except GitCommandError:
+        raise GitCloningError from None
+    return clone_path
+
+
+def resolve_tag_or_commit(repo: Repo, name: str, tags: bool = True) -> str:
+    """Get the commit of a tag or of an abbreviated or full commit hash.
+
+    Args:
+        repo: Clone of the repository.
+        name: Name of a tag, or a commit hash with 4 to 64 hexadecimal digits.
+        tags: Whether `name` may be a tag; if not, only commit hashes are
+            accepted.
+
+    Returns:
+        The full hash of the commit.
+
+    Raises:
+        GitRefNotFound: If `name` is neither a tag nor a commit hash.
+        GitCommandError: If Git can't resolve the tag or hash to a commit
+            (status 1 if it isn't in the repository or isn't unique).
+    """
+    revision = name
+    if tags:
+        tag = f"refs/tags/{name}"
+        try:
+            repo.git.show_ref("--verify", "--quiet", tag)
+            revision = tag
+        except GitCommandError as error:
+            if error.status != 1:
+                raise
+    if revision == name and not COMMIT_HASH.fullmatch(name):
+        raise GitRefNotFound
+    commit: str = repo.git.rev_parse("--verify", "--quiet", f"{revision}^{{commit}}")
+    return commit
 
 
 def create_deployment_YAML(

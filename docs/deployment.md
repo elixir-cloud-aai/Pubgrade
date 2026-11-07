@@ -103,6 +103,19 @@ builds don't work under OpenShift's default restrictions. With builds off,
 requests that need them get a 403, as does
 `PUT /repositories/{id}/builds/{build_id}`.
 
+Pubgrade clones the repository and checks out the `branch` (and the
+`commit_sha`, if given) or the `tag` in `head_commit`. Branches and tags must
+be given by their exact names, and `commit_sha` as a commit hash (4 to 64
+hexadecimal digits); revision expressions such as `dev~1` aren't accepted.
+If one of them is empty, isn't in the repository or (a short hash) isn't
+unique, the request gets a 400 that says so (before: a 500). A build that
+can't start, for this or another reason (e.g., a Dockerfile that can't be
+read, which still gets a 500), is removed again, with its files: only
+builds whose identifier the client got are kept. While the repository is
+cloned, the build is listed as `QUEUED`. If only creating the build pod
+fails (a 500), the build and its files are kept, as the pod may have been
+created nonetheless.
+
 ## Upgrading to FOCA 0.21 (API 2.0.0)
 
 From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA

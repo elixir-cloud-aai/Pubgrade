@@ -11,13 +11,13 @@ from types import SimpleNamespace
 from typing import Any, ClassVar, NoReturn
 from unittest.mock import MagicMock, patch
 
-from git import Repo
+from git import Git, GitCommandError, Repo
 from kubernetes.client import ApiException
 import mongomock
 from pymongo.errors import DuplicateKeyError
 import pytest
 import requests
-from werkzeug.exceptions import InternalServerError, Unauthorized
+from werkzeug.exceptions import BadRequest, InternalServerError, Unauthorized
 import yaml
 
 from pubgrade.errors.exceptions import (
@@ -26,8 +26,10 @@ from pubgrade.errors.exceptions import (
     CreatePodError,
     DeletePodError,
     GitCloningError,
+    GitRefNotFound,
     InvalidImage,
     RepositoryNotFound,
+    exceptions,
 )
 from pubgrade.modules.endpoints import builds
 from pubgrade.modules.endpoints.builds import (
@@ -41,7 +43,9 @@ from pubgrade.modules.endpoints.builds import (
     get_builds,
     git_clone_and_checkout,
     register_builds,
+    remove_build_dir,
     remove_files,
+    start_build,
 )
 from tests.helpers import FocaApp, make_config
 from tests.mock_data import (
@@ -474,6 +478,144 @@ class TestBuild:
                 MOCK_BUILD_PAYLOAD,
             )
 
+    @pytest.mark.parametrize("error", [GitRefNotFound, GitCloningError, RuntimeError])
+    def test_register_builds_failed_build_not_recorded(
+        self, error: type[Exception]
+    ) -> None:
+        """A build that can't start isn't recorded, for the repository either.
+
+        Args:
+            error: Error of starting the build.
+        """
+        self.setup()
+        repository_id = MOCK_REPOSITORY_2["id"]
+        with (
+            patch.object(builds, "create_build", side_effect=error),
+            self.app.app_context(),
+        ):
+            assert builds.builds_enabled()
+            with pytest.raises(error):
+                register_builds(
+                    repository_id,
+                    MOCK_REPOSITORY_2["access_token"],
+                    copy.deepcopy(MOCK_BUILD_PAYLOAD),
+                )
+            repository = builds.collection("repositories").find_one(
+                {"id": repository_id}
+            )
+            assert builds.collection("builds").count_documents({}) == 0
+        assert repository is not None
+        assert repository["build_list"] == MOCK_REPOSITORY_2["build_list"]
+
+    def test_register_builds_pod_error_keeps_build(self) -> None:
+        """A build whose pod may have been created is kept."""
+        self.setup()
+        repository_id = MOCK_REPOSITORY_2["id"]
+        with (
+            patch.object(builds, "create_build", side_effect=CreatePodError),
+            self.app.app_context(),
+        ):
+            with pytest.raises(CreatePodError):
+                register_builds(
+                    repository_id,
+                    MOCK_REPOSITORY_2["access_token"],
+                    copy.deepcopy(MOCK_BUILD_PAYLOAD),
+                )
+            repository = builds.collection("repositories").find_one(
+                {"id": repository_id}
+            )
+            assert builds.collection("builds").count_documents({}) == 1
+        assert repository is not None
+        assert len(repository["build_list"]) == len(MOCK_REPOSITORY_2["build_list"]) + 1
+
+    @pytest.mark.parametrize(
+        ("head_commit", "branch", "commit"),
+        [
+            ({"branch": "dev"}, "dev", ""),
+            ({"branch": "dev", "commit_sha": "abc1234"}, "dev", "abc1234"),
+            ({"tag": "v1"}, "", "v1"),
+        ],
+    )
+    def test_start_build(
+        self, head_commit: dict[str, str], branch: str, commit: str
+    ) -> None:
+        """A build checks out the branch (and commit) or the tag.
+
+        Args:
+            head_commit: Branch, commit or tag of the request.
+            branch: Expected branch to check out.
+            commit: Expected commit or tag to check out.
+        """
+        self.setup()
+        build = {**copy.deepcopy(MOCK_BUILD_PAYLOAD), "id": "build123"}
+        build["head_commit"] = head_commit
+        with (
+            patch.object(builds, "create_build") as create,
+            self.app.app_context(),
+        ):
+            start_build(build, self.repository_url, "access_token")
+        create.assert_called_once()
+        assert create.call_args.kwargs["branch"] == branch
+        assert create.call_args.kwargs["commit"] == commit
+        assert (
+            create.call_args.kwargs["intermediate_registry_path"]
+            == "ttl.sh/test-updater:1h"
+        )
+
+    @pytest.mark.parametrize(
+        "head_commit",
+        [
+            {"tag": ""},
+            {"branch": ""},
+            {"branch": "", "commit_sha": "abcd"},
+            {"branch": "dev", "commit_sha": ""},
+        ],
+    )
+    def test_start_build_empty_name(self, head_commit: dict[str, str]) -> None:
+        """An empty branch or tag is rejected, instead of the default branch.
+
+        Args:
+            head_commit: Branch, commit or tag of the request.
+        """
+        self.setup()
+        build = {**copy.deepcopy(MOCK_BUILD_PAYLOAD), "id": "build123"}
+        build["head_commit"] = head_commit
+        with (
+            patch.object(builds, "create_build") as create,
+            self.app.app_context(),
+            pytest.raises(GitRefNotFound),
+        ):
+            start_build(build, self.repository_url, "access_token")
+        create.assert_not_called()
+
+    def test_register_builds_failed_removal(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """If a build that can't start can't be removed, its error is kept.
+
+        Args:
+            caplog: Pytest's fixture of log messages.
+        """
+        self.setup()
+        builds_client = (
+            self.app.config.foca.db.dbs["pubgradeStore"].collections["builds"].client
+        )
+        builds_client.delete_one = MagicMock(side_effect=RuntimeError)
+        with (
+            patch.object(builds, "create_build", side_effect=GitRefNotFound),
+            self.app.app_context(),
+            pytest.raises(GitRefNotFound),
+        ):
+            register_builds(
+                MOCK_REPOSITORY_2["id"],
+                MOCK_REPOSITORY_2["access_token"],
+                copy.deepcopy(MOCK_BUILD_PAYLOAD),
+            )
+        assert any(
+            "could not start, failed: RuntimeError" in message
+            for message in caplog.messages
+        )
+
     def test_get_builds(self) -> None:
         """Test get builds."""
         self.setup_with_build()
@@ -566,23 +708,143 @@ class TestBuild:
         assert Repo(clone_path).head.commit.hexsha.startswith(drs_filer.commit)
         shutil.rmtree("./build123")
 
-    def test_git_clone_and_checkout_type_error(
-        self, drs_filer: SimpleNamespace
+    def test_git_clone_and_checkout_branch_only(
+        self, drs_filer: SimpleNamespace, tmp_path: Path
     ) -> None:
-        """Cloning a branch that doesn't exist fails.
+        """Without a tag or commit, the head of the branch is checked out.
 
         Args:
             drs_filer: Local copy of the repository.
+            tmp_path: Temporary directory, holding the base directory.
         """
-        with pytest.raises(GitCloningError):
+        clone_path = git_clone_and_checkout(
+            repo_url=self.repository_url,
+            branch="dev",
+            commit="",
+            base_dir=str(tmp_path),
+            build_id="build123",
+        )
+        clone = Repo(clone_path)
+        remote = Repo(drs_filer.root / "drs-filer")
+        assert clone.active_branch.name == "dev"
+        assert clone.head.commit == remote.heads.dev.commit
+
+    def test_git_clone_and_checkout_full_hash(
+        self, drs_filer: SimpleNamespace, tmp_path: Path
+    ) -> None:
+        """A full commit hash is checked out, also without a branch.
+
+        Args:
+            drs_filer: Local copy of the repository.
+            tmp_path: Temporary directory, holding the base directory.
+        """
+        remote = Repo(drs_filer.root / "drs-filer")
+        commit = remote.commit(drs_filer.commit).hexsha
+        clone_path = git_clone_and_checkout(
+            repo_url=self.repository_url,
+            branch="",
+            commit=commit,
+            base_dir=str(tmp_path),
+            build_id="build123",
+        )
+        assert Repo(clone_path).head.commit.hexsha == commit
+
+    @pytest.mark.parametrize(
+        ("branch", "commit"),
+        [
+            ("missing", ""),
+            ("missing", "v1"),
+            ("dev", "0000000"),
+            ("", "v9"),
+            ("", "--detach"),
+            ("--detach", ""),
+            ("HEAD", ""),
+            ("", "HEAD~1"),
+            ("", "origin/dev"),
+            ("dev", "HEAD~1"),
+            ("dev", "v1~0"),
+            ("dev", "v1"),
+        ],
+    )
+    def test_git_clone_and_checkout_unknown_ref(
+        self, drs_filer: SimpleNamespace, tmp_path: Path, branch: str, commit: str
+    ) -> None:
+        """A branch, tag or commit that isn't in the repository is rejected.
+
+        Args:
+            drs_filer: Local copy of the repository.
+            tmp_path: Temporary directory, holding the base directory.
+            branch: Branch to check out.
+            commit: Commit or tag to check out.
+        """
+        with pytest.raises(GitRefNotFound):
             git_clone_and_checkout(
                 repo_url=self.repository_url,
-                branch="missing",
-                commit=drs_filer.commit,
-                base_dir=".",
+                branch=branch,
+                commit=commit,
+                base_dir=str(tmp_path),
                 build_id="build123",
             )
-        shutil.rmtree("./build123")
+
+    def test_git_clone_and_checkout_checkout_error(
+        self, drs_filer: SimpleNamespace, tmp_path: Path
+    ) -> None:
+        """A checkout of a known branch that fails is a server error.
+
+        Args:
+            drs_filer: Local copy of the repository.
+            tmp_path: Temporary directory, holding the base directory.
+        """
+        with (
+            patch.object(
+                Git,
+                "checkout",
+                side_effect=GitCommandError("checkout", 128),
+                create=True,
+            ),
+            pytest.raises(GitCloningError),
+        ):
+            git_clone_and_checkout(
+                repo_url=self.repository_url,
+                branch="dev",
+                commit=drs_filer.commit,
+                base_dir=str(tmp_path),
+                build_id="build123",
+            )
+
+    @pytest.mark.parametrize(("branch", "commit"), [("dev", ""), ("", "v1")])
+    def test_git_clone_and_checkout_lookup_error(
+        self, drs_filer: SimpleNamespace, tmp_path: Path, branch: str, commit: str
+    ) -> None:
+        """A lookup that fails for another reason than an unknown name is a 500.
+
+        Args:
+            drs_filer: Local copy of the repository.
+            tmp_path: Temporary directory, holding the base directory.
+            branch: Branch to check out.
+            commit: Tag to check out.
+        """
+        with (
+            patch.object(
+                Git,
+                "show_ref",
+                side_effect=GitCommandError("show-ref", 128),
+                create=True,
+            ),
+            pytest.raises(GitCloningError),
+        ):
+            git_clone_and_checkout(
+                repo_url=self.repository_url,
+                branch=branch,
+                commit=commit,
+                base_dir=str(tmp_path),
+                build_id="build123",
+            )
+
+    def test_git_ref_not_found_is_bad_request(self) -> None:
+        """An unknown branch, tag or commit is the client's error (400)."""
+        assert issubclass(GitRefNotFound, BadRequest)
+        assert exceptions[GitRefNotFound]["status"] == 400
 
     def test_git_clone_and_checkout_git_command_error(
         self, drs_filer: SimpleNamespace
@@ -780,6 +1042,103 @@ class TestBuild:
         assert os.path.isdir("basedir/build123/drs-filer/.git")
         push_image.assert_called_once_with(deployment_file_location=deployment_file)
         shutil.rmtree("basedir")
+
+    @pytest.mark.parametrize("error", [CreatePodError, RuntimeError])
+    @patch("pubgrade.modules.endpoints.builds.create_dockerhub_config_file")
+    @patch("pubgrade.modules.endpoints.builds.create_deployment_YAML")
+    @patch("pubgrade.modules.endpoints.builds.git_clone_and_checkout")
+    def test_create_build_pod_error(
+        self,
+        clone: MagicMock,
+        deployment: MagicMock,
+        config_file_writer: MagicMock,
+        error: type[Exception],
+        tmp_path: Path,
+    ) -> None:
+        """If creating the pod fails, the build's files are kept.
+
+        The pod may have been created nonetheless.
+
+        Args:
+            clone: Mock of the function that clones the repository.
+            deployment: Mock of the function that writes the deployment file.
+            config_file_writer: Mock of the function that writes the config file.
+            error: Error of creating the pod.
+            tmp_path: Temporary directory, holding the base directory.
+        """
+        build_dir = tmp_path / "build123"
+        build_dir.mkdir()
+        with (
+            patch.object(builds, "build_push_image_using_kaniko", side_effect=error),
+            pytest.raises(CreatePodError),
+        ):
+            create_build(
+                repo_url=self.repository_url,
+                branch="dev",
+                commit="",
+                base_dir=str(tmp_path),
+                build_id="build123",
+                dockerfile_location="Dockerfile",
+                intermediate_registry_path="registry/image",
+                dockerhub_token="token",
+                project_access_token="access_token",
+            )
+        assert build_dir.is_dir()
+
+    def test_remove_build_dir_missing(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A build without files is fine.
+
+        Args:
+            tmp_path: Temporary directory, without the build's directory.
+            caplog: Pytest's fixture of log messages.
+        """
+        remove_build_dir(str(tmp_path / "build123"), "build123")
+        assert not caplog.messages
+
+    def test_remove_build_dir_error(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Files of a build that can't be removed are logged.
+
+        Args:
+            tmp_path: Temporary directory, holding the build's directory.
+            caplog: Pytest's fixture of log messages.
+        """
+        with patch.object(shutil, "rmtree", side_effect=PermissionError):
+            remove_build_dir(str(tmp_path), "build123")
+        assert "Removing the files of build build123 failed: PermissionError" in (
+            caplog.messages
+        )
+
+    @patch("pubgrade.modules.endpoints.builds.build_push_image_using_kaniko")
+    def test_create_build_unknown_ref(
+        self, push_image: MagicMock, drs_filer: SimpleNamespace, tmp_path: Path
+    ) -> None:
+        """A build of an unknown branch leaves no files and starts no pod.
+
+        Args:
+            push_image: Mock of the function that pushes the image.
+            drs_filer: Local copy of the repository.
+            tmp_path: Temporary directory, holding the base directory.
+        """
+        base_dir = tmp_path / "base"
+        base_dir.mkdir()
+        with pytest.raises(GitRefNotFound):
+            create_build(
+                repo_url=self.repository_url,
+                branch="missing",
+                commit="",
+                base_dir=str(base_dir),
+                build_id="build123",
+                dockerfile_location="Dockerfile",
+                intermediate_registry_path="registry/image",
+                dockerhub_token="token",
+                project_access_token="access_token",
+            )
+        push_image.assert_not_called()
+        assert list(base_dir.iterdir()) == []
 
     @patch("pubgrade.modules.endpoints.builds.remove_files", mocked_remove_files)
     @patch("requests.request", mocked_request_api)

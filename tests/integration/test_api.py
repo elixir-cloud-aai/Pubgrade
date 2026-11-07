@@ -1,12 +1,16 @@
 """Integration tests of the API: register, publish and notify."""
 
+from pathlib import Path
 import socket
+from types import SimpleNamespace
 from typing import Any
 
 from flask.testing import FlaskClient
 import pytest
 
-from pubgrade.settings import collection
+from pubgrade.errors.exceptions import GitRefNotFound, exceptions
+from pubgrade.modules.endpoints import builds
+from pubgrade.settings import collection, endpoints
 from tests.integration.conftest import ADMIN, Subscriber
 
 ADMIN_HEADERS = {
@@ -269,3 +273,75 @@ def test_repositories_hide_tokens(api: FlaskClient) -> None:
     retrieved = check(api.get(f"/repositories/{repository['id']}"))
     for item in [*listed, retrieved]:
         assert "access_token" not in item
+
+
+@pytest.mark.parametrize(
+    "head_commit",
+    [
+        {"branch": "missing"},
+        {"branch": "dev", "commit_sha": "0000000"},
+        {"tag": "v9"},
+        {"tag": "HEAD~1"},
+        {"tag": ""},
+        {"branch": ""},
+    ],
+)
+def test_build_of_unknown_ref(
+    api: FlaskClient,
+    drs_filer: SimpleNamespace,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    head_commit: dict[str, str],
+) -> None:
+    """A build of a branch, tag or commit that the repository lacks gets a 400.
+
+    Regression test for issue #28, where it got a 500. The build isn't
+    recorded and leaves no files. Git clones the repository's URL on GitHub
+    from the local copy (fixture `drs_filer`), so the URL must not end in
+    `.git`.
+
+    Args:
+        api: Client of the API.
+        drs_filer: Local copy of the repository `drs-filer`.
+        tmp_path: Temporary directory for the builds' files.
+        monkeypatch: Pytest's monkeypatch fixture.
+        head_commit: Branch, commit or tag to build.
+    """
+    builds_dir = tmp_path / "builds"
+    builds_dir.mkdir()
+    monkeypatch.setattr(builds, "BASE_DIR", str(builds_dir))
+    with api.application.app_context():
+        settings = endpoints()["builds"]
+    monkeypatch.setitem(settings, "enabled", True)
+    monkeypatch.setitem(
+        settings, "intermediate_registery_format", "registry.example.org/{}"
+    )
+    repository = check(
+        api.post(
+            "/repositories",
+            json={"url": "https://github.com/elixir-cloud-aai/drs-filer"},
+        )
+    )
+    error = check(
+        api.post(
+            f"/repositories/{repository['id']}/builds",
+            headers={"X-Project-Access-Token": repository["access_token"]},
+            json={
+                "images": [{"name": "org/image:1", "location": "Dockerfile"}],
+                "head_commit": head_commit,
+                "dockerhub_token": "dXNlcjpwYXNzd2Q=",  # user:passwd  gitleaks:allow
+            },
+        ),
+        400,
+    )
+    assert error == {
+        "title": "Bad Request",
+        "status": 400,
+        "detail": exceptions[GitRefNotFound]["detail"],
+    }
+    assert list(builds_dir.iterdir()) == []
+    with api.application.app_context():
+        assert collection("builds").count_documents({}) == 0
+        stored = collection("repositories").find_one({"id": repository["id"]})
+    assert stored is not None
+    assert not stored.get("build_list")
