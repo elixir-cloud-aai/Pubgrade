@@ -15,7 +15,7 @@ DELETE  /repositories/{id}                      the repository
 GET     /repositories/{id}/builds               anyone
 POST    /repositories/{id}/builds               the repository: publish an image
 GET     /repositories/{id}/builds/{build_id}    anyone
-PUT     /repositories/{id}/builds/{build_id}    internal: build pods report completion
+PUT     /repositories/{id}/builds/{build_id}    the repository's build pods (internal), builds on only
 DELETE  /repositories/{id}/builds/{build_id}    the repository: cancel a build
 POST    /users/register                         anyone, while registration is open
 DELETE  /users/register                         the user

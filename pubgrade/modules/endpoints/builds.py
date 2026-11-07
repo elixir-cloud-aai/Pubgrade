@@ -222,12 +222,18 @@ def register_builds(
     except CreatePodError:
         # The pod may have been created nonetheless, and reports to the build
         ensure_accepting(repository_id, build_data["id"])
+        stop_canceled_build(build_data["id"])
         raise
     except Exception:
         # The client gets an error instead of the build's identifier, so the
         # build is not kept; the client gets the original error even if this
         # fails. The repository's list goes first: a listed build that is
-        # missing would break the listing of the repository's builds.
+        # missing would break the listing of the repository's builds. A build
+        # canceled meanwhile (e.g., while its repository was cloned, which
+        # then failed) is kept, as its cancellation promised.
+        if is_canceled(build_data["id"]):
+            stop_canceled_build(build_data["id"])
+            raise
         try:
             db_collection_repositories.update_one(
                 {"id": repository_id}, {"$pull": {"build_list": build_data["id"]}}
@@ -243,6 +249,7 @@ def register_builds(
             logger.info("Removed build %s, which could not start.", build_data["id"])
         raise
     ensure_accepting(repository_id, build_data["id"])
+    stop_canceled_build(build_data["id"])
     return {"id": build_data["id"]}
 
 
@@ -693,9 +700,13 @@ def build_completed(
     """Record the completion of a build, reported by its pod.
 
     This is the internal callback of the build pods (via the updater), not a
-    way to change a build: a changed build is registered anew. A build that
-    has been withdrawn (`CANCELED`), also while its completion is processed,
-    doesn't succeed, and its subscriptions aren't notified.
+    way to change a build: a changed build is registered anew. The build is
+    recorded as `SUCCEEDED` before its image is sent for signing, and gets
+    its previous state back if that fails. A build that has been withdrawn
+    (`CANCELED`) before doesn't succeed, its image isn't signed, and the
+    pod and files it may still have are removed. A build withdrawn after its
+    completion was recorded counts as finished: its image is signed, but its
+    subscriptions aren't notified any more.
 
     Args:
         repository_id (str): Repository identifier.
@@ -729,12 +740,26 @@ def build_completed(
         data = (
             db_collection_builds.find({"id": build_id}, {"_id": False}).limit(1).next()
         )
-        if data.get("status") == CANCELED:
-            raise BuildCanceled
-
-        intermediate_registry_format = endpoints()["builds"][
-            "intermediate_registery_format"
-        ]
+    except StopIteration:
+        raise BuildNotFound from None
+    # Recorded before the signing, so that a cancellation from now on finds
+    # a finished build and doesn't stop it
+    finished_at = now()
+    previous = db_collection_builds.find_one_and_update(
+        {"id": build_id, **NOT_CANCELED},
+        {"$set": {"status": "SUCCEEDED", "finished_at": finished_at}},
+        projection={"_id": False, "status": True, "finished_at": True},
+        return_document=ReturnDocument.BEFORE,
+    )
+    if previous is None:
+        # A pod that started after its build was canceled, or that wasn't
+        # removed, would be reported again and again
+        stop_canceled_build(build_id)
+        raise BuildCanceled
+    intermediate_registry_format = endpoints()["builds"][
+        "intermediate_registery_format"
+    ]
+    try:
         trigger_signing_image(
             image_path=data["images"][0]["name"],
             dockerhub_token=data["dockerhub_token"],
@@ -743,29 +768,34 @@ def build_completed(
             ),
             push_tag=data["images"][0]["name"],
         )
-
-        # Only if the build hasn't been withdrawn meanwhile, which stopped it
-        completed = db_collection_builds.update_one(
-            {"id": build_id, **NOT_CANCELED},
-            {"$set": {"status": "SUCCEEDED", "finished_at": now()}},
+    except Exception:
+        # The pod reports the build again; not if it was canceled meanwhile
+        db_collection_builds.update_one(
+            {"id": build_id, "status": "SUCCEEDED", "finished_at": finished_at},
+            {
+                "$set": {
+                    "status": previous.get("status"),
+                    "finished_at": previous.get("finished_at"),
+                }
+            },
         )
-        if completed.matched_count == 0:
-            raise BuildCanceled
-        remove_files(
-            f"{BASE_DIR}/{build_id}",
-            build_id,
-            os.getenv("NAMESPACE", "default"),
-        )
-
-        # Notifies available subscriptions registered for the repository.
-        notify_all_subscriptions(
-            data_from_db.get("subscription_list", []),
-            data["images"][0]["name"],
-            build_id,
-        )
+        raise
+    remove_files(
+        f"{BASE_DIR}/{build_id}",
+        build_id,
+        os.getenv("NAMESPACE", "default"),
+    )
+    # A build canceled meanwhile notifies no one
+    if is_canceled(build_id):
+        logger.info("Build %s was canceled; no one is notified.", build_id)
         return {"id": build_id}
-    except StopIteration:
-        raise BuildNotFound from None
+    # Notifies available subscriptions registered for the repository.
+    notify_all_subscriptions(
+        data_from_db.get("subscription_list", []),
+        data["images"][0]["name"],
+        build_id,
+    )
+    return {"id": build_id}
 
 
 def cancel_build(
@@ -807,33 +837,45 @@ def cancel_build(
     if build_id not in repository.get("build_list", []):
         raise BuildNotFound
     db_collection_builds = collection("builds")
+    projection = {"_id": False, "status": True, "finished_at": True}
+    # Unfinished builds also get their end, in the same update; finished
+    # ones are only marked. A build can finish between the two updates, not
+    # go back, so one of them finds a build that isn't canceled.
+    finished_at = now()
     previous = db_collection_builds.find_one_and_update(
-        {"id": build_id, **NOT_CANCELED},
-        {"$set": {"status": CANCELED}},
-        projection={"_id": False, "status": True, "finished_at": True},
+        {"id": build_id, "status": {"$nin": [*FINISHED, CANCELED]}},
+        {"$set": {"status": CANCELED, "finished_at": finished_at}},
+        projection=projection,
         return_document=ReturnDocument.BEFORE,
     )
     if previous is None:
+        finished = db_collection_builds.find_one_and_update(
+            {"id": build_id, "status": {"$in": FINISHED}},
+            {"$set": {"status": CANCELED}},
+            projection=projection,
+        )
+        if finished is not None:
+            logger.info("Canceled build %s, which had finished.", build_id)
+            return {"id": build_id}
         if db_collection_builds.find_one({"id": build_id}, {"_id": True}) is None:
             raise BuildNotFound
         raise BuildCanceled
-    if previous.get("status") in FINISHED:
-        logger.info("Canceled build %s, which had finished.", build_id)
-        return {"id": build_id}
     try:
         stop_builds([build_id], force=True)
     except Exception:
-        # The build is as before, so that the request can be repeated
+        # The build is as before, so that the request can be repeated. Until
+        # then, other cancellations and its completion got a 409; the
+        # updater reports the completion again while the pod exists
         db_collection_builds.update_one(
-            {"id": build_id, "status": CANCELED},
-            {"$set": {"status": previous.get("status")}},
+            {"id": build_id, "status": CANCELED, "finished_at": finished_at},
+            {
+                "$set": {
+                    "status": previous.get("status"),
+                    "finished_at": previous.get("finished_at"),
+                }
+            },
         )
         raise
-    if previous.get("finished_at") is None:
-        db_collection_builds.update_one(
-            {"id": build_id, "finished_at": None},
-            {"$set": {"finished_at": now()}},
-        )
     logger.info("Canceled build %s.", build_id)
     return {"id": build_id}
 
@@ -979,6 +1021,43 @@ def ensure_accepting(repository_id: str, build_id: str) -> None:
         return
     withdraw_build(repository_id, build_id)
     raise RepositoryNotFound
+
+
+def is_canceled(build_id: str) -> bool:
+    """Check whether a build has been canceled.
+
+    Args:
+        build_id: Identifier of the build.
+
+    Returns:
+        Whether the build exists and is `CANCELED`.
+    """
+    found = collection("builds").find_one(
+        {"id": build_id, "status": CANCELED}, {"_id": True}
+    )
+    return found is not None
+
+
+def stop_canceled_build(build_id: str) -> None:
+    """Stop a build that was canceled, if it may still have a pod or files.
+
+    A build is listed before its pod and files exist, so its cancellation
+    may have found nothing to remove. Errors are logged: the build stays
+    canceled, and its completion gets a 409 anyway.
+
+    Args:
+        build_id: Identifier of the build.
+    """
+    if not is_canceled(build_id):
+        return
+    try:
+        stop_builds([build_id], force=True)
+    except Exception as error:
+        logger.error(
+            "Build %s could not be stopped: %s", build_id, type(error).__name__
+        )
+    else:
+        logger.info("Stopped build %s, which was canceled.", build_id)
 
 
 def withdraw_build(repository_id: str, build_id: str) -> None:

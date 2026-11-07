@@ -1000,7 +1000,7 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
     Conflict:
-      description: 'Conflict ([RFC 9110](https://www.rfc-editor.org/rfc/rfc9110))'
+      description: 'Conflict ([RFC 7231](https://tools.ietf.org/html/rfc7231))'
       content:
         application/problem+json:
           schema:
