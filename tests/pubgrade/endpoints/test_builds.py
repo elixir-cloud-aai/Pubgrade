@@ -11,7 +11,7 @@ from types import SimpleNamespace
 from typing import Any, ClassVar, NoReturn
 from unittest.mock import MagicMock, patch
 
-from git import Repo
+from git import Git, GitCommandError, Repo
 from kubernetes.client import ApiException
 import mongomock
 from pymongo.errors import DuplicateKeyError
@@ -26,8 +26,10 @@ from pubgrade.errors.exceptions import (
     CreatePodError,
     DeletePodError,
     GitCloningError,
+    GitRefNotFound,
     InvalidImage,
     RepositoryNotFound,
+    exceptions,
 )
 from pubgrade.modules.endpoints import builds
 from pubgrade.modules.endpoints.builds import (
@@ -474,6 +476,34 @@ class TestBuild:
                 MOCK_BUILD_PAYLOAD,
             )
 
+    @pytest.mark.parametrize("error", [GitRefNotFound, GitCloningError])
+    def test_register_builds_failed_build_not_recorded(
+        self, error: type[Exception]
+    ) -> None:
+        """A build that can't start isn't recorded, for the repository either.
+
+        Args:
+            error: Error of starting the build.
+        """
+        self.setup()
+        repository_id = MOCK_REPOSITORY_2["id"]
+        with (
+            patch.object(builds, "create_build", side_effect=error),
+            self.app.app_context(),
+        ):
+            with pytest.raises(error):
+                register_builds(
+                    repository_id,
+                    MOCK_REPOSITORY_2["access_token"],
+                    copy.deepcopy(MOCK_BUILD_PAYLOAD),
+                )
+            repository = builds.collection("repositories").find_one(
+                {"id": repository_id}
+            )
+            assert builds.collection("builds").count_documents({}) == 0
+        assert repository is not None
+        assert repository["build_list"] == MOCK_REPOSITORY_2["build_list"]
+
     def test_get_builds(self) -> None:
         """Test get builds."""
         self.setup_with_build()
@@ -566,23 +596,68 @@ class TestBuild:
         assert Repo(clone_path).head.commit.hexsha.startswith(drs_filer.commit)
         shutil.rmtree("./build123")
 
-    def test_git_clone_and_checkout_type_error(
-        self, drs_filer: SimpleNamespace
+    @pytest.mark.parametrize(
+        ("branch", "commit"),
+        [
+            ("missing", ""),
+            ("missing", "v1"),
+            ("dev", "0000000"),
+            ("", "v9"),
+            ("", "--detach"),
+            ("--detach", ""),
+        ],
+    )
+    def test_git_clone_and_checkout_unknown_ref(
+        self, drs_filer: SimpleNamespace, tmp_path: Path, branch: str, commit: str
     ) -> None:
-        """Cloning a branch that doesn't exist fails.
+        """A branch, tag or commit that isn't in the repository is rejected.
 
         Args:
             drs_filer: Local copy of the repository.
+            tmp_path: Temporary directory, holding the base directory.
+            branch: Branch to check out.
+            commit: Commit or tag to check out.
         """
-        with pytest.raises(GitCloningError):
+        with pytest.raises(GitRefNotFound):
             git_clone_and_checkout(
                 repo_url=self.repository_url,
-                branch="missing",
-                commit=drs_filer.commit,
-                base_dir=".",
+                branch=branch,
+                commit=commit,
+                base_dir=str(tmp_path),
                 build_id="build123",
             )
-        shutil.rmtree("./build123")
+
+    def test_git_clone_and_checkout_checkout_error(
+        self, drs_filer: SimpleNamespace, tmp_path: Path
+    ) -> None:
+        """A checkout of a known branch that fails is a server error.
+
+        Args:
+            drs_filer: Local copy of the repository.
+            tmp_path: Temporary directory, holding the base directory.
+        """
+        with (
+            patch.object(
+                Git,
+                "checkout",
+                side_effect=GitCommandError("checkout", 128),
+                create=True,
+            ),
+            pytest.raises(GitCloningError),
+        ):
+            git_clone_and_checkout(
+                repo_url=self.repository_url,
+                branch="dev",
+                commit=drs_filer.commit,
+                base_dir=str(tmp_path),
+                build_id="build123",
+            )
+
+    def test_git_ref_not_found_is_bad_request(self) -> None:
+        """An unknown branch, tag or commit is the client's error (400)."""
+        problem = exceptions[GitRefNotFound]
+        assert problem["status"] == 400
+        assert "branch, tag or commit" in str(problem["detail"])
 
     def test_git_clone_and_checkout_git_command_error(
         self, drs_filer: SimpleNamespace
@@ -780,6 +855,34 @@ class TestBuild:
         assert os.path.isdir("basedir/build123/drs-filer/.git")
         push_image.assert_called_once_with(deployment_file_location=deployment_file)
         shutil.rmtree("basedir")
+
+    @patch("pubgrade.modules.endpoints.builds.build_push_image_using_kaniko")
+    def test_create_build_unknown_ref(
+        self, push_image: MagicMock, drs_filer: SimpleNamespace, tmp_path: Path
+    ) -> None:
+        """A build of an unknown branch leaves no files and starts no pod.
+
+        Args:
+            push_image: Mock of the function that pushes the image.
+            drs_filer: Local copy of the repository.
+            tmp_path: Temporary directory, holding the base directory.
+        """
+        base_dir = tmp_path / "base"
+        base_dir.mkdir()
+        with pytest.raises(GitRefNotFound):
+            create_build(
+                repo_url=self.repository_url,
+                branch="missing",
+                commit="",
+                base_dir=str(base_dir),
+                build_id="build123",
+                dockerfile_location="Dockerfile",
+                intermediate_registry_path="registry/image",
+                dockerhub_token="token",
+                project_access_token="access_token",
+            )
+        push_image.assert_not_called()
+        assert list(base_dir.iterdir()) == []
 
     @patch("pubgrade.modules.endpoints.builds.remove_files", mocked_remove_files)
     @patch("requests.request", mocked_request_api)
