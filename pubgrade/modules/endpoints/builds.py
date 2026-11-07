@@ -72,6 +72,64 @@ IMAGE_WITH_TAG = re.compile(
     r":[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}"
 )
 
+# Hosts of Docker Hub, and the key of its credentials in Docker's
+# configuration files
+DOCKER_HUB_HOSTS = ("docker.io", "index.docker.io", "registry-1.docker.io")
+DOCKER_HUB_AUTH_KEY = "https://index.docker.io/v1/"
+
+
+def intermediate_registry_format() -> str:
+    """Get the path of built images in the intermediate registry.
+
+    The setting `endpoints.builds.intermediate_registery_format`, if it is
+    set (kept for compatibility); otherwise `<host>/<namespace>/{}` from the
+    environment variables `INTERMEDIATE_REGISTRY_HOST` (Docker Hub,
+    `docker.io`, if unset) and `INTERMEDIATE_REGISTRY_NAMESPACE` (e.g., a
+    Harbor project or a Docker Hub organization; none if unset), which the
+    chart sets from `builds.registry`.
+
+    Returns:
+        The path, with `{}` for the name of the image (see `image_basename`).
+    """
+    configured = endpoints()["builds"].get("intermediate_registery_format")
+    if configured:
+        return str(configured)
+    host = (os.getenv("INTERMEDIATE_REGISTRY_HOST") or "docker.io").strip("/")
+    namespace = (os.getenv("INTERMEDIATE_REGISTRY_NAMESPACE") or "").strip("/")
+    return "/".join(part for part in (host, namespace, "{}") if part)
+
+
+def image_basename(image: str) -> str:
+    """Get the name of an image without its registry, namespace and tag.
+
+    Args:
+        image: Name of the image with its tag, e.g.,
+            `harbor.example.org/project/app:1.0`.
+
+    Returns:
+        The last part of the name, e.g., `app`.
+    """
+    return image.rsplit("/", 1)[-1].split(":", 1)[0]
+
+
+def registry_auth_key(path: str) -> str:
+    """Get the key of a registry's credentials in a Docker configuration file.
+
+    Args:
+        path: Path of an image in the registry, e.g., `harbor.example.org/{}`.
+
+    Returns:
+        The registry's host (with its port, if any); Docker Hub's key for
+        Docker Hub, also for paths without a registry host (as with Docker,
+        the first part is a host only if it has a `.` or a `:`, or is
+        `localhost`).
+    """
+    first, has_more, _ = path.partition("/")
+    is_host = has_more and ("." in first or ":" in first or first == "localhost")
+    if not is_host or first in DOCKER_HUB_HOSTS:
+        return DOCKER_HUB_AUTH_KEY
+    return first
+
 
 def builds_enabled() -> bool:
     """Check whether Pubgrade builds images itself.
@@ -301,11 +359,8 @@ def start_build(build_data: dict[str, Any], repo_url: str, access_token: str) ->
     # An empty branch or tag would build the repository's default branch
     if name == "":
         raise GitRefNotFound
-    intermediate_registry_format = endpoints()["builds"][
-        "intermediate_registery_format"
-    ]
-    intermediate_registry_path = intermediate_registry_format.format(
-        build_data["images"][0]["name"].split("/")[1].split(":")[0]
+    intermediate_registry_path = intermediate_registry_format().format(
+        image_basename(build_data["images"][0]["name"])
     )
     create_build(
         repo_url=repo_url,
@@ -663,16 +718,10 @@ def create_dockerhub_config_file(
         config_file_location (str): Location to create Dockerhub config file,
         it contains dockerhub access token.
     """
-    intermediate_registry_format = endpoints()["builds"][
-        "intermediate_registery_format"
-    ]
-    registry = intermediate_registry_format.split("/", 1)[0]
+    registry = registry_auth_key(intermediate_registry_format())
     token = os.getenv("INTERMEDIATE_REGISTRY_TOKEN")
-    template_config_file = (
-        f'{{\n"auths": {{\n"{registry}": {{\n"auth": "{token}"\n        }}\n    }}\n}}'
-    )
     with open(config_file_location, "w") as config_file:
-        config_file.write(template_config_file)
+        json.dump({"auths": {registry: {"auth": token}}}, config_file)
 
 
 def load_cluster_config() -> None:
@@ -775,15 +824,12 @@ def build_completed(
         # removed, would be reported again and again
         stop_canceled_build(build_id)
         raise BuildCanceled
-    intermediate_registry_format = endpoints()["builds"][
-        "intermediate_registery_format"
-    ]
     try:
         trigger_signing_image(
             image_path=data["images"][0]["name"],
             dockerhub_token=data["dockerhub_token"],
-            pull_tag=intermediate_registry_format.format(
-                data["images"][0]["name"].split("/")[1].split(":")[0]
+            pull_tag=intermediate_registry_format().format(
+                image_basename(data["images"][0]["name"])
             ),
             push_tag=data["images"][0]["name"],
         )
