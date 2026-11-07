@@ -89,12 +89,12 @@ class TestRepository:
     def test_register_repository(self) -> None:
         """A registered repository gets an identifier and a token."""
         self.setup()
-        data = {"url": self.repository_url}
+        data = {"url": self.repository_url, "build_types": ["production"]}
         with self.app.app_context():
             res = register_repository(data=data)
-            assert "id" in res
-            assert "access_token" in res
             assert isinstance(res, dict)
+            # Only what the client needs to publish images
+            assert set(res) == {"id", "access_token"}
 
     def test_register_repository_logs_no_token(
         self, caplog: pytest.LogCaptureFixture
