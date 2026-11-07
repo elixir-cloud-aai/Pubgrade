@@ -120,11 +120,12 @@ its [API](sidecar/api.md)).
 
 ### Services with several images
 
-Each published build has one image, and each notification names one image:
-Pubgrade doesn't group images by service. A service with several images
-(e.g., an API and a worker, or a main container and a helper) publishes each
-image as a build of its own, and its subscribers get one notification per
-image. Subscribers match notifications by image repository: a listener
+Each published build has one image, the first entry of `images` (further
+entries are ignored), and each notification names one image: Pubgrade doesn't
+group images by service. A service with several images (e.g., an API and a
+worker, or a main container and a helper) publishes each image as a build of
+its own, from one Pubgrade repository or from several, and the subscribers of
+a repository get one notification per build that matches their subscription. Subscribers match notifications by image repository: a listener
 updates every container whose image repository equals `image_name` (e.g.,
 `elixircloud/tesk-api`, also when the container spells it
 `docker.io/elixircloud/tesk-api`) to the new `tag`, and leaves the others as
@@ -133,9 +134,11 @@ they are.
 Pubgrade-Sidecar does this with `PUT /deployment`: in every Deployment it
 manages (its `targetDeployments`, optionally only those with the label
 `deploymentLabel`), it updates every container of the notified image
-repository. Subscribe its callback URL `<sidecar URL>/deployment` once per
-image repository, i.e., to each repository of the service that publishes an
-image (see the sidecar's [API](sidecar/api.md) and
+repository. Subscribe its callback URL `<sidecar URL>/deployment` once to
+each Pubgrade repository that publishes images of the service, not once per
+image: subscriptions belong to Pubgrade repositories, so a second
+subscription of the same callback to a repository gets every notification
+twice (see the sidecar's [API](sidecar/api.md) and
 [Deployment](sidecar/deployment.md)). `PUT /deployment/<deployment name>`
 updates the containers of the repository in that one Deployment only.
 

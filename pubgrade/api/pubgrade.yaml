@@ -1166,8 +1166,8 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Image'
-          description: List of image to be build. It can contain single or
-           multiple images depending on requirement of repository.
+          description: Image of the build, as a list. Only the first entry
+           counts; publish further images as builds of their own.
         head_commit:
           type: object
           oneOf:
