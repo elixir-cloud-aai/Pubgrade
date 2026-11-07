@@ -14,8 +14,8 @@ from kubernetes.client import ApiException
 from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized
 
-from pubgrade.timestamps import now, repaired_build
 from pubgrade.charsets import get_charset
+from pubgrade.timestamps import now, repaired_build
 from pubgrade.errors.exceptions import (
     BuildsDisabled,
     InvalidImage,

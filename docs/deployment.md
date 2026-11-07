@@ -60,8 +60,9 @@ from the Secret given by `pubgrade.configSecret`. The environment variable
   (default: lowercase letters, digits, `.` and `-`): the characters of
   generated identifiers and access tokens, drawn with Python's `secrets`
   module. Each takes one of these forms:
-    - a list of names of character sets and literal characters, optionally
-      in quotes: `[string.ascii_lowercase, string.digits, '.', '-']`;
+    - a list of names of character sets (without quotes) and literal
+      characters, optionally in quotes: `[string.ascii_lowercase,
+      string.digits, '.', '-']`;
     - a string joining such names and quoted literal characters with `+`, or
       listing them in brackets: `string.ascii_lowercase + string.digits +
       '.' + '-'`;
@@ -69,11 +70,11 @@ from the Secret given by `pubgrade.configSecret`. The environment variable
     - any other string, as literal characters: `abcdef`.
 
     The names are `string.ascii_letters`, `string.ascii_lowercase`,
-    `string.ascii_uppercase`, `string.digits` and `string.hexdigits`; a string
-    that mentions `string.` in any other way is an error. Literal characters
-    are ASCII letters, digits, `.`, `-`, `~` and `_`. Generated values never
-    contain `_`, and neither start nor end with `.`, `-` or a digit, so each
-    setting needs at least one other character. Pubgrade checks these settings
+    `string.ascii_uppercase`, `string.digits` and `string.hexdigits`; anything
+    else that looks like a name (e.g., in quotes, misspelt, or without
+    `string.`) is an error. Literal characters are ASCII letters, digits,
+    `.`, `-` and `~`. Generated values neither start nor end with `.`, `-` or
+    a digit, so each setting needs at least one other character. Pubgrade checks these settings
     at start and stops with an error naming the setting if one can't be used.
 
 Log messages name repositories, users, subscriptions, builds and pods by
@@ -112,9 +113,9 @@ From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA
   sets (`repository.id_charset`, `user.uid_charset`, `access_token.charset`)
   take only the forms listed under [Configuration](#configuration): names of
   character sets and literal characters (ASCII letters, digits, `.`, `-`,
-  `~`, `_`), no other Python expressions. The image's values are unchanged;
-  a value that can't be used stops the app at start, with an error naming
-  the setting.
+  `~`), no other Python expressions and no other characters (e.g., `_`,
+  spaces, `!`, non-ASCII). The image's values are unchanged; a value that
+  can't be used stops the app at start, with an error naming the setting.
 - **Errors** are problem details (see [API](api.md)), with `title`, `status`
   and `detail` instead of `msg` and `status_code`.
 - **Timestamps** are in UTC with time zone, and `finished_at` of an

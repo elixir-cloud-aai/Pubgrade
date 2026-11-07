@@ -5,23 +5,22 @@ and `endpoints.access_token.charset` name the characters that generated
 identifiers and access tokens consist of, as one of:
 
 - a list, whose items are names of character sets (`NAMED`, e.g.,
-  `string.digits`) or literal characters, optionally in quotes (e.g., `'.'`,
-  `-`, `abc`);
+  `string.digits`, without quotes) or literal characters, optionally in
+  quotes (e.g., `'.'`, `-`, `abc`);
 - a string with such items joined by `+`, literal characters in quotes (e.g.,
   `string.ascii_lowercase + string.digits + '.' + '-'`), or written as a list
   (e.g., `[string.digits, '.', '-']`);
 - a single name (e.g., `string.digits`) or quoted string (e.g., `'abc'`);
 - any other string, as literal characters (e.g., `abcdef`).
 
-Literal characters are ASCII letters, digits, `.`, `-`, `~` and `_` (which
-generated values never contain), the characters that URLs take as they are.
+Literal characters are ASCII letters, digits, `.`, `-` and `~`, which URLs
+take as they are.
 The app checks the settings at start (`check_charsets()`), so that a mistake
 stops it with an error instead of failing requests.
 """
 
 from __future__ import annotations
 
-import ast
 from collections.abc import Mapping
 import re
 import string
@@ -39,7 +38,7 @@ NAMED: dict[str, str] = {
 }
 
 # Characters that the settings may contain
-ALLOWED = frozenset(string.ascii_letters + string.digits + ".-~_")
+ALLOWED = frozenset(string.ascii_letters + string.digits + ".-~")
 
 # Characters that generated values never contain (`EXCLUDED`), or not at
 # their start or end (`NOT_AT_ENDS`); cf. `generate_id()`
@@ -53,12 +52,15 @@ SETTINGS: tuple[tuple[str, str], ...] = (
     ("access_token", "charset"),
 )
 
-# Tokens of a setting written as an expression or list: names, quoted strings
-# (without escapes), the separators `+` and `,`, and brackets
+# A string in quotes, without escapes
+_QUOTED = r"'[^'\\]*'|\"[^\"\\]*\""
+# Tokens of a setting written as an expression or list: names, quoted
+# strings, the separators `+` and `,`, and brackets
 _TOKEN = re.compile(
-    r"\s*(?:(?P<name>string\.\w+)|(?P<quoted>'[^'\\]*'|\"[^\"\\]*\")"
-    r"|(?P<sep>[+,\[\]]))\s*"
+    rf"\s*(?:(?P<name>string\.\w+)|(?P<quoted>{_QUOTED})|(?P<sep>[+,\[\]]))\s*"
 )
+# Anything that looks like a name of a character set, also misspelt
+_NAME_LIKE = re.compile(r"strings?\.|ascii_|^(?:digits|hexdigits)$", re.IGNORECASE)
 
 
 class CharsetError(ValueError):
@@ -75,18 +77,6 @@ def usable(charset: str) -> bool:
         Whether it has a character other than `_`, `.`, `-` and digits.
     """
     return bool(set(charset) - set(EXCLUDED + NOT_AT_ENDS))
-
-
-def _is_quoted(item: str) -> bool:
-    """Tell whether an item is a string in quotes.
-
-    Args:
-        item: Item of a setting, without surrounding whitespace.
-
-    Returns:
-        Whether it starts and ends with the same quote character.
-    """
-    return len(item) >= 2 and item[0] == item[-1] and item[0] in "'\""
 
 
 def _split(value: str) -> list[str] | None:
@@ -137,18 +127,13 @@ def _item(item: str, setting: str) -> str:
     item = item.strip()
     if item in NAMED:
         return NAMED[item]
-    if item.startswith("string."):
+    if re.fullmatch(_QUOTED, item):
+        item = item[1:-1]
+    if _NAME_LIKE.search(item):
         raise CharsetError(
-            f"{setting}: unknown character set {item!r}; "
-            f"use one of {', '.join(NAMED)} or literal characters"
+            f"{setting}: unknown character set {item!r}; use one of "
+            f"{', '.join(NAMED)} (without quotes) or literal characters"
         )
-    if _is_quoted(item):
-        try:
-            value = ast.literal_eval(item)
-        except (SyntaxError, ValueError):
-            return item
-        if isinstance(value, str):
-            return value
     return item
 
 
@@ -160,22 +145,23 @@ def resolve_charset(value: Any, setting: str = "charset") -> str:
         setting: Name of the setting, for error messages.
 
     Returns:
-        The characters, each once, in sorted order, without `_`.
+        The characters, each once, in sorted order.
 
     Raises:
         CharsetError: If the value has the wrong type, can't be read, names
             an unknown character set, has characters other than ASCII
-            letters, digits, `.`, `-`, `~` and `_`, or leaves no character for
-            the start and end of generated values (anything but `_`, `.`, `-`
-            and digits).
+            letters, digits, `.`, `-` and `~`, or leaves no character for the
+            start and end of generated values (anything but `.`, `-` and
+            digits).
     """
     if isinstance(value, str):
         items = _split(value)
         if items is None:
-            if "string." in value:
+            if _NAME_LIKE.search(value):
                 raise CharsetError(
-                    f"{setting}: can't read {value!r}; join names of character "
-                    f"sets and quoted literal characters with '+'"
+                    f"{setting}: can't read {value!r}; use names of character "
+                    f"sets and quoted literal characters, joined by '+' or "
+                    f"listed in brackets"
                 )
             items = [value]
     elif isinstance(value, list) and all(isinstance(item, str) for item in value):
@@ -191,11 +177,10 @@ def resolve_charset(value: Any, setting: str = "charset") -> str:
             f"{setting}: characters {''.join(sorted(characters - ALLOWED))!r} "
             f"not allowed; use ASCII letters, digits, '.', '-' and '~'"
         )
-    characters.discard(EXCLUDED)
     if not usable("".join(characters)):
         raise CharsetError(
             f"{setting}: needs at least one character other than "
-            f"'_', '.', '-' and digits, for the start and end of values"
+            f"'.', '-' and digits, for the start and end of values"
         )
     return "".join(sorted(characters))
 

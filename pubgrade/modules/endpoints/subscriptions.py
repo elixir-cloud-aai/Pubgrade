@@ -3,8 +3,8 @@ import logging
 from typing import Any, Dict, List, Optional
 
 import requests
-from pubgrade.timestamps import now, repaired_subscription
 from pubgrade.charsets import get_charset
+from pubgrade.timestamps import now, repaired_subscription
 from pubgrade.errors.exceptions import (
     RegistrationDisabled,
     RepositoryNotFound,

@@ -50,7 +50,6 @@ def test_resolve_named_and_literal(value: Any) -> None:
         ("string.ascii_uppercase", string.ascii_uppercase),
         ("abca", "abc"),
         ("A", "A"),
-        ("a_b", "ab"),
         (["abc", "b"], "abc"),
         (["string.hexdigits"], "".join(sorted(set(string.hexdigits)))),
         (["string.ascii_letters"], "".join(sorted(string.ascii_letters))),
@@ -58,12 +57,10 @@ def test_resolve_named_and_literal(value: Any) -> None:
         ('"abc"', "abc"),
         ("~a", "a~"),
         ("['a']", "a"),
-        # Without `string.`, a name is taken as literal characters
-        ("ascii_lowercase", "aceilorsw"),
     ],
 )
 def test_resolve(value: Any, expected: str) -> None:
-    """Each character once, sorted, without `_`.
+    """Each character once, sorted.
 
     Args:
         value: Value of the setting.
@@ -95,7 +92,19 @@ def test_resolve(value: Any, expected: str) -> None:
         ("", "needs at least one character"),
         ([], "needs at least one character"),
         ("string.digits", "needs at least one character"),
-        (["_", ".", "-", "0"], "needs at least one character"),
+        ([".", "-", "0"], "needs at least one character"),
+        ("a_b", "characters '_' not allowed"),
+        ("'a' 'b'", "not allowed"),
+        # Names in quotes, or misspelt
+        ("'string.digits'", "unknown character set 'string.digits'"),
+        ("['string.digits']", "unknown character set 'string.digits'"),
+        (["'string.digits'"], "unknown character set 'string.digits'"),
+        (["xstring.digits"], "unknown character set"),
+        ("ascii_lowercase", "can't read"),
+        (["ascii_lowercase"], "unknown character set"),
+        ("String.digits", "can't read"),
+        ("strings.digits", "can't read"),
+        ("[string.digits, '.', '-', abc]", "listed in brackets"),
     ],
 )
 def test_resolve_errors(value: Any, message: str) -> None:
