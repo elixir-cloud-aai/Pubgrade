@@ -810,10 +810,12 @@ def stop_builds(build_ids: list[str]) -> None:
             {"id": True, "_id": False},
         )
     }
+    build_dirs = {build_id: build_dir_of(build_id) for build_id in build_ids}
     stopping = [
         build_id
-        for build_id in build_ids
-        if build_id in unfinished or os.path.isdir(os.path.join(BASE_DIR, build_id))
+        for build_id, build_dir in build_dirs.items()
+        if build_id in unfinished
+        or (build_dir is not None and os.path.isdir(build_dir))
     ]
     if not stopping:
         return
@@ -821,8 +823,29 @@ def stop_builds(build_ids: list[str]) -> None:
     namespace = os.getenv("NAMESPACE") or "default"
     for build_id in stopping:
         delete_pod(build_id, namespace, missing_ok=True)
-        remove_build_dir(os.path.join(BASE_DIR, build_id), build_id)
+        build_dir = build_dirs[build_id]
+        if build_dir is not None:
+            remove_build_dir(build_dir, build_id)
         logger.info("Stopped build %s.", build_id)
+
+
+def build_dir_of(build_id: str) -> str | None:
+    """Get the directory of a build's files.
+
+    Args:
+        build_id: Identifier of the build.
+
+    Returns:
+        The directory in `BASE_DIR`, or None if the identifier would lead
+        outside it.
+    """
+    base = os.path.abspath(BASE_DIR)
+    build_dir = os.path.abspath(os.path.join(base, build_id))
+    # `join(base, "")` ends in a separator, also for the root directory
+    if not build_dir.startswith(os.path.join(base, "")):
+        logger.error("Directory of build %s is outside the base directory.", build_id)
+        return None
+    return build_dir
 
 
 def ensure_accepting(repository_id: str, build_id: str) -> None:

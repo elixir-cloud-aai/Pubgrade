@@ -456,6 +456,31 @@ class TestRepository:
             assert self.remaining("builds") == ["repo12abcdef"]
         load.assert_not_called()
 
+    def test_delete_repository_stays_in_base_dir(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Files outside the directory of builds are never removed.
+
+        Args:
+            monkeypatch: Fixture to replace the calls to Kubernetes.
+            tmp_path: Temporary directory for the builds' files.
+        """
+        self.setup_cascade(builds_enabled=True)
+        collection_of(self.app, "repositories").update_one(
+            {"id": MOCK_REPOSITORY_2["id"]}, {"$push": {"build_list": "../outside"}}
+        )
+        base = tmp_path / "builds"
+        base.mkdir()
+        (tmp_path / "outside").mkdir()
+        monkeypatch.setattr(builds, "BASE_DIR", str(base))
+        monkeypatch.setattr(builds, "load_cluster_config", MagicMock())
+        monkeypatch.setattr(builds, "delete_pod", MagicMock())
+        with self.app.app_context():
+            delete_repository(
+                MOCK_REPOSITORY_2["id"], MOCK_REPOSITORY_2["access_token"]
+            )
+        assert (tmp_path / "outside").is_dir()
+
     def test_delete_repository_unmarks_on_error(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
