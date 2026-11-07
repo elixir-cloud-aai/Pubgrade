@@ -74,7 +74,10 @@ A subscription may also list `build_types`, e.g., `"build_types":
 ["production"]`, to get only builds of these types. Each must be declared by
 the repository; otherwise the request gets a 400. Without `build_types`, or
 with an empty list, the subscription gets all builds that match `type` and
-`value`, as before. With `build_types`, builds without a type don't match.
+`value`, as before. With `build_types` (at most 50), builds without a type
+don't match. The subscription's details (`GET /subscriptions/<subscription
+ID>`) show its `build_types`, the repository's (`GET /repositories/<repository
+ID>`) its declared `build_types`, and each build its `build_type`, if any.
 
 ## Publish an image
 

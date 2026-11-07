@@ -202,7 +202,8 @@ From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA
   for some `build_types` only (see
   [Usage](usage.md#subscribe-to-a-repository)). Nothing needs to change:
   stored repositories, builds and subscriptions have none, so subscriptions
-  get all builds, as before.
+  get all builds, as before. Responses have these fields where they are
+  set: clients that reject unknown fields need to accept them.
 - **Builds:** `DELETE /repositories/{id}/builds/{build_id}` cancels a build
   (see [Usage](usage.md#cancel-a-build)), and the status of builds has the
   new value `CANCELED`: clients that check `status` against a fixed list

@@ -583,7 +583,9 @@ paths:
               summary: Notification of a new image
               description: Pubgrade calls the subscription's `callback_url`
                 when the repository publishes an image whose `head_commit`
-                matches the subscription's `type` and `value`. Only the status
+                matches the subscription's `type` and `value` and, if the
+                subscription has `build_types`, whose `build_type` is one of
+                them. Only the status
                 of the response counts, the body isn't read; a 2xx status
                 means `delivered`, any other status, a redirect or no
                 response in time means `failed` (see the build's
@@ -1301,7 +1303,7 @@ components:
         - url
     BuildType:
       type: string
-      description: Name of a build type, declared by the repository.
+      description: Name of a build type.
       pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'
       maxLength: 64
       example: production

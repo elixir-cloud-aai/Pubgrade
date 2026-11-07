@@ -90,11 +90,12 @@ def register_repository(data: dict[str, Any]) -> dict[str, Any]:
         )
         raise InternalServerError
 
-    repository_object.pop("_id", None)
-    del repository_object["url"]
-    repository_object.pop("build_types", None)
     logger.info("Added repository %s.", repository_object["id"])
-    return repository_object
+    # The response holds only what the client needs to publish images
+    return {
+        "id": repository_object["id"],
+        "access_token": repository_object["access_token"],
+    }
 
 
 def get_repositories() -> list[dict[str, Any]]:

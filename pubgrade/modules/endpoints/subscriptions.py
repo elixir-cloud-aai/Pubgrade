@@ -285,15 +285,7 @@ def notify_subscriptions(
     subscription_object = db_collection_subscriptions.find_one({"id": subscription_id})
     if subscription_object is None:
         raise SubscriptionNotFound
-    head_commit = build_object["head_commit"]
-    subscription_type = subscription_object["type"]
-    value = subscription_object["value"]
-    build_types = subscription_object.get("build_types")
-    if (
-        subscription_type not in head_commit
-        or value not in ("*", head_commit[subscription_type])
-        or (build_types and build_object.get("build_type") not in build_types)
-    ):
+    if not matches(subscription_object, build_object):
         logger.info("Subscription %s doesn't match the build.", subscription_id)
         return _notification_result(subscription_id, "skipped")
 
@@ -332,6 +324,33 @@ def notify_subscriptions(
         {"id": subscription_id}, {"$set": subscription_object}
     )
     return _notification_result(subscription_id, result, http_status)
+
+
+def matches(subscription: dict[str, Any], build: dict[str, Any]) -> bool:
+    """Tell whether a subscription matches a build.
+
+    Args:
+        subscription: The subscription, as stored.
+        build: The build, as stored.
+
+    Returns:
+        Whether the subscription's `type` is in the build's `head_commit`,
+        with the subscription's `value` (or any value for `*`), and, if the
+        subscription has `build_types` (a list that isn't empty), whether
+        the build's `build_type` is one of them; builds without a type then
+        don't match.
+    """
+    head_commit = build["head_commit"]
+    subscription_type = subscription["type"]
+    if subscription_type not in head_commit or subscription["value"] not in (
+        "*",
+        head_commit[subscription_type],
+    ):
+        return False
+    build_types = subscription.get("build_types")
+    if isinstance(build_types, list) and build_types:
+        return build.get("build_type") in build_types
+    return True
 
 
 def notify_all_subscriptions(

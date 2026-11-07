@@ -144,7 +144,8 @@ def test_subscriptions_filter_build_types(
         everything: ("delivered", 200),
         empty: ("delivered", 200),
     }
-    assert len(subscriber.received) == 7
+    # All but the filtered subscription's two skips
+    assert len(subscriber.received) == 3 * 3 - 2
 
 
 def test_undeclared_build_types_rejected(
