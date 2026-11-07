@@ -30,10 +30,13 @@ from pubgrade.errors.exceptions import (
     InternalServerError,
     InvalidImage,
     RepositoryNotFound,
+    UndeclaredBuildType,
 )
 from pubgrade.modules.endpoints.repositories import (
     ACCEPTING,
     accepts_additions,
+    check_build_types,
+    declaring,
     generate_id,
 )
 from pubgrade.modules.endpoints.subscriptions import notify_all_subscriptions
@@ -246,6 +249,8 @@ def register_builds(
         exactly one.
         GitRefNotFound: Raised when the branch, tag or commit to build isn't
         in the repository.
+        UndeclaredBuildType: Raised when the repository doesn't declare the
+        build's `build_type`.
     """
     db_collection_builds = collection("builds")
     db_collection_repositories = collection("repositories")
@@ -267,6 +272,8 @@ def register_builds(
         IMAGE_WITH_TAG.fullmatch(image.get("name", "")) for image in images
     ):
         raise InvalidImage
+    if "build_type" in build_data:
+        check_build_types(data_from_db, [build_data["build_type"]])
     build_path = builds_enabled()
     if not build_path:
         validate_prebuilt_image(build_data)
@@ -276,11 +283,15 @@ def register_builds(
             charset=id_charset,
             length=id_length,
         )
+        build_types = [build_data["build_type"]] if "build_type" in build_data else []
         pushed = db_collection_repositories.update_one(
-            {"id": repository_id, **ACCEPTING},
+            {"id": repository_id, **ACCEPTING, **declaring(build_types)},
             {"$push": {"build_list": build_data["id"]}},
         )
         if pushed.matched_count == 0:
+            # The type may have been removed since the check
+            if build_types and accepts_additions(repository_id):
+                raise UndeclaredBuildType
             raise RepositoryNotFound
         try:
             build_data["finished_at"] = None

@@ -18,10 +18,17 @@ from pubgrade.errors.exceptions import (
     RepositoryNotFound,
     SubscriptionNotFound,
     TooManySubscriptions,
+    UndeclaredBuildType,
     UserNotFound,
     UserNotVerified,
 )
-from pubgrade.modules.endpoints.repositories import ACCEPTING, generate_id
+from pubgrade.modules.endpoints.repositories import (
+    ACCEPTING,
+    accepts_additions,
+    check_build_types,
+    declaring,
+    generate_id,
+)
 from pubgrade.settings import collection, endpoints
 from pubgrade.timestamps import now, repaired_subscription
 
@@ -62,6 +69,8 @@ def register_subscription(
         setting `endpoints.subscriptions.registration_enabled`.
         TooManySubscriptions: Raised when the repository has reached the limit
         `endpoints.subscriptions.max_per_repository`.
+        UndeclaredBuildType: Raised when the repository doesn't declare one of
+        the subscription's `build_types`.
     """
     if not endpoints()["subscriptions"].get("registration_enabled", True):
         raise RegistrationDisabled
@@ -83,6 +92,7 @@ def register_subscription(
         raise Unauthorized
     if data_from_db_repository is None or "deleting" in data_from_db_repository:
         raise RepositoryNotFound
+    check_build_types(data_from_db_repository, data.get("build_types", []))
     if (
         db_collection_subscriptions.count_documents(
             {"repository_id": data["repository_id"]}
@@ -117,7 +127,12 @@ def register_subscription(
         {"uid": uid}, {"$push": {"subscription_list": data["id"]}}
     )
     pushed = db_collection_repositories.update_one(
-        {"id": data["repository_id"], **ACCEPTING},
+        {
+            "id": data["repository_id"],
+            **ACCEPTING,
+            # Types removed since the check aren't stored
+            **declaring(data.get("build_types", [])),
+        },
         {"$push": {"subscription_list": data["id"]}},
     )
     if pushed.matched_count == 0:
@@ -125,6 +140,13 @@ def register_subscription(
             {"uid": uid}, {"$pull": {"subscription_list": data["id"]}}
         )
         db_collection_subscriptions.delete_one({"id": data["id"]})
+        if data.get("build_types") and accepts_additions(data["repository_id"]):
+            logger.info(
+                "Removed subscription %s, whose build types the repository no "
+                "longer declares.",
+                data["id"],
+            )
+            raise UndeclaredBuildType
         logger.info(
             "Removed subscription %s, whose repository is being deleted.", data["id"]
         )
@@ -250,7 +272,9 @@ def notify_subscriptions(
 
     Sends a request to the callback URL of the subscription, if its type and
     value match the build's `head_commit`; the value `*` matches any value of
-    the type. The result doesn't contain the
+    the type. A subscription with `build_types` (not empty) matches only
+    builds whose `build_type` is one of them, not builds without a type. The
+    result doesn't contain the
     callback URL or the subscription's token, as builds are public.
 
     Args:
@@ -276,13 +300,7 @@ def notify_subscriptions(
     subscription_object = db_collection_subscriptions.find_one({"id": subscription_id})
     if subscription_object is None:
         raise SubscriptionNotFound
-    head_commit = build_object["head_commit"]
-    subscription_type = subscription_object["type"]
-    value = subscription_object["value"]
-    if subscription_type not in head_commit or value not in (
-        "*",
-        head_commit[subscription_type],
-    ):
+    if not matches(subscription_object, build_object):
         logger.info("Subscription %s doesn't match the build.", subscription_id)
         return _notification_result(subscription_id, "skipped")
 
@@ -321,6 +339,33 @@ def notify_subscriptions(
         {"id": subscription_id}, {"$set": subscription_object}
     )
     return _notification_result(subscription_id, result, http_status)
+
+
+def matches(subscription: dict[str, Any], build: dict[str, Any]) -> bool:
+    """Tell whether a subscription matches a build.
+
+    Args:
+        subscription: The subscription, as stored.
+        build: The build, as stored.
+
+    Returns:
+        Whether the subscription's `type` is in the build's `head_commit`,
+        with the subscription's `value` (or any value for `*`), and, if the
+        subscription has `build_types` (a list that isn't empty), whether
+        the build's `build_type` is one of them; builds without a type then
+        don't match.
+    """
+    head_commit = build["head_commit"]
+    subscription_type = subscription["type"]
+    if subscription_type not in head_commit or subscription["value"] not in (
+        "*",
+        head_commit[subscription_type],
+    ):
+        return False
+    build_types = subscription.get("build_types")
+    if isinstance(build_types, list) and build_types:
+        return build.get("build_type") in build_types
+    return True
 
 
 def notify_all_subscriptions(

@@ -19,11 +19,13 @@ from pubgrade.errors.exceptions import (
     DeletePodError,
     RegistrationDisabled,
     RepositoryNotFound,
+    UndeclaredBuildType,
     URLNotFound,
 )
 from pubgrade.modules.endpoints import builds, repositories
 from pubgrade.modules.endpoints.builds import register_builds
 from pubgrade.modules.endpoints.repositories import (
+    check_build_types,
     delete_repository,
     generate_id,
     get_repositories,
@@ -87,12 +89,12 @@ class TestRepository:
     def test_register_repository(self) -> None:
         """A registered repository gets an identifier and a token."""
         self.setup()
-        data = {"url": self.repository_url}
+        data = {"url": self.repository_url, "build_types": ["production"]}
         with self.app.app_context():
             res = register_repository(data=data)
-            assert "id" in res
-            assert "access_token" in res
             assert isinstance(res, dict)
+            # Only what the client needs to publish images
+            assert set(res) == {"id", "access_token"}
 
     def test_register_repository_logs_no_token(
         self, caplog: pytest.LogCaptureFixture
@@ -877,3 +879,27 @@ class TestRepository:
         with self.app.app_context():
             assert len(self.remaining("builds")) == 3
         delete_pod.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "repository,build_types",
+    [
+        ({}, []),
+        ({"build_types": ["production"]}, ["production"]),
+    ],
+)
+def test_check_build_types_declared(
+    repository: dict[str, Any], build_types: list[str]
+) -> None:
+    """Declared build types, and none, pass."""
+    check_build_types(repository, build_types)
+
+
+@pytest.mark.parametrize(
+    "repository",
+    [{}, {"build_types": ["production"]}],
+)
+def test_check_build_types_undeclared(repository: dict[str, Any]) -> None:
+    """Build types that the repository doesn't declare are rejected."""
+    with pytest.raises(UndeclaredBuildType):
+        check_build_types(repository, ["production", "testing"])
