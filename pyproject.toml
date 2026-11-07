@@ -81,6 +81,71 @@ docs = [
 # package, so `uv sync` installs only its dependencies
 package = false
 
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+# The submodule with Pubgrade-Sidecar, checked in its own repository
+extend-exclude = ["external"]
+
+[tool.ruff.lint]
+# The rule set shared by FOCA and FOCA apps (as in cloud-registry): FOCA's
+# rules plus `G` and `S`; `D` applies everywhere, also to the tests
+select = [
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "D",    # pydocstyle (docstrings)
+    "E",    # pycodestyle errors
+    "F",    # Pyflakes
+    "G",    # flake8-logging-format
+    "I",    # isort
+    "PL",   # Pylint
+    "RUF",  # Ruff-specific rules
+    "S",    # flake8-bandit (security)
+    "SIM",  # flake8-simplify
+    "UP",   # pyupgrade
+    "W",    # pycodestyle warnings
+]
+ignore = [
+    # Complexity limits, as in FOCA: some functions mirror the API's
+    # operations or take many test fixtures, and splitting them would obscure
+    # them
+    "PLR0912",  # too-many-branches
+    "PLR0913",  # too-many-arguments
+    "PLR0915",  # too-many-statements
+    "PLR0917",  # too-many-positional-arguments
+    # Flags HTTP status codes and other literals (e.g., lengths), which are
+    # clear as is
+    "PLR2004",  # magic-value-comparison
+]
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+known-first-party = ["pubgrade", "tests"]
+
+[tool.ruff.lint.per-file-ignores]
+# pytest checks with `assert`; the tests use fixed, made-up access tokens
+"tests/**" = ["S101", "S105", "S106"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.mypy]
+files = [
+    "build-complete-updater", "docs/hooks.py", "pubgrade", "scripts", "tests",
+]
+python_version = "3.13"
+# Complete type hints: all functions annotated, generic types parametrized
+# (instead of ruff's `ANN` rules, which report missing hints only, without
+# checking them)
+disallow_untyped_defs = true
+disallow_any_generics = true
+warn_unused_ignores = true
+
+# These ship no type information
+[[tool.mypy.overrides]]
+module = ["connexion", "connexion.*", "kubernetes", "kubernetes.*", "mongomock"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 # Not the tests of the submodule with Pubgrade-Sidecar (`external/`)
