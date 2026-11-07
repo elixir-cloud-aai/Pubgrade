@@ -4,7 +4,9 @@ import logging
 import secrets
 import string
 from typing import Any
+import uuid
 
+from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized
 
@@ -18,6 +20,12 @@ from pubgrade.errors.exceptions import (
 from pubgrade.settings import collection, endpoints
 
 logger = logging.getLogger(__name__)
+
+# Matches repositories that take new builds and subscriptions: not those that
+# are being deleted
+ACCEPTING: dict[str, Any] = {"deleting": {"$exists": False}}
+# Fields of repositories that responses leave out
+HIDDEN: dict[str, Any] = {"access_token": False, "_id": False, "deleting": False}
 
 
 def register_repository(data: dict[str, Any]) -> dict[str, Any]:
@@ -95,7 +103,7 @@ def get_repositories() -> list[dict[str, Any]]:
     """
     db_collection = collection("repositories")
 
-    cursor = db_collection.find({}, {"access_token": False, "_id": False})
+    cursor = db_collection.find({}, HIDDEN)
     repos = list(cursor)
 
     for repo in repos:
@@ -154,11 +162,7 @@ def get_repository(repo_id: str) -> dict[str, Any]:
     """
     db_collection = collection("repositories")
     try:
-        repository_object = (
-            db_collection.find({"id": repo_id}, {"access_token": False, "_id": False})
-            .limit(1)
-            .next()
-        )
+        repository_object = db_collection.find({"id": repo_id}, HIDDEN).limit(1).next()
         if "subscription_list" in repository_object:
             del repository_object["subscription_list"]
         return repository_object
@@ -172,18 +176,20 @@ def modify_repository_info(
 ) -> dict[str, Any]:
     """Modify registered repository.
 
+    Only the URL changes: the repository keeps its identifier, access token,
+    builds and subscriptions.
+
     Args:
         repo_id (str): Unique identifier for the repository.
         access_token (str): Secret used to verify source is authorized.
         data (dict): Request data containing modified url of the repository.
 
     Returns:
-        repository_object (dict): Dictionary object of created repository
-        containing it's identifier and access_token.
+        repository_object (dict): Identifier and access token of the
+        repository.
 
     Raises:
-        MongoError: Raised when object is unable to replace existing
-        repository_object in mongodb.
+        URLNotFound: Raised when request data does not have url string.
         Unauthorized: Raised when access_token is invalid or not specified
         in request.
         RepositoryNotFound: Raised when repository is not found with given
@@ -196,32 +202,63 @@ def modify_repository_info(
         raise RepositoryNotFound
     if data_from_db["access_token"] != access_token:
         raise Unauthorized
-    data["id"] = repo_id
-    data["access_token"] = str(access_token)
-    db_collection_repository.replace_one(filter={"id": repo_id}, replacement=data)
-    del data["url"]
-    return data
+    try:
+        url = data["url"]
+    except KeyError:
+        raise URLNotFound from None
+    result = db_collection_repository.update_one(
+        {"id": repo_id}, {"$set": {"url": url}}
+    )
+    if result.matched_count == 0:
+        raise RepositoryNotFound
+    logger.info("Modified repository %s.", repo_id)
+    return {"id": repo_id, "access_token": data_from_db["access_token"]}
 
 
-def delete_repository(repo_id: str, access_token: str) -> int:
-    """Delete repository.
+def accepts_additions(repo_id: str) -> bool:
+    """Check whether a repository takes new builds and subscriptions.
+
+    Args:
+        repo_id: Identifier of the repository.
+
+    Returns:
+        Whether the repository exists and isn't being deleted.
+    """
+    found = collection("repositories").find_one(
+        {"id": repo_id, **ACCEPTING}, {"_id": True}
+    )
+    return found is not None
+
+
+def delete_repository(repo_id: str, access_token: str) -> None:
+    """Delete a repository with its builds and subscriptions.
+
+    The repository is marked first, so that it takes no new builds or
+    subscriptions; those registered meanwhile remove themselves again (see
+    `accepts_additions()`). With builds switched on, the pods and files of
+    the repository's builds are removed. Then its subscriptions (also from
+    their users' lists), its builds and the repository itself are deleted,
+    the repository last. If this fails (e.g., a pod can't be deleted), the
+    mark is removed and the data left stays, so that the request can be
+    repeated; pods and files removed before stay removed. Deployments that
+    have been notified keep their images.
 
     Args:
         repo_id (str): Unique identifier for the repository.
         access_token (str): Secret used to verify source is authorized.
 
-    Returns:
-        repository delete count. (1 if repository is deleted, 0 if not
-        deleted.)
-
     Raises:
-        MongoError: Raised when object is unable to replace existing
-        repository object in mongodb.
         Unauthorized: Raised when access_token is invalid or not specified
         in request.
         RepositoryNotFound: Raised when repository is not found with given
-        identifier.
+        identifier, also if another request deleted it meanwhile.
+        DeletePodError: Raised when the pod of a build can't be deleted.
     """
+    # Imported here, as the module of builds imports this one (`generate_id`)
+    from pubgrade.modules.endpoints.builds import (  # noqa: PLC0415
+        stop_builds,
+    )
+
     db_collection = collection("repositories")
     data = db_collection.find_one({"id": repo_id})
     if data is None:
@@ -229,5 +266,54 @@ def delete_repository(repo_id: str, access_token: str) -> int:
         raise RepositoryNotFound
     if data["access_token"] != access_token:
         raise Unauthorized
-    is_deleted = db_collection.delete_one({"id": repo_id})
-    return is_deleted.deleted_count
+    # The builds as of the mark: builds registered later remove themselves
+    # Each deletion has its own mark, so that one that fails removes only
+    # its own, not that of another one in progress
+    mark = uuid.uuid4().hex
+    data = db_collection.find_one_and_update(
+        {"id": repo_id},
+        {"$set": {"deleting": mark}},
+        return_document=ReturnDocument.AFTER,
+    )
+    if data is None:
+        raise RepositoryNotFound
+    build_ids: list[str] = data.get("build_list", [])
+    subscription_ids = list(data.get("subscription_list", []))
+    try:
+        stop_builds(build_ids)
+        db_collection_subscriptions = collection("subscriptions")
+        subscription_ids = list(
+            {
+                *subscription_ids,
+                *(
+                    subscription["id"]
+                    for subscription in db_collection_subscriptions.find(
+                        {"repository_id": repo_id}, {"id": True, "_id": False}
+                    )
+                ),
+            }
+        )
+        if subscription_ids:
+            collection("users").update_many(
+                {"subscription_list": {"$in": subscription_ids}},
+                {"$pull": {"subscription_list": {"$in": subscription_ids}}},
+            )
+            db_collection_subscriptions.delete_many({"id": {"$in": subscription_ids}})
+        if build_ids:
+            collection("builds").delete_many({"id": {"$in": build_ids}})
+        deleted = db_collection.delete_one({"id": repo_id}).deleted_count
+    except Exception:
+        # The repository takes builds and subscriptions again until the
+        # request is repeated
+        db_collection.update_one(
+            {"id": repo_id, "deleting": mark}, {"$unset": {"deleting": ""}}
+        )
+        raise
+    if deleted == 0:
+        raise RepositoryNotFound
+    logger.info(
+        "Deleted repository %s with %s builds and %s subscriptions.",
+        repo_id,
+        len(build_ids),
+        len(subscription_ids),
+    )

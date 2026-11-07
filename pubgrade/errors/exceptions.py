@@ -92,6 +92,12 @@ class GitCloningError(InternalServerError):
     pass
 
 
+class GitRefNotFound(BadRequest):
+    """Raised when the branch, tag or commit of a build isn't in the repository."""
+
+    pass
+
+
 class ValidationError(Exception):
     """Value or object is not compatible with required type or schema."""
 
@@ -203,6 +209,14 @@ exceptions = {
         "title": "Internal Server Error",
         "status": 500,
         "detail": "The Git repository information is wrong.",
+    },
+    GitRefNotFound: {
+        "title": "Bad Request",
+        "status": 400,
+        "detail": (
+            "The branch, tag or commit in `head_commit` is empty, isn't in the"
+            " repository or isn't unique."
+        ),
     },
     URLNotFound: {
         "title": "Bad Request",

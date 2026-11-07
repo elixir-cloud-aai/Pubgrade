@@ -91,6 +91,33 @@ Results per subscription, once all calls are done, are in the field
 - `failed`: another response, or none in time.
 - `skipped`: the subscription doesn't match the build.
 
+## Change or delete a repository
+
+The repository's access token also allows changing its URL; the repository
+keeps its identifier, access token, builds and subscriptions:
+
+```bash
+curl --request PUT '<base URL>/repositories/<repository ID>' \
+  --header 'X-Project-Access-Token: <repository access token>' \
+  --header 'Content-Type: application/json' \
+  --data '{"url": "<new repository URL>"}'
+```
+
+Deleting a repository deletes its builds and subscriptions too, permanently:
+
+```bash
+curl --request DELETE '<base URL>/repositories/<repository ID>' \
+  --header 'X-Project-Access-Token: <repository access token>'
+```
+
+The subscriptions disappear from their users' lists, and their deployments
+are no longer notified; they keep the images they already have. Pubgrade
+doesn't manage deployments: to remove one, its operators undeploy it (e.g.,
+with Helm or kubectl). Images and
+subscriptions sent to the repository while it is deleted get a 404. With
+builds switched on, its builds are stopped (see
+[Builds](deployment.md#builds)).
+
 ## Queries
 
 ```bash
