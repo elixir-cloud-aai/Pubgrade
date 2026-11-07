@@ -106,6 +106,8 @@ curl --request PUT '<callback URL>' \
 
 A listener of your own, instead of [Pubgrade-Sidecar](sidecar/index.md),
 checks the token, answers with a 2xx status if it accepts the notification,
+updates what uses the image repository `image_name` (see
+[Services with several images](#services-with-several-images)),
 and does the actual work (e.g., triggering a CD pipeline) in the background:
 it must answer in time (see above; to be safe, within `notification_timeout`
 from the request). Pubgrade only reads the status
@@ -115,6 +117,34 @@ describes the call as the callback `notification` of `POST /subscriptions`,
 with the body `NotificationRequest` (see [API](api.md)); Pubgrade-Sidecar's
 `PUT /deployment/<deployment name>` is an example of such a listener (see
 its [API](sidecar/api.md)).
+
+### Services with several images
+
+Each published build has one image, and each notification names one image:
+Pubgrade doesn't group images by service. A service with several images
+(e.g., an API and a worker, or a main container and a helper) publishes each
+image as a build of its own, and its subscribers get one notification per
+image. Subscribers match notifications by image repository: a listener
+updates every container whose image repository equals `image_name` (e.g.,
+`elixircloud/tesk-api`, also when the container spells it
+`docker.io/elixircloud/tesk-api`) to the new `tag`, and leaves the others as
+they are.
+
+Pubgrade-Sidecar does this with `PUT /deployment`: in every Deployment it
+manages (its `targetDeployments`, optionally only those with the label
+`deploymentLabel`), it updates every container of the notified image
+repository. Subscribe its callback URL `<sidecar URL>/deployment` once per
+image repository, i.e., to each repository of the service that publishes an
+image (see the sidecar's [API](sidecar/api.md) and
+[Deployment](sidecar/deployment.md)). `PUT /deployment/<deployment name>`
+updates the containers of the repository in that one Deployment only.
+
+A release of a service with several images therefore leads to several
+notifications, one at a time per build, and each Deployment rolls out each
+new image on its own. Containers that must change together (e.g., because
+their versions depend on each other) are best published from one repository
+with one image, or rolled out by a listener of your own that waits for all of
+them.
 
 ## Cancel a build
 

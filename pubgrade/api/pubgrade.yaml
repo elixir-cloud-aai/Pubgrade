@@ -592,7 +592,11 @@ paths:
                 seconds in all. Redirects
                 aren't followed. A subscriber that takes longer answers at
                 once (e.g., with 202) and acts in the background, as
-                Pubgrade-Sidecar does.
+                Pubgrade-Sidecar does. Each call names one image; a service
+                with several images gets one call per published image.
+                Subscribers match calls by image repository and update
+                every container whose image repository equals `image_name`
+                to `tag`, as Pubgrade-Sidecar's `PUT /deployment` does.
               parameters:
                 - in: header
                   name: X-Access-Token
@@ -1111,7 +1115,9 @@ components:
       properties:
         image_name:
           type: string
-          description: Name of the image, without its tag, as published.
+          description: Name of the image, without its tag, as published, i.e.,
+            the image repository, optionally with its registry. Subscribers
+            update the containers that use this repository.
           example: elixircloud/tesk-api
         tag:
           type: string
