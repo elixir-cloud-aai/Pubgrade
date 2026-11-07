@@ -120,6 +120,21 @@ class TestSubscriptions:
         assert f"Added subscription {res['subscription_id']}." in caplog.messages
         assert "subscription-secret" not in caplog.text
 
+    def test_register_subscription_charset(self, monkeypatch):
+        """Identifiers use the characters of the repositories' setting."""
+        self.setup()
+        monkeypatch.setitem(
+            self.app.config.foca.endpoints["repository"], "id_charset", "qz"
+        )
+        with self.app.app_context():
+            res = register_subscription(
+                MOCK_USER["uid"],
+                MOCK_USER["user_access_token"],
+                SUBSCRIPTION_PAYLOAD,
+            )
+        assert len(res["subscription_id"]) == 6
+        assert set(res["subscription_id"]) <= {"q", "z"}
+
     def test_register_subscription(self):
         self.setup()
         with self.app.app_context():

@@ -14,6 +14,7 @@ from kubernetes.client import ApiException
 from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized
 
+from pubgrade.charsets import get_charset
 from pubgrade.timestamps import now, repaired_build
 from pubgrade.errors.exceptions import (
     BuildsDisabled,
@@ -138,13 +139,7 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
     id_length: int = get_config().endpoints["repository"][
         "id_length"
     ]
-    id_charset: str = get_config().endpoints["repository"][
-        "id_charset"
-    ]
-    try:
-        id_charset = eval(id_charset)
-    except Exception:
-        id_charset = "".join(sorted(set(id_charset)))
+    id_charset = get_charset("repository", "id_charset")
 
     data_from_db = db_collection_repositories.find_one({"id": repository_id})
 

@@ -1,11 +1,12 @@
 import logging
+import secrets
 import string
-from random import choice
 
 from foca import get_config
 from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized
 
+from pubgrade.charsets import EXCLUDED, NOT_AT_ENDS, get_charset, usable
 from pubgrade.errors.exceptions import (
     RegistrationDisabled,
     RepositoryNotFound,
@@ -54,23 +55,11 @@ def register_repository(data: dict):
     id_length: int = get_config().endpoints["repository"][
         "id_length"
     ]
-    id_charset: str = get_config().endpoints["repository"][
-        "id_charset"
-    ]
+    id_charset = get_charset("repository", "id_charset")
     access_token_length: int = get_config().endpoints[
         "access_token"
     ]["length"]
-    access_token_charset: str = get_config().endpoints[
-        "access_token"
-    ]["charset"]
-    try:
-        id_charset = eval(id_charset)
-    except Exception:
-        id_charset = "".join(sorted(set(id_charset)))
-    try:
-        access_token_charset = eval(access_token_charset)
-    except Exception:
-        access_token_charset = "".join(sorted(set(id_charset)))
+    access_token_charset = get_charset("access_token", "charset")
 
     for i in range(retries):
         logger.debug(f"Trying to insert/update object: try {i}")
@@ -137,27 +126,35 @@ def generate_id(
     charset: str = "".join([string.ascii_lowercase, string.digits]),
     length: int = 6,
 ) -> str:
-    """Generate random string based on allowed set of characters.
+    """Generate a random string from a set of characters.
+
+    Characters are drawn with `secrets.choice`. Values never contain `_`, and
+    don't start or end with `.`, `-` or a digit.
 
     Args:
-        charset (str): String of allowed characters.
-        length (int): Length of returned string.
+        charset: Characters to draw from (cf. `pubgrade.charsets`).
+        length: Length of the string.
 
     Returns:
-        Random string of specified length and composed of defined set of
-        allowed characters except '_' and '.' or '-' at index 0 and length-1
+        Random string of the given length.
+
+    Raises:
+        ValueError: If the characters leave none for the start and end of
+            values.
     """
+    if not usable(charset):
+        raise ValueError(
+            f"No character for the start and end of values in {charset!r}"
+        )
     generated_string = ""
-    counter = 0
-    while counter < length:
-        random_char = choice(charset)
-        if random_char in "_":
+    while len(generated_string) < length:
+        random_char = secrets.choice(charset)
+        if random_char in EXCLUDED:
             continue
-        if counter == 0 or counter == (length - 1):
-            if random_char in ".-" or random_char in string.digits:
-                continue
-        counter = counter + 1
-        generated_string = generated_string + "".join(random_char)
+        at_end = len(generated_string) in (0, length - 1)
+        if at_end and random_char in NOT_AT_ENDS:
+            continue
+        generated_string += random_char
     return generated_string
 
 

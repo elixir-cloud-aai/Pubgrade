@@ -3,6 +3,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 import requests
+from pubgrade.charsets import get_charset
 from pubgrade.timestamps import now, repaired_subscription
 from pubgrade.errors.exceptions import (
     RegistrationDisabled,
@@ -82,13 +83,7 @@ def register_subscription(uid: str, user_access_token: str, data: dict):
     id_length: int = get_config().endpoints["repository"][
         "id_length"
     ]
-    id_charset: str = get_config().endpoints["repository"][
-        "id_charset"
-    ]
-    try:
-        id_charset = eval(id_charset)
-    except Exception:
-        id_charset = "".join(sorted(set(id_charset)))
+    id_charset = get_charset("repository", "id_charset")
     data_from_db_user = db_collection_user.find_one({"uid": uid})
     data_from_db_repository = db_collection_repositories.find_one(
         {"id": data["repository_id"]}

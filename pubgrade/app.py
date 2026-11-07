@@ -11,6 +11,7 @@ from pathlib import Path
 from connexion import App
 from foca import Foca, get_collection, get_config
 
+from pubgrade.charsets import check_charsets
 from pubgrade.timestamps import repair_timestamps
 
 logger = logging.getLogger(__name__)
@@ -53,12 +54,15 @@ def create_app() -> App:
 
     Gunicorn calls this in each worker, after forking (MongoDB clients must
     not be shared across forks). Also brings stored timestamps into the
-    format of the API (cf. `repair_timestamps()`).
+    format of the API (cf. `repair_timestamps()`). Stops with an error if a
+    character set setting can't be used (cf. `check_charsets()`).
 
     Returns:
         Connexion app.
     """
     app = Foca(config_file=CONFIG_FILE).create_app()
+    with app.app.app_context():
+        check_charsets(get_config().endpoints)
     create_admin_user(app)
     with app.app.app_context():
         repair_timestamps(

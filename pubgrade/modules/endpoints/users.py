@@ -1,5 +1,6 @@
 import logging
 
+from pubgrade.charsets import get_charset
 from pubgrade.errors.exceptions import (
     RegistrationDisabled,
     UserNotFound,
@@ -50,32 +51,11 @@ def register_user(data: dict):
     )
     retries = get_config().endpoints["user"]["retries"]
     id_length: int = get_config().endpoints["user"]["uid_length"]
-    id_charset: str = get_config().endpoints["user"][
-        "uid_charset"
-    ]
+    id_charset = get_charset("user", "uid_charset")
     access_token_length: int = get_config().endpoints[
         "access_token"
     ]["length"]
-    access_token_charset: str = get_config().endpoints[
-        "access_token"
-    ]["charset"]
-    # First try to evaluate python expression like string.ascii_lowercase',
-    # 'string.digits' but if any exception occurs (i.e. due to list or character
-    # set) then create character set using `set` (remove duplicate characters)
-    # and simply `join` it.
-    try:
-        # Works for 'string.digits', "string.ascii_lowercase" or "[ '.' , '-',
-        # string.ascii_lowercase, string.digits]" etc.
-        id_charset = eval(id_charset)
-    except Exception:
-        # Works for 'abcd', string.digits, string.ascii_lowercase or [ '.' ,
-        # '-', string.ascii_lowercase, string.digits] etc.
-        id_charset = "".join(sorted(set(id_charset)))
-    # Same as above.
-    try:
-        access_token_charset = eval(access_token_charset)
-    except Exception:
-        access_token_charset = "".join(sorted(set(access_token_charset)))
+    access_token_charset = get_charset("access_token", "charset")
 
     for i in range(retries):
         logger.debug(f"Trying to insert/update object: try {i}")
