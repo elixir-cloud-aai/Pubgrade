@@ -237,10 +237,10 @@ def delete_repository(repo_id: str, access_token: str) -> None:
     `accepts_additions()`). With builds switched on, the pods and files of
     the repository's builds are removed. Then its subscriptions (also from
     their users' lists), its builds and the repository itself are deleted,
-    the repository last. If a pod can't be deleted, the mark is removed and
-    the data stays, so that the request can be repeated; pods and files
-    removed before stay removed. Deployments that have been notified keep
-    their images.
+    the repository last. If this fails (e.g., a pod can't be deleted), the
+    mark is removed and the data left stays, so that the request can be
+    repeated; pods and files removed before stay removed. Deployments that
+    have been notified keep their images.
 
     Args:
         repo_id (str): Unique identifier for the repository.
@@ -274,33 +274,36 @@ def delete_repository(repo_id: str, access_token: str) -> None:
     if data is None:
         raise RepositoryNotFound
     build_ids: list[str] = data.get("build_list", [])
+    subscription_ids = list(data.get("subscription_list", []))
     try:
         stop_builds(build_ids)
+        db_collection_subscriptions = collection("subscriptions")
+        subscription_ids = list(
+            {
+                *subscription_ids,
+                *(
+                    subscription["id"]
+                    for subscription in db_collection_subscriptions.find(
+                        {"repository_id": repo_id}, {"id": True, "_id": False}
+                    )
+                ),
+            }
+        )
+        if subscription_ids:
+            collection("users").update_many(
+                {"subscription_list": {"$in": subscription_ids}},
+                {"$pull": {"subscription_list": {"$in": subscription_ids}}},
+            )
+            db_collection_subscriptions.delete_many({"id": {"$in": subscription_ids}})
+        if build_ids:
+            collection("builds").delete_many({"id": {"$in": build_ids}})
+        deleted = db_collection.delete_one({"id": repo_id}).deleted_count
     except Exception:
+        # The repository takes builds and subscriptions again until the
+        # request is repeated
         db_collection.update_one({"id": repo_id}, {"$unset": {"deleting": ""}})
         raise
-
-    db_collection_subscriptions = collection("subscriptions")
-    subscription_ids = list(
-        {
-            *data.get("subscription_list", []),
-            *(
-                subscription["id"]
-                for subscription in db_collection_subscriptions.find(
-                    {"repository_id": repo_id}, {"id": True, "_id": False}
-                )
-            ),
-        }
-    )
-    if subscription_ids:
-        collection("users").update_many(
-            {"subscription_list": {"$in": subscription_ids}},
-            {"$pull": {"subscription_list": {"$in": subscription_ids}}},
-        )
-        db_collection_subscriptions.delete_many({"id": {"$in": subscription_ids}})
-    if build_ids:
-        collection("builds").delete_many({"id": {"$in": build_ids}})
-    if db_collection.delete_one({"id": repo_id}).deleted_count == 0:
+    if deleted == 0:
         raise RepositoryNotFound
     logger.info(
         "Deleted repository %s with %s builds and %s subscriptions.",

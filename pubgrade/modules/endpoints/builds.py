@@ -45,6 +45,9 @@ BASE_DIR = os.getenv("BASE_DIR", "/pubgrade_temp_files")
 # signing of an image
 REQUEST_TIMEOUT = 30
 
+# States of builds that have finished
+FINISHED = ["SUCCEEDED", "FAILED"]
+
 # An abbreviated or full commit hash (SHA-1 or SHA-256)
 COMMIT_HASH = re.compile(r"[0-9a-fA-F]{4,64}")
 
@@ -196,9 +199,7 @@ def register_builds(
     if not build_path:
         # The repository's deletion may have started after the build was
         # listed, and missed it in the database
-        if not accepts_additions(repository_id):
-            withdraw_build(build_data["id"])
-            raise RepositoryNotFound
+        ensure_accepting(repository_id, build_data["id"])
         publish_prebuilt_image(
             build_data["id"],
             build_data["images"][0]["name"],
@@ -209,6 +210,7 @@ def register_builds(
         start_build(build_data, data_from_db["url"], access_token)
     except CreatePodError:
         # The pod may have been created nonetheless, and reports to the build
+        ensure_accepting(repository_id, build_data["id"])
         raise
     except Exception:
         # The client gets an error instead of the build's identifier, so the
@@ -229,11 +231,7 @@ def register_builds(
         else:
             logger.info("Removed build %s, which could not start.", build_data["id"])
         raise
-    # The repository's deletion may have started while the build started,
-    # and missed its pod
-    if not accepts_additions(repository_id):
-        withdraw_build(build_data["id"])
-        raise RepositoryNotFound
+    ensure_accepting(repository_id, build_data["id"])
     return {"id": build_data["id"]}
 
 
@@ -788,12 +786,13 @@ def delete_pod(name: str, namespace: str, missing_ok: bool = False) -> Any:
 
 
 def stop_builds(build_ids: list[str]) -> None:
-    """Remove the pods and files of builds, as far as they still exist.
+    """Remove the pods and files of builds that may still have them.
 
     Only with builds switched on, as only then do builds have pods and
-    files. Unfinished builds are stopped this way; finished builds normally
-    have neither, unless their cleanup failed. Pods that no longer exist
-    count as deleted, so this can be repeated after an error.
+    files. Unfinished builds are stopped this way, and finished builds
+    whose files are left because their cleanup failed are cleaned up. Pods
+    that no longer exist count as deleted, so this can be repeated after an
+    error.
 
     Args:
         build_ids: Identifiers of the builds.
@@ -804,23 +803,62 @@ def stop_builds(build_ids: list[str]) -> None:
     """
     if not builds_enabled() or not build_ids:
         return
+    unfinished = {
+        build["id"]
+        for build in collection("builds").find(
+            {"id": {"$in": build_ids}, "status": {"$nin": FINISHED}},
+            {"id": True, "_id": False},
+        )
+    }
+    stopping = [
+        build_id
+        for build_id in build_ids
+        if build_id in unfinished or os.path.isdir(os.path.join(BASE_DIR, build_id))
+    ]
+    if not stopping:
+        return
     load_cluster_config()
     namespace = os.getenv("NAMESPACE") or "default"
-    for build_id in build_ids:
+    for build_id in stopping:
         delete_pod(build_id, namespace, missing_ok=True)
         remove_build_dir(os.path.join(BASE_DIR, build_id), build_id)
-    logger.info("Removed the pods and files of %s builds.", len(build_ids))
+        logger.info("Stopped build %s.", build_id)
 
 
-def withdraw_build(build_id: str) -> None:
-    """Remove a build whose repository is being deleted.
+def ensure_accepting(repository_id: str, build_id: str) -> None:
+    """Withdraw a new build if its repository is being deleted.
 
-    Its pod and files, if any, are removed as far as possible; errors are
-    logged, as the client gets a 404 anyway.
+    The repository's deletion may have started after the build was listed,
+    and missed its document or pod.
 
     Args:
+        repository_id: Identifier of the repository.
+        build_id: Identifier of the build.
+
+    Raises:
+        RepositoryNotFound: Raised when the repository is being deleted or
+            is gone; the build has been withdrawn then.
+    """
+    if accepts_additions(repository_id):
+        return
+    withdraw_build(repository_id, build_id)
+    raise RepositoryNotFound
+
+
+def withdraw_build(repository_id: str, build_id: str) -> None:
+    """Remove a build whose repository is being deleted.
+
+    The build leaves the repository's list first, in case the deletion
+    fails and the repository stays. Its pod and files, if any, are removed
+    as far as possible; errors are logged, as the client gets a 404 anyway.
+
+    Args:
+        repository_id: Identifier of the repository.
         build_id: Identifier of the build.
     """
+    collection("repositories").update_one(
+        {"id": repository_id}, {"$pull": {"build_list": build_id}}
+    )
     try:
         stop_builds([build_id])
     except Exception as error:

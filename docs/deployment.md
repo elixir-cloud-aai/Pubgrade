@@ -117,8 +117,8 @@ fails (a 500), the build and its files are kept, as the pod may have been
 created nonetheless.
 
 Deleting a repository (`DELETE /repositories/{id}`) stops its builds: their
-pods are deleted and their files removed, also those of finished builds whose
-cleanup failed. A build started while the repository is deleted is stopped
+pods are deleted and their files removed, also the files left by finished
+builds whose cleanup failed. A build started while the repository is deleted is stopped
 and removed again, and its request gets a 404. If a pod can't be deleted, the
 request gets a 500; the repository, its builds and subscriptions stay (pods
 and files removed until then stay removed), so the request can be repeated.
