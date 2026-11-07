@@ -1,5 +1,7 @@
 ##### BASE IMAGE #####
-FROM python:3
+## Pinned by digest, so that rebuilds use the same base image; the Python
+## version of the app's image. Dependabot updates the tag and digest together
+FROM python:3.13.18@sha256:51db6babcbd039687e5362a676db5444b5926739abb03b10c8c6a8144872611f
 
 ##### METADATA ##### 
 LABEL software="Pubgrade"
