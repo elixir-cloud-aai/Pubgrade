@@ -45,6 +45,7 @@ from pubgrade.modules.endpoints.builds import (
     get_builds,
     git_clone_and_checkout,
     image_basename,
+    intermediate_image,
     intermediate_registry_format,
     publish_prebuilt_image,
     register_builds,
@@ -1196,6 +1197,29 @@ class TestBuild:
             assert data["status"] == "SUCCEEDED"
             assert res["id"] == MOCK_REPOSITORY_2["build_list"][0]
 
+    def test_build_and_signing_use_one_image(self) -> None:
+        """The signing pulls the image that the build pushed."""
+        self.setup_with_build()
+        build_id = MOCK_REPOSITORY_2["build_list"][0]
+        with self.app.app_context():
+            stored = builds.collection("builds").find_one({"id": build_id})
+            with patch.object(builds, "create_build") as create:
+                start_build(
+                    {**stored, "id": build_id}, self.repository_url, "access_token"
+                )
+            with (
+                patch.object(builds, "trigger_signing_image") as trigger,
+                patch.object(builds, "notify_all_subscriptions"),
+                patch.object(builds, "remove_files"),
+            ):
+                build_completed(
+                    MOCK_REPOSITORY_2["id"],
+                    build_id,
+                    MOCK_REPOSITORY_2["access_token"],
+                )
+        pushed = create.call_args.kwargs["intermediate_registry_path"]
+        assert trigger.call_args.kwargs["pull_tag"] == pushed
+
     @patch("pubgrade.modules.endpoints.builds.remove_files")
     @patch("requests.request", mocked_request_api)
     def test_build_completed_removes_pod_in_own_namespace(
@@ -2251,3 +2275,23 @@ def test_config_file_for_intermediate_registry(
     assert json.loads(path.read_text()) == {
         "auths": {"https://index.docker.io/v1/": {"auth": "dXNlcjpwYXNzd2Q="}}
     }
+
+
+@pytest.mark.parametrize(
+    "configured,image,expected",
+    [
+        # A tag in the setting stays
+        ("ttl.sh/{}:1h", "org/app:1", "ttl.sh/app:1h"),
+        ("", "harbor.example.org/project/app:1", "docker.io/org/app:build-repo.b1"),
+        ("registry:5000/{}", "app:1", "registry:5000/app:build-repo.b1"),
+    ],
+)
+def test_intermediate_image(
+    monkeypatch: pytest.MonkeyPatch, configured: str, image: str, expected: str
+) -> None:
+    """Each build has its own image in the intermediate registry."""
+    monkeypatch.delenv("INTERMEDIATE_REGISTRY_HOST", raising=False)
+    monkeypatch.setenv("INTERMEDIATE_REGISTRY_NAMESPACE", "org")
+    settings = {"builds": {"intermediate_registery_format": configured}}
+    with patch.object(builds, "endpoints", return_value=settings):
+        assert intermediate_image(image, "repo.b1") == expected

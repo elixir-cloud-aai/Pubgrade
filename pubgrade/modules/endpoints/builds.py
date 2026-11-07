@@ -112,6 +112,27 @@ def image_basename(image: str) -> str:
     return image.rsplit("/", 1)[-1].split(":", 1)[0]
 
 
+def intermediate_image(image: str, build_id: str) -> str:
+    """Get the image that a build pushes to the intermediate registry.
+
+    The build pod pushes it there, and the signing workflow pulls it from
+    there. Unless the path of the intermediate registry has a tag, the tag is
+    `build-<build ID>`, so that builds of images with the same name don't
+    replace each other's image before it is signed.
+
+    Args:
+        image: Name of the image to build, with its tag.
+        build_id: Identifier of the build.
+
+    Returns:
+        The image in the intermediate registry, with its tag.
+    """
+    path = intermediate_registry_format().format(image_basename(image))
+    if ":" not in path.rsplit("/", 1)[-1]:
+        path = f"{path}:build-{build_id}"
+    return path
+
+
 def registry_auth_key(path: str) -> str:
     """Get the key of a registry's credentials in a Docker configuration file.
 
@@ -359,8 +380,8 @@ def start_build(build_data: dict[str, Any], repo_url: str, access_token: str) ->
     # An empty branch or tag would build the repository's default branch
     if name == "":
         raise GitRefNotFound
-    intermediate_registry_path = intermediate_registry_format().format(
-        image_basename(build_data["images"][0]["name"])
+    intermediate_registry_path = intermediate_image(
+        build_data["images"][0]["name"], build_data["id"]
     )
     create_build(
         repo_url=repo_url,
@@ -828,9 +849,7 @@ def build_completed(
         trigger_signing_image(
             image_path=data["images"][0]["name"],
             dockerhub_token=data["dockerhub_token"],
-            pull_tag=intermediate_registry_format().format(
-                image_basename(data["images"][0]["name"])
-            ),
+            pull_tag=intermediate_image(data["images"][0]["name"], build_id),
             push_tag=data["images"][0]["name"],
         )
     except Exception:

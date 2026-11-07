@@ -77,7 +77,7 @@ has "${chart}" 'resources: \["pods"\]' "builds"
 has "$(grep -A1 'name: INTERMEDIATE_REGISTRY_HOST' <<< "${chart}")" \
   'value: "docker.io"' "registry default"
 has "$(grep -A4 'name: INTERMEDIATE_REGISTRY_TOKEN' <<< "${chart}")" \
-  'name: builds' "registry default"
+  'name: "builds"' "registry default"
 hasnt "${chart}" 'INTERMEDIATE_REGISTRY_NAMESPACE' "registry default"
 registry="$(render --set builds.enabled=true --set builds.existingSecret=builds \
   --set builds.pubgradeUrl=https://pubgrade.example.org \
@@ -90,9 +90,16 @@ has "$(grep -A1 'name: INTERMEDIATE_REGISTRY_HOST' <<< "${registry}")" \
 has "$(grep -A1 'name: INTERMEDIATE_REGISTRY_NAMESPACE' <<< "${registry}")" \
   'value: "pubgrade"' "registry"
 has "$(grep -A4 'name: INTERMEDIATE_REGISTRY_TOKEN' <<< "${registry}")" \
-  'name: harbor-robot' "registry"
+  'name: "harbor-robot"' "registry"
 has "$(grep -A4 'name: INTERMEDIATE_REGISTRY_TOKEN' <<< "${registry}")" \
-  'key: auth' "registry"
+  'key: "auth"' "registry"
+# Without registry values, the defaults
+unset_registry="$(render --set builds.enabled=true --set builds.existingSecret=builds \
+  --set builds.pubgradeUrl=https://pubgrade.example.org --set builds.registry=null)"
+has "$(grep -A4 'name: INTERMEDIATE_REGISTRY_TOKEN' <<< "${unset_registry}")" \
+  'key: "intermediate_registry_token"' "registry unset"
+has "$(grep -A1 'name: INTERMEDIATE_REGISTRY_HOST' <<< "${unset_registry}")" \
+  'value: "docker.io"' "registry unset"
 if render --set builds.enabled=true > /dev/null 2>&1; then
   echo "::error::Builds without their Secret must fail"
   status=1

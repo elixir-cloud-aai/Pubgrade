@@ -152,15 +152,19 @@ the subscribers, which check for the image themselves (see the sidecar's
 
 With builds on, build pods push each image to an intermediate registry, set
 by the chart values `builds.registry.host` (default `docker.io`) and
-`builds.registry.namespace` (e.g., a Harbor project): the image `<registry
-host>/<project>/app:1.0` goes to `<host>/<namespace>/app`. The credentials
+`builds.registry.namespace` (e.g., a Harbor project, or a Docker Hub
+organization, which Docker Hub needs): the image `<registry
+host>/<project>/app:1.0` goes to `<host>/<namespace>/app:build-<build ID>`.
+Without the chart, set the environment variables `INTERMEDIATE_REGISTRY_HOST`
+and `INTERMEDIATE_REGISTRY_NAMESPACE`. The credentials
 are base64 of `<user>:<password>` (e.g., of a Harbor robot account that may
 push), by default in the key `intermediate_registry_token` of
 `builds.existingSecret`, or in `builds.registry.existingSecret` and
 `builds.registry.key`. The setting
 `endpoints.builds.intermediate_registery_format` of the app's configuration
 (a path with `{}` for the image's name) still works, and takes precedence
-over the chart values if it is set.
+over the chart values if it is set; without a tag in it, each build
+gets the tag `build-<build ID>`.
 
 The signing workflow (`endpoints.builds.gh_action_path`) then pulls the
 image from the intermediate registry, signs it and pushes it to its final
@@ -232,7 +236,10 @@ From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA
   `endpoints.builds.intermediate_registery_format`, which still works and
   takes precedence. Images whose name has a registry host or no namespace
   (e.g., `harbor.example.org/project/app`, `app`) are built under their
-  last name part, `app`; before, a registry host broke the build. The
+  last name part, `app`, and the tag `build-<build ID>` (unless
+  `intermediate_registery_format` has a tag), so that builds of images with
+  the same name no longer replace each other's image before it is signed;
+  before, a registry host broke the build. The
   credentials of a Docker Hub intermediate registry are stored under
   Docker's key for Docker Hub, so that build pods can push there.
 - **Image:** it runs as user 1000 (group 0), and its app files are read-only;
