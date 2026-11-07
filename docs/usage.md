@@ -107,7 +107,8 @@ curl --request PUT '<callback URL>' \
 A listener of your own, instead of [Pubgrade-Sidecar](sidecar/index.md),
 checks the token, answers with a 2xx status if it accepts the notification,
 and does the actual work (e.g., triggering a CD pipeline) in the background:
-it must answer within `notification_timeout`. Pubgrade only reads the status
+it must answer in time (see above; to be safe, within `notification_timeout`
+from the request). Pubgrade only reads the status
 of the response, not its body, and doesn't follow redirects (a redirect
 counts as `failed`). It doesn't repeat failed notifications. The API
 describes the call as the callback `notification` of `POST /subscriptions`,

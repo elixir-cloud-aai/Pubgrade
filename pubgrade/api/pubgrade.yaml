@@ -585,8 +585,11 @@ paths:
                 matches the subscription's `type` and `value`. Only the status
                 of the response counts, the body isn't read; a 2xx status
                 means `delivered`, any other status, a redirect or no
-                response within `endpoints.subscriptions.notification_timeout`
-                means `failed` (see the build's `notifications`). Redirects
+                response in time means `failed` (see the build's
+                `notifications`). In time means within
+                `endpoints.subscriptions.notification_timeout` for connecting
+                and again for the response, and within twice that plus 5
+                seconds in all. Redirects
                 aren't followed. A subscriber that takes longer answers at
                 once (e.g., with 202) and acts in the background, as
                 Pubgrade-Sidecar does.

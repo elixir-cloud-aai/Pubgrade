@@ -186,6 +186,7 @@ def test_publish_notifies_subscribers(api: FlaskClient, subscriber: Subscriber) 
         {
             "path": "/update",
             "token": "subscriber-token",
+            "content_type": "application/json",
             "body": {"image_name": "org/image", "tag": "1"},
         }
     ]
@@ -218,10 +219,22 @@ def test_notification_matches_spec(api: FlaskClient, subscriber: Subscriber) -> 
     subscribe(api, user, repository["id"], subscriber.url)
     publish(api, repository, "1")
     [received] = subscriber.received
-    assert [parameter["name"] for parameter in callback["parameters"]] == [
-        "X-Access-Token"
+    assert callback["parameters"] == [
+        {
+            "in": "header",
+            "name": "X-Access-Token",
+            "required": True,
+            "schema": {"type": "string"},
+            "description": callback["parameters"][0]["description"],
+        }
     ]
     assert received["token"] == "subscriber-token"
+    assert received["content_type"] == "application/json"
+    assert callback["requestBody"]["content"] == {
+        "application/json": {
+            "schema": {"$ref": "#/components/schemas/NotificationRequest"}
+        }
+    }
     assert set(received["body"]) == set(schema["properties"]) == set(schema["required"])
     assert all(isinstance(value, str) for value in received["body"].values())
 
