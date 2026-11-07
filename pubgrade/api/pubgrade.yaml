@@ -198,10 +198,11 @@ paths:
       summary: 'Delete repository'
       description: Delete a repository from Pubgrade permanently, with its
         builds and subscriptions; the subscriptions also disappear from their
-        users' lists. Only the repository's access token allows it. With
-        builds switched on, builds that haven't finished are stopped first,
-        deleting their pods and files; if a pod can't be deleted, the request
-        fails, the repository stays and the request can be repeated.
+        users' lists. Only the repository's access token allows it. Builds
+        and subscriptions registered meanwhile get a 404. With builds
+        switched on, the builds' pods and files are removed first; if a pod
+        can't be deleted, the request fails, the repository with its builds
+        and subscriptions stays, and the request can be repeated.
         Deployments that have been notified keep their images.
       operationId: deleteRepository
       tags:
@@ -309,6 +310,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
         default:
@@ -517,6 +520,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
         default:

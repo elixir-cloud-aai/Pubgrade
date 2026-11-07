@@ -10,8 +10,8 @@ Endpoint                                        Who
 GET     /repositories                           anyone
 POST    /repositories                           anyone, while registration is open
 GET     /repositories/{id}                      anyone
-PUT     /repositories/{id}                      the repository (its access token): new URL
-DELETE  /repositories/{id}                      the repository: with builds, subscriptions
+PUT     /repositories/{id}                      the repository (its access token)
+DELETE  /repositories/{id}                      the repository
 GET     /repositories/{id}/builds               anyone
 POST    /repositories/{id}/builds               the repository: publish an image
 GET     /repositories/{id}/builds/{build_id}    anyone
@@ -26,6 +26,10 @@ POST    /subscriptions                          verified users, while registrati
 GET     /subscriptions/{subscription_id}        the subscription's user
 DELETE  /subscriptions/{subscription_id}        the subscription's user
 ```
+
+`PUT /repositories/{id}` changes only the repository's URL. `DELETE
+/repositories/{id}` also deletes the repository's builds and subscriptions
+(see [Usage](usage.md#change-or-delete-a-repository)).
 
 Registrations are open until they are closed in the
 [configuration](deployment.md#configuration). The specification is the

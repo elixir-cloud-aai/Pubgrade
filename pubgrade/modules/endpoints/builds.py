@@ -28,7 +28,11 @@ from pubgrade.errors.exceptions import (
     InvalidImage,
     RepositoryNotFound,
 )
-from pubgrade.modules.endpoints.repositories import generate_id
+from pubgrade.modules.endpoints.repositories import (
+    ACCEPTING,
+    accepts_additions,
+    generate_id,
+)
 from pubgrade.modules.endpoints.subscriptions import notify_all_subscriptions
 from pubgrade.settings import collection, endpoints
 from pubgrade.timestamps import now, repaired_build
@@ -40,9 +44,6 @@ BASE_DIR = os.getenv("BASE_DIR", "/pubgrade_temp_files")
 # Seconds to connect to GitHub and for its response, when triggering the
 # signing of an image
 REQUEST_TIMEOUT = 30
-
-# States of builds that have finished
-FINISHED = ["SUCCEEDED", "FAILED"]
 
 # An abbreviated or full commit hash (SHA-1 or SHA-256)
 COMMIT_HASH = re.compile(r"[0-9a-fA-F]{4,64}")
@@ -129,7 +130,8 @@ def register_builds(
         Unauthorized: Raised when access_token is invalid or not specified
         in request.
         RepositoryNotFound: Raised when repository is not found with given
-        identifier.
+        identifier, or is being deleted; a build registered meanwhile is
+        removed again.
         BuildsDisabled: Raised when the request asks for a build, with builds
         switched off.
         InvalidImage: Raised when there is no image, an image isn't a valid
@@ -167,9 +169,12 @@ def register_builds(
             charset=id_charset,
             length=id_length,
         )
-        db_collection_repositories.update_one(
-            {"id": repository_id}, {"$push": {"build_list": build_data["id"]}}
+        pushed = db_collection_repositories.update_one(
+            {"id": repository_id, **ACCEPTING},
+            {"$push": {"build_list": build_data["id"]}},
         )
+        if pushed.matched_count == 0:
+            raise RepositoryNotFound
         try:
             build_data["finished_at"] = None
             build_data["started_at"] = now()
@@ -189,6 +194,11 @@ def register_builds(
         )
         raise InternalServerError
     if not build_path:
+        # The repository's deletion may have started after the build was
+        # listed, and missed it in the database
+        if not accepts_additions(repository_id):
+            withdraw_build(build_data["id"])
+            raise RepositoryNotFound
         publish_prebuilt_image(
             build_data["id"],
             build_data["images"][0]["name"],
@@ -219,6 +229,11 @@ def register_builds(
         else:
             logger.info("Removed build %s, which could not start.", build_data["id"])
         raise
+    # The repository's deletion may have started while the build started,
+    # and missed its pod
+    if not accepts_additions(repository_id):
+        withdraw_build(build_data["id"])
+        raise RepositoryNotFound
     return {"id": build_data["id"]}
 
 
@@ -425,7 +440,7 @@ def create_build(
 
 
 def remove_build_dir(build_dir: str, build_id: str) -> None:
-    """Remove the directory of a build that didn't start, if there is one.
+    """Remove the directory of a build that didn't start or was stopped, if any.
 
     Args:
         build_dir: Directory of the build.
@@ -772,13 +787,13 @@ def delete_pod(name: str, namespace: str, missing_ok: bool = False) -> Any:
         raise DeletePodError from None
 
 
-def stop_unfinished_builds(build_ids: list[str]) -> None:
-    """Stop builds that haven't finished, removing their pods and files.
+def stop_builds(build_ids: list[str]) -> None:
+    """Remove the pods and files of builds, as far as they still exist.
 
     Only with builds switched on, as only then do builds have pods and
-    files. Builds that have finished have already been cleaned up when they
-    were reported. Pods that no longer exist count as deleted, so this can
-    be repeated after an error.
+    files. Unfinished builds are stopped this way; finished builds normally
+    have neither, unless their cleanup failed. Pods that no longer exist
+    count as deleted, so this can be repeated after an error.
 
     Args:
         build_ids: Identifiers of the builds.
@@ -789,21 +804,31 @@ def stop_unfinished_builds(build_ids: list[str]) -> None:
     """
     if not builds_enabled() or not build_ids:
         return
-    unfinished = [
-        build["id"]
-        for build in collection("builds").find(
-            {"id": {"$in": build_ids}, "status": {"$nin": FINISHED}},
-            {"id": True, "_id": False},
-        )
-    ]
-    if not unfinished:
-        return
     load_cluster_config()
     namespace = os.getenv("NAMESPACE") or "default"
-    for build_id in unfinished:
+    for build_id in build_ids:
         delete_pod(build_id, namespace, missing_ok=True)
         remove_build_dir(os.path.join(BASE_DIR, build_id), build_id)
-        logger.info("Stopped build %s.", build_id)
+    logger.info("Removed the pods and files of %s builds.", len(build_ids))
+
+
+def withdraw_build(build_id: str) -> None:
+    """Remove a build whose repository is being deleted.
+
+    Its pod and files, if any, are removed as far as possible; errors are
+    logged, as the client gets a 404 anyway.
+
+    Args:
+        build_id: Identifier of the build.
+    """
+    try:
+        stop_builds([build_id])
+    except Exception as error:
+        logger.error(
+            "Build %s could not be stopped: %s", build_id, type(error).__name__
+        )
+    collection("builds").delete_one({"id": build_id})
+    logger.info("Removed build %s, whose repository is being deleted.", build_id)
 
 
 def trigger_signing_image(

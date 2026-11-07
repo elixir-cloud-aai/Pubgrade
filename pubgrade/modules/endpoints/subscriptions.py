@@ -21,7 +21,7 @@ from pubgrade.errors.exceptions import (
     UserNotFound,
     UserNotVerified,
 )
-from pubgrade.modules.endpoints.repositories import generate_id
+from pubgrade.modules.endpoints.repositories import ACCEPTING, generate_id
 from pubgrade.settings import collection, endpoints
 from pubgrade.timestamps import now, repaired_subscription
 
@@ -53,7 +53,8 @@ def register_subscription(
 
     Raises:
         RepositoryNotFound: Raised when there is no registered repository in
-        the pubgrade.
+        the pubgrade, or it is being deleted; a subscription registered
+        meanwhile is removed again.
         Unauthorized: Raised when access_token is invalid or not specified
         in request.
         UserNotFound: Raised when there is no user with specified uid.
@@ -80,7 +81,7 @@ def register_subscription(
         raise UserNotVerified
     if data_from_db_user["user_access_token"] != user_access_token:
         raise Unauthorized
-    if data_from_db_repository is None:
+    if data_from_db_repository is None or data_from_db_repository.get("deleting"):
         raise RepositoryNotFound
     if (
         db_collection_subscriptions.count_documents(
@@ -98,15 +99,6 @@ def register_subscription(
         data["state"] = "Inactive"
         try:
             db_collection_subscriptions.insert_one(data)
-            # Updates subscription_list at both user and subscribed repository.
-            db_collection_user.update_one(
-                {"uid": uid}, {"$push": {"subscription_list": data["id"]}}
-            )
-            db_collection_repositories.update_one(
-                {"id": data["repository_id"]},
-                {"$push": {"subscription_list": data["id"]}},
-            )
-            logger.info("Added subscription %s.", data["id"])
             break
         except DuplicateKeyError:
             logger.error(
@@ -118,6 +110,26 @@ def register_subscription(
             "Could not generate unique identifier. Tried %s times.", retries + 1
         )
         raise InternalServerError
+    # Lists the subscription for the user first, then for the repository,
+    # unless that is being deleted meanwhile: its deletion then misses the
+    # subscription, which is removed again
+    db_collection_user.update_one(
+        {"uid": uid}, {"$push": {"subscription_list": data["id"]}}
+    )
+    pushed = db_collection_repositories.update_one(
+        {"id": data["repository_id"], **ACCEPTING},
+        {"$push": {"subscription_list": data["id"]}},
+    )
+    if pushed.matched_count == 0:
+        db_collection_user.update_one(
+            {"uid": uid}, {"$pull": {"subscription_list": data["id"]}}
+        )
+        db_collection_subscriptions.delete_one({"id": data["id"]})
+        logger.info(
+            "Removed subscription %s, whose repository is being deleted.", data["id"]
+        )
+        raise RepositoryNotFound
+    logger.info("Added subscription %s.", data["id"])
     return {"subscription_id": data["id"]}
 
 

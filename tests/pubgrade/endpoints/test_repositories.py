@@ -1,10 +1,11 @@
 """Tests for the /repositories endpoint."""
 
+import copy
 import logging
 from pathlib import Path
 import string
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 
 from flask import Flask
 from foca.models.config import MongoConfig
@@ -20,6 +21,7 @@ from pubgrade.errors.exceptions import (
     URLNotFound,
 )
 from pubgrade.modules.endpoints import builds, repositories
+from pubgrade.modules.endpoints.builds import register_builds
 from pubgrade.modules.endpoints.repositories import (
     delete_repository,
     generate_id,
@@ -28,17 +30,26 @@ from pubgrade.modules.endpoints.repositories import (
     modify_repository_info,
     register_repository,
 )
+from pubgrade.modules.endpoints.subscriptions import register_subscription
 from tests.helpers import foca_config, set_foca
 from tests.mock_data import (
     ENDPOINT_CONFIG,
     MOCK_BUILD_INFO,
     MOCK_BUILD_INFO_2,
+    MOCK_BUILD_PAYLOAD,
     MOCK_REPOSITORIES,
     MOCK_REPOSITORY_2,
     MOCK_SUBSCRIPTION_INFO,
     MOCK_USER_DB,
     MONGO_CONFIG,
+    SUBSCRIPTION_PAYLOAD,
 )
+
+# Request to publish a prebuilt image
+PREBUILT: dict[str, Any] = {
+    "images": [{"name": "org/image:1"}],
+    "head_commit": {"tag": "1"},
+}
 
 
 def collection_of(app: Flask, name: str) -> Any:
@@ -383,17 +394,23 @@ class TestRepository:
         assert user["subscription_list"] == ["other1"]
         delete_pod.assert_not_called()
 
-    def test_delete_repository_stops_unfinished_builds(
+    def test_delete_repository_stops_builds(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
-        """With builds switched on, unfinished builds lose their pods and files.
+        """With builds switched on, the builds' pods and files are removed.
+
+        Also those of finished builds, whose own cleanup may have failed.
 
         Args:
             monkeypatch: Fixture to replace the calls to Kubernetes.
             tmp_path: Temporary directory for the builds' files.
         """
         self.setup_cascade(builds_enabled=True)
-        for build_id in (MOCK_BUILD_INFO["id"], MOCK_BUILD_INFO_2["id"]):
+        for build_id in (
+            MOCK_BUILD_INFO["id"],
+            MOCK_BUILD_INFO_2["id"],
+            "repo12abcdef",
+        ):
             (tmp_path / build_id).mkdir()
         monkeypatch.setattr(builds, "BASE_DIR", str(tmp_path))
         monkeypatch.setattr(builds, "load_cluster_config", MagicMock())
@@ -405,16 +422,16 @@ class TestRepository:
                 MOCK_REPOSITORY_2["id"], MOCK_REPOSITORY_2["access_token"]
             )
             assert self.remaining("builds") == ["repo12abcdef"]
-        delete_pod.assert_called_once_with(
-            MOCK_BUILD_INFO["id"], "default", missing_ok=True
-        )
-        # The finished build's files are left to its own cleanup
-        assert [path.name for path in tmp_path.iterdir()] == [MOCK_BUILD_INFO_2["id"]]
+        assert delete_pod.call_args_list == [
+            call(build_id, "default", missing_ok=True)
+            for build_id in MOCK_REPOSITORY_2["build_list"]
+        ]
+        assert [path.name for path in tmp_path.iterdir()] == ["repo12abcdef"]
 
-    def test_delete_repository_keeps_all_if_pod_deletion_fails(
+    def test_delete_repository_keeps_data_if_pod_deletion_fails(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
-        """If a build's pod can't be deleted, nothing is, so a retry can finish.
+        """If a build's pod can't be deleted, the data stays for a retry.
 
         Args:
             monkeypatch: Fixture to replace the calls to Kubernetes.
@@ -429,9 +446,27 @@ class TestRepository:
                 MOCK_REPOSITORY_2["id"], MOCK_REPOSITORY_2["access_token"]
             )
         with self.app.app_context():
-            assert MOCK_REPOSITORY_2["id"] in self.remaining("repositories")
+            repository = collection_of(self.app, "repositories").find_one(
+                {"id": MOCK_REPOSITORY_2["id"]}
+            )
             assert len(self.remaining("builds")) == 3
             assert len(self.remaining("subscriptions")) == 2
+        # It takes builds and subscriptions again
+        assert repository is not None
+        assert "deleting" not in repository
+
+    def test_delete_repository_deleted_before_mark(self) -> None:
+        """A repository that another request deleted before the mark isn't found."""
+        self.setup_cascade(builds_enabled=False)
+        wrapper = MagicMock(wraps=collection_of(self.app, "repositories"))
+        wrapper.find_one_and_update.return_value = None
+        foca_config(self.app).db.dbs["pubgradeStore"].collections[
+            "repositories"
+        ].client = wrapper
+        with self.app.app_context(), pytest.raises(RepositoryNotFound):
+            delete_repository(
+                MOCK_REPOSITORY_2["id"], MOCK_REPOSITORY_2["access_token"]
+            )
 
     def test_delete_repository_deleted_meanwhile(self) -> None:
         """A repository that another request deleted meanwhile isn't found."""
@@ -458,3 +493,176 @@ class TestRepository:
         self.setup()
         with self.app.app_context(), pytest.raises(Unauthorized):
             delete_repository(MOCK_REPOSITORIES[1]["id"], "access_token")
+
+    def mark_deleting(self) -> None:
+        """Mark the repository with builds and a subscription as being deleted."""
+        collection_of(self.app, "repositories").update_one(
+            {"id": MOCK_REPOSITORY_2["id"]}, {"$set": {"deleting": True}}
+        )
+
+    def test_repository_being_deleted_is_shown_without_mark(self) -> None:
+        """A repository being deleted is shown as before."""
+        self.setup_cascade(builds_enabled=False)
+        self.mark_deleting()
+        with self.app.app_context():
+            assert "deleting" not in get_repository(MOCK_REPOSITORY_2["id"])
+            assert all("deleting" not in repo for repo in get_repositories())
+
+    def test_no_additions_while_deleting(self) -> None:
+        """A repository being deleted takes no builds or subscriptions."""
+        self.setup_cascade(builds_enabled=False)
+        self.mark_deleting()
+        with self.app.app_context():
+            with pytest.raises(RepositoryNotFound):
+                register_builds(
+                    MOCK_REPOSITORY_2["id"],
+                    MOCK_REPOSITORY_2["access_token"],
+                    copy.deepcopy(PREBUILT),
+                )
+            with pytest.raises(RepositoryNotFound):
+                register_subscription(
+                    MOCK_USER_DB["uid"],
+                    MOCK_USER_DB["user_access_token"],
+                    dict(SUBSCRIPTION_PAYLOAD),
+                )
+            assert len(self.remaining("builds")) == 3
+            assert len(self.remaining("subscriptions")) == 2
+            user = collection_of(self.app, "users").find_one({})
+        assert user is not None
+        assert user["subscription_list"] == ["tnglot", "other1"]
+
+    def test_build_published_during_deletion(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A build stored while its repository is deleted is removed again.
+
+        Args:
+            monkeypatch: Fixture to start the deletion and catch notifications.
+        """
+        self.setup_cascade(builds_enabled=False)
+        builds_collection = collection_of(self.app, "builds")
+        insert_one = builds_collection.insert_one
+
+        def insert_and_delete(document: dict[str, Any]) -> Any:
+            """Store the build, then start deleting its repository.
+
+            Args:
+                document: The build.
+
+            Returns:
+                Result of the insertion.
+            """
+            result = insert_one(document)
+            self.mark_deleting()
+            return result
+
+        monkeypatch.setattr(builds_collection, "insert_one", insert_and_delete)
+        notify = MagicMock()
+        monkeypatch.setattr(builds, "notify_all_subscriptions", notify)
+        with self.app.app_context(), pytest.raises(RepositoryNotFound):
+            register_builds(
+                MOCK_REPOSITORY_2["id"],
+                MOCK_REPOSITORY_2["access_token"],
+                copy.deepcopy(PREBUILT),
+            )
+        with self.app.app_context():
+            assert len(self.remaining("builds")) == 3
+        notify.assert_not_called()
+
+    def test_build_started_during_deletion(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """A build started while its repository is deleted is stopped again.
+
+        Args:
+            monkeypatch: Fixture to start the deletion and replace Kubernetes.
+            tmp_path: Temporary directory for the builds' files.
+        """
+        self.setup_cascade(builds_enabled=True)
+        monkeypatch.setattr(builds, "BASE_DIR", str(tmp_path))
+        monkeypatch.setattr(builds, "load_cluster_config", MagicMock())
+        delete_pod = MagicMock()
+        monkeypatch.setattr(builds, "delete_pod", delete_pod)
+        started: list[str] = []
+
+        def start(build_data: dict[str, Any], *args: Any) -> None:
+            """Create the build's files, while its repository is deleted.
+
+            Args:
+                build_data: The build.
+                *args: Other arguments of `start_build`.
+            """
+            started.append(build_data["id"])
+            (tmp_path / build_data["id"]).mkdir()
+            self.mark_deleting()
+
+        monkeypatch.setattr(builds, "start_build", start)
+        with self.app.app_context(), pytest.raises(RepositoryNotFound):
+            register_builds(
+                MOCK_REPOSITORY_2["id"],
+                MOCK_REPOSITORY_2["access_token"],
+                copy.deepcopy(MOCK_BUILD_PAYLOAD),
+            )
+        with self.app.app_context():
+            assert len(self.remaining("builds")) == 3
+        delete_pod.assert_called_once_with(started[0], "default", missing_ok=True)
+        assert list(tmp_path.iterdir()) == []
+
+    def test_build_started_during_deletion_pod_error(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """If such a build's pod can't be deleted, the client still gets a 404.
+
+        Args:
+            monkeypatch: Fixture to start the deletion and replace Kubernetes.
+            caplog: Fixture to capture log messages.
+        """
+        self.setup_cascade(builds_enabled=True)
+        monkeypatch.setattr(builds, "load_cluster_config", MagicMock())
+        monkeypatch.setattr(builds, "delete_pod", MagicMock(side_effect=DeletePodError))
+        monkeypatch.setattr(builds, "start_build", lambda *args: self.mark_deleting())
+        with self.app.app_context(), pytest.raises(RepositoryNotFound):
+            register_builds(
+                MOCK_REPOSITORY_2["id"],
+                MOCK_REPOSITORY_2["access_token"],
+                copy.deepcopy(MOCK_BUILD_PAYLOAD),
+            )
+        assert "could not be stopped" in caplog.text
+
+    def test_subscription_during_deletion(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A subscription stored while its repository is deleted is removed.
+
+        Args:
+            monkeypatch: Fixture to start the deletion.
+        """
+        self.setup_cascade(builds_enabled=False)
+        subscriptions_collection = collection_of(self.app, "subscriptions")
+        insert_one = subscriptions_collection.insert_one
+
+        def insert_and_delete(document: dict[str, Any]) -> Any:
+            """Store the subscription, then start deleting its repository.
+
+            Args:
+                document: The subscription.
+
+            Returns:
+                Result of the insertion.
+            """
+            result = insert_one(document)
+            self.mark_deleting()
+            return result
+
+        monkeypatch.setattr(subscriptions_collection, "insert_one", insert_and_delete)
+        with self.app.app_context(), pytest.raises(RepositoryNotFound):
+            register_subscription(
+                MOCK_USER_DB["uid"],
+                MOCK_USER_DB["user_access_token"],
+                dict(SUBSCRIPTION_PAYLOAD),
+            )
+        with self.app.app_context():
+            assert len(self.remaining("subscriptions")) == 2
+            user = collection_of(self.app, "users").find_one({})
+        assert user is not None
+        assert user["subscription_list"] == ["tnglot", "other1"]

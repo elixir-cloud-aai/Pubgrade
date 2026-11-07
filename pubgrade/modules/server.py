@@ -70,7 +70,7 @@ def getRepository(id: str) -> dict[str, Any]:
 
 @log_traffic
 def putRepositories(id: str) -> dict[str, Any]:
-    """Modify already registered Repository.
+    """Change the URL of a registered Repository.
 
     Args:
         id: Identifier of Repository to be modified.
