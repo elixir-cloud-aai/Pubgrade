@@ -25,6 +25,7 @@ from pubgrade.errors.exceptions import (
     GitCloningError,
     InternalServerError,
 )
+from pubgrade.charsets import resolve_charset
 from pubgrade.modules.endpoints.repositories import generate_id
 from pubgrade.modules.endpoints.subscriptions import notify_all_subscriptions
 
@@ -141,10 +142,7 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
     id_charset: str = get_config().endpoints["repository"][
         "id_charset"
     ]
-    try:
-        id_charset = eval(id_charset)
-    except Exception:
-        id_charset = "".join(sorted(set(id_charset)))
+    id_charset = resolve_charset(id_charset, "endpoints.repository.id_charset")
 
     data_from_db = db_collection_repositories.find_one({"id": repository_id})
 

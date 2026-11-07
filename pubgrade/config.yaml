@@ -88,6 +88,9 @@ log:
 
 # Custom app configuration
 endpoints:
+    # Character sets (`id_charset`, `uid_charset`, `charset`): names such as
+    # `string.digits` and literal characters (see "Configuration" in
+    # `docs/deployment.md`; checked at start)
     repository:
         # Switch off after setup to close registration
         registration_enabled: True

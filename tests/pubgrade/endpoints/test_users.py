@@ -1,5 +1,6 @@
 """Tests for /users endpoint """
 import logging
+import string
 from unittest.mock import MagicMock
 
 import mongomock
@@ -60,6 +61,16 @@ class TestUsers:
             assert "user_access_token" in response
             assert "name" in response
             assert sanitise_text(name) == response["name"]
+
+    def test_register_user_charsets(self):
+        """Identifiers and tokens use the characters the settings name."""
+        self.setup()
+        self.app.config.foca.endpoints["user"]["uid_charset"] = "string.ascii_uppercase"
+        self.app.config.foca.endpoints["access_token"]["charset"] = ["x", "y"]
+        with self.app.app_context():
+            response = register_user({"name": "Name"})
+        assert set(response["uid"]) <= set(string.ascii_uppercase)
+        assert set(response["user_access_token"]) <= {"x", "y"}
 
     def test_register_user_logs_no_token(self, caplog):
         """Log messages name the new user, without its token."""

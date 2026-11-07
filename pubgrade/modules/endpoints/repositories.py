@@ -1,11 +1,12 @@
 import logging
 import string
-from random import choice
+import secrets
 
 from foca import get_config
 from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized
 
+from pubgrade.charsets import resolve_charset
 from pubgrade.errors.exceptions import (
     RegistrationDisabled,
     RepositoryNotFound,
@@ -63,14 +64,10 @@ def register_repository(data: dict):
     access_token_charset: str = get_config().endpoints[
         "access_token"
     ]["charset"]
-    try:
-        id_charset = eval(id_charset)
-    except Exception:
-        id_charset = "".join(sorted(set(id_charset)))
-    try:
-        access_token_charset = eval(access_token_charset)
-    except Exception:
-        access_token_charset = "".join(sorted(set(id_charset)))
+    id_charset = resolve_charset(id_charset, "endpoints.repository.id_charset")
+    access_token_charset = resolve_charset(
+        access_token_charset, "endpoints.access_token.charset"
+    )
 
     for i in range(retries):
         logger.debug(f"Trying to insert/update object: try {i}")
@@ -150,7 +147,7 @@ def generate_id(
     generated_string = ""
     counter = 0
     while counter < length:
-        random_char = choice(charset)
+        random_char = secrets.choice(charset)
         if random_char in "_":
             continue
         if counter == 0 or counter == (length - 1):

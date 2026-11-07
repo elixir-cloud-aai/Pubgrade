@@ -17,6 +17,7 @@ from pubgrade.errors.exceptions import (
     RepositoryNotFound,
     URLNotFound,
 )
+from pubgrade.modules.endpoints import repositories
 from pubgrade.modules.endpoints.repositories import (
     register_repository,
     get_repositories,
@@ -118,15 +119,53 @@ class TestRepository:
             assert MOCK_REPOSITORIES[1]["id"] == res[1]["id"]
 
     def test_generate_id(self):
-        string.digits  # to avoid lint error
-        for i in range(100):
-            charset = "string.ascii_lowercase + string.digits +  '.' +  '-'"
-            charset = eval(charset)
-            length = 6
-            res = generate_id(charset, length)
-            assert length == len(res)
-            assert 1 in [c in res for c in charset]
-            assert "_" not in res or res[0] != "." or res[0] != "-"
+        """Values have the length and the characters asked for."""
+        charset = string.ascii_lowercase + string.digits + ".-"
+        for _ in range(100):
+            res = generate_id(charset, 6)
+            assert len(res) == 6
+            assert set(res) <= set(charset)
+            assert res[0] not in ".-" + string.digits
+            assert res[-1] not in ".-" + string.digits
+
+    def test_generate_id_skips_underscores(self):
+        """Values never contain `_`."""
+        for _ in range(20):
+            assert generate_id("a_", 4) == "aaaa"
+
+    def test_generate_id_uses_secrets(self, monkeypatch):
+        """Characters are drawn with `secrets.choice`, the standard for tokens."""
+        calls = []
+
+        def choice(charset):
+            calls.append(charset)
+            return "a"
+
+        monkeypatch.setattr(repositories.secrets, "choice", choice)
+        assert generate_id("ab", 3) == "aaa"
+        assert calls == ["ab"] * 3
+
+    def test_register_repository_charsets(self, monkeypatch):
+        """Identifiers and tokens use the characters the settings name."""
+        self.setup()
+        charsets = []
+        choice = repositories.secrets.choice
+
+        def recording_choice(charset):
+            charsets.append(charset)
+            return choice(charset)
+
+        monkeypatch.setattr(repositories.secrets, "choice", recording_choice)
+        self.app.config.foca.endpoints["access_token"]["charset"] = (
+            "string.ascii_uppercase"
+        )
+        with self.app.app_context():
+            res = register_repository(data={"url": self.repository_url})
+        expected = "".join(sorted(string.ascii_lowercase + string.digits + ".-"))
+        assert set(charsets) == {expected, string.ascii_uppercase}
+        assert set(res["id"]) <= set(expected)
+        assert len(res["access_token"]) == 32
+        assert set(res["access_token"]) <= set(string.ascii_uppercase)
 
     def test_get_repository(self):
         self.setup()

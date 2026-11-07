@@ -9,6 +9,7 @@ import mongomock
 import pytest
 
 import pubgrade.app
+from pubgrade.charsets import CharsetError
 from pubgrade.app import CONFIG_FILE, DB, create_app, main
 from tests.mock_data import ENDPOINT_CONFIG, MONGO_CONFIG
 
@@ -92,3 +93,11 @@ def test_main_runs_on_configured_port(
     monkeypatch.setattr(FakeFoca.app, "run", lambda port: ports.append(port))
     main()
     assert ports == [8080]
+
+
+def test_create_app_checks_charsets(collections: Dict[str, Any]) -> None:
+    """A character set setting that can't be used stops the app at start."""
+    FakeFoca.app.app.config.foca.endpoints["user"]["uid_charset"] = "string.foo"
+    with pytest.raises(CharsetError, match="endpoints.user.uid_charset"):
+        create_app()
+    assert collections["admin_users"].count_documents({}) == 0

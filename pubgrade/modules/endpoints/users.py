@@ -6,6 +6,7 @@ from pubgrade.errors.exceptions import (
     InternalServerError,
     NameNotFound,
 )
+from pubgrade.charsets import resolve_charset
 from pubgrade.modules.endpoints.repositories import generate_id
 from foca import get_config
 from pymongo.errors import DuplicateKeyError
@@ -59,23 +60,10 @@ def register_user(data: dict):
     access_token_charset: str = get_config().endpoints[
         "access_token"
     ]["charset"]
-    # First try to evaluate python expression like string.ascii_lowercase',
-    # 'string.digits' but if any exception occurs (i.e. due to list or character
-    # set) then create character set using `set` (remove duplicate characters)
-    # and simply `join` it.
-    try:
-        # Works for 'string.digits', "string.ascii_lowercase" or "[ '.' , '-',
-        # string.ascii_lowercase, string.digits]" etc.
-        id_charset = eval(id_charset)
-    except Exception:
-        # Works for 'abcd', string.digits, string.ascii_lowercase or [ '.' ,
-        # '-', string.ascii_lowercase, string.digits] etc.
-        id_charset = "".join(sorted(set(id_charset)))
-    # Same as above.
-    try:
-        access_token_charset = eval(access_token_charset)
-    except Exception:
-        access_token_charset = "".join(sorted(set(access_token_charset)))
+    id_charset = resolve_charset(id_charset, "endpoints.user.uid_charset")
+    access_token_charset = resolve_charset(
+        access_token_charset, "endpoints.access_token.charset"
+    )
 
     for i in range(retries):
         logger.debug(f"Trying to insert/update object: try {i}")
