@@ -148,13 +148,13 @@ Images can come from any registry that implements the OCI distribution API
 never contacts a registry: it passes the image name of the request,
 including its registry host (e.g., `harbor.example.org/project/app`), to
 the subscribers, which check for the image themselves (see the sidecar's
-[Deployment](sidecar/deployment.md)).
+[Deployment](sidecar/deployment.md#registries)).
 
 With builds on, build pods push each image to an intermediate registry, set
 by the chart values `builds.registry.host` (default `docker.io`) and
 `builds.registry.namespace` (e.g., a Harbor project, or a Docker Hub
-organization, which Docker Hub needs): the image `<registry
-host>/<project>/app:1.0` goes to `<host>/<namespace>/app:build-<build ID>`.
+organization, which Docker Hub needs): the image
+`harbor.example.org/project/app:1.0` goes to `<host>/<namespace>/app:build-<build ID>`.
 Without the chart, set the environment variables `INTERMEDIATE_REGISTRY_HOST`
 and `INTERMEDIATE_REGISTRY_NAMESPACE`. The credentials
 are base64 of `<user>:<password>` (e.g., of a Harbor robot account that may
