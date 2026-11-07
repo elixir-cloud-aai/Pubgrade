@@ -242,6 +242,21 @@ def check_build_types(repository: dict[str, Any], build_types: list[str]) -> Non
         raise UndeclaredBuildType
 
 
+def declaring(build_types: list[str]) -> dict[str, Any]:
+    """Build a filter for repositories that declare build types.
+
+    Used in the update that lists a build or a subscription in its repository,
+    so that types removed after `check_build_types` aren't stored.
+
+    Args:
+        build_types: Build types of a build or a subscription.
+
+    Returns:
+        A MongoDB filter; empty if there are no types.
+    """
+    return {"build_types": {"$all": build_types}} if build_types else {}
+
+
 def accepts_additions(repo_id: str) -> bool:
     """Check whether a repository takes new builds and subscriptions.
 

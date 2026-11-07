@@ -29,11 +29,13 @@ from pubgrade.errors.exceptions import (
     InternalServerError,
     InvalidImage,
     RepositoryNotFound,
+    UndeclaredBuildType,
 )
 from pubgrade.modules.endpoints.repositories import (
     ACCEPTING,
     accepts_additions,
     check_build_types,
+    declaring,
     generate_id,
 )
 from pubgrade.modules.endpoints.subscriptions import notify_all_subscriptions
@@ -196,11 +198,15 @@ def register_builds(
             charset=id_charset,
             length=id_length,
         )
+        build_types = [build_data["build_type"]] if "build_type" in build_data else []
         pushed = db_collection_repositories.update_one(
-            {"id": repository_id, **ACCEPTING},
+            {"id": repository_id, **ACCEPTING, **declaring(build_types)},
             {"$push": {"build_list": build_data["id"]}},
         )
         if pushed.matched_count == 0:
+            # The type may have been removed since the check
+            if build_types and accepts_additions(repository_id):
+                raise UndeclaredBuildType
             raise RepositoryNotFound
         try:
             build_data["finished_at"] = None

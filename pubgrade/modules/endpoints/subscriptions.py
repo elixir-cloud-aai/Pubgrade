@@ -18,12 +18,15 @@ from pubgrade.errors.exceptions import (
     RepositoryNotFound,
     SubscriptionNotFound,
     TooManySubscriptions,
+    UndeclaredBuildType,
     UserNotFound,
     UserNotVerified,
 )
 from pubgrade.modules.endpoints.repositories import (
     ACCEPTING,
+    accepts_additions,
     check_build_types,
+    declaring,
     generate_id,
 )
 from pubgrade.settings import collection, endpoints
@@ -124,7 +127,12 @@ def register_subscription(
         {"uid": uid}, {"$push": {"subscription_list": data["id"]}}
     )
     pushed = db_collection_repositories.update_one(
-        {"id": data["repository_id"], **ACCEPTING},
+        {
+            "id": data["repository_id"],
+            **ACCEPTING,
+            # Types removed since the check aren't stored
+            **declaring(data.get("build_types", [])),
+        },
         {"$push": {"subscription_list": data["id"]}},
     )
     if pushed.matched_count == 0:
@@ -132,6 +140,13 @@ def register_subscription(
             {"uid": uid}, {"$pull": {"subscription_list": data["id"]}}
         )
         db_collection_subscriptions.delete_one({"id": data["id"]})
+        if data.get("build_types") and accepts_additions(data["repository_id"]):
+            logger.info(
+                "Removed subscription %s, whose build types the repository no "
+                "longer declares.",
+                data["id"],
+            )
+            raise UndeclaredBuildType
         logger.info(
             "Removed subscription %s, whose repository is being deleted.", data["id"]
         )

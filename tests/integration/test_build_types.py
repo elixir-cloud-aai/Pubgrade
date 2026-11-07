@@ -1,6 +1,7 @@
 """Integration tests of build types: declared, published and subscribed to."""
 
 from typing import Any
+from unittest.mock import patch
 
 from flask.testing import FlaskClient
 import pytest
@@ -204,3 +205,29 @@ def test_modify_build_types(api: FlaskClient) -> None:
     assert check(api.get(url))["build_types"] == ["nightly"]
     publish(api, repository, build_type="nightly")
     publish(api, repository, status=400, build_type="production")
+
+
+def test_types_removed_meanwhile_rejected(
+    api: FlaskClient, subscriber: Subscriber
+) -> None:
+    """Types removed after the check, before the write, get a 400 too."""
+    user = register_user(api)
+    repository = register_repository(api)
+    # As if the types had been declared when the repository was read
+    with (
+        patch("pubgrade.modules.endpoints.builds.check_build_types"),
+        patch("pubgrade.modules.endpoints.subscriptions.check_build_types"),
+    ):
+        error = subscribe(
+            api,
+            user,
+            repository["id"],
+            subscriber.url,
+            status=400,
+            build_types=["production"],
+        )
+        assert "build type" in error["detail"]
+        error = publish(api, repository, status=400, build_type="production")
+        assert "build type" in error["detail"]
+    assert check(api.get("/subscriptions", headers=user)) == []
+    check(api.get(f"/repositories/{repository['id']}/builds"), 404)

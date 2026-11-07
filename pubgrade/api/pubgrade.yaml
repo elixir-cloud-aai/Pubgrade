@@ -584,8 +584,8 @@ paths:
               description: Pubgrade calls the subscription's `callback_url`
                 when the repository publishes an image whose `head_commit`
                 matches the subscription's `type` and `value` and, if the
-                subscription has `build_types`, whose `build_type` is one of
-                them. Only the status
+                subscription has a non-empty `build_types`, whose
+                `build_type` is one of them. Only the status
                 of the response counts, the body isn't read; a 2xx status
                 means `delivered`, any other status, a redirect or no
                 response in time means `failed` (see the build's
@@ -1181,8 +1181,8 @@ components:
             - $ref: '#/components/schemas/BuildType'
           description: Type of the build, one of the repository's
             `build_types` (otherwise the request gets a 400). Subscriptions
-            with `build_types` get only builds of these types; builds without
-            a type go only to subscriptions without `build_types`.
+            with a non-empty `build_types` get only builds of these types;
+            builds without a type go only to subscriptions without them.
       required:
           - images
           - head_commit
