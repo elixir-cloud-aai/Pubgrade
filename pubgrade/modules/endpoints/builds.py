@@ -300,9 +300,21 @@ def create_build(
         dockerhub to push image `echo -n USER:PASSWD | base64`
         project_access_token (str): Secret used to verify source, will be used
         by callback_url to inform pubgrade for build completion.
+
+    Raises:
+        InternalServerError: If the build's directory would be outside
+            `base_dir`.
     """
-    deployment_file_location = f"{base_dir}/{build_id}/{build_id}.yaml"
-    config_file_location = f"{base_dir}/{build_id}/config.json"
+    # Build identifiers are generated, but keep the files of a build in
+    # `base_dir` regardless
+    build_dir = os.path.normpath(os.path.join(base_dir, build_id))
+    if not build_dir.startswith(os.path.normpath(base_dir) + os.sep):
+        logger.error("Directory of build %s is outside the base directory.", build_id)
+        raise InternalServerError
+    deployment_file_location = os.path.join(
+        build_dir, f"{os.path.basename(build_dir)}.yaml"
+    )
+    config_file_location = os.path.join(build_dir, "config.json")
 
     # Clone project repository.
     clone_path = git_clone_and_checkout(

@@ -643,6 +643,35 @@ class TestBuild:
         assert os.path.isfile("config.json")
         os.remove("config.json")
 
+    @pytest.mark.parametrize("build_id", ["../escape", "/abs", "a/../../escape"])
+    @patch("pubgrade.modules.endpoints.builds.git_clone_and_checkout")
+    def test_create_build_outside_base_dir(
+        self, clone: MagicMock, build_id: str, tmp_path: Path
+    ) -> None:
+        """Builds can't write outside the base directory.
+
+        Args:
+            clone: Mock of the function that clones the repository.
+            build_id: Identifier of the build.
+            tmp_path: Temporary directory, holding the base directory.
+        """
+        base_dir = tmp_path / "base"
+        base_dir.mkdir()
+        with pytest.raises(InternalServerError):
+            create_build(
+                repo_url=self.repository_url,
+                branch="dev",
+                commit="",
+                base_dir=str(base_dir),
+                build_id=build_id,
+                dockerfile_location="Dockerfile",
+                intermediate_registry_path="registry/image",
+                dockerhub_token="token",
+                project_access_token="access_token",
+            )
+        clone.assert_not_called()
+        assert list(tmp_path.iterdir()) == [base_dir]
+
     @patch("pubgrade.modules.endpoints.builds.build_push_image_using_kaniko")
     def test_create_build(self, push_image: MagicMock) -> None:
         """Test create build.
