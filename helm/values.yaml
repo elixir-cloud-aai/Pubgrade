@@ -8,11 +8,25 @@ hostName: ""
 builds:
   enabled: false
   # With builds on, the name of an existing Secret with the keys
-  # `gh_access_token`, `cosign_password`, `cosign_private_key` and
-  # `intermediate_registry_token`
+  # `gh_access_token`, `cosign_password`, `cosign_private_key` and, unless
+  # `builds.registry` names another Secret, `intermediate_registry_token`
   existingSecret: ""
   # URL at which the build pods reach Pubgrade
   pubgradeUrl: ""
+  # The registry that build pods push images to, from which the signing
+  # workflow pulls them; any OCI registry, e.g., Harbor. Used unless the app's
+  # configuration sets `endpoints.builds.intermediate_registery_format`
+  registry:
+    # Host, with its port if needed; Docker Hub by default
+    host: docker.io
+    # Namespace of the images, e.g., a Harbor project or a Docker Hub
+    # organization; images go to `<host>/<namespace>/<name>`
+    namespace: ""
+    # Secret and key with the registry's credentials, base64 of
+    # `<user>:<password>` (e.g., of a Harbor robot account); by default the
+    # key `intermediate_registry_token` of `builds.existingSecret`
+    existingSecret: ""
+    key: intermediate_registry_token
   # The volume that Pubgrade and the build pods share
   volume:
     storageClass: ""

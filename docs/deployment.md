@@ -141,6 +141,33 @@ the notifications have started already. Finished builds are only marked;
 their files, if their cleanup failed, are removed when their repository is
 deleted.
 
+### Registries
+
+Images can come from any registry that implements the OCI distribution API
+(e.g., Docker Hub, Harbor, GitLab, Quay or GHCR). With builds off, Pubgrade
+never contacts a registry: it passes the image name of the request,
+including its registry host (e.g., `harbor.example.org/project/app`), to
+the subscribers, which check for the image themselves (see the sidecar's
+[Deployment](sidecar/deployment.md)).
+
+With builds on, build pods push each image to an intermediate registry, set
+by the chart values `builds.registry.host` (default `docker.io`) and
+`builds.registry.namespace` (e.g., a Harbor project): the image `<registry
+host>/<project>/app:1.0` goes to `<host>/<namespace>/app`. The credentials
+are base64 of `<user>:<password>` (e.g., of a Harbor robot account that may
+push), by default in the key `intermediate_registry_token` of
+`builds.existingSecret`, or in `builds.registry.existingSecret` and
+`builds.registry.key`. The setting
+`endpoints.builds.intermediate_registery_format` of the app's configuration
+(a path with `{}` for the image's name) still works, and takes precedence
+over the chart values if it is set.
+
+The signing workflow (`endpoints.builds.gh_action_path`) then pulls the
+image from the intermediate registry, signs it and pushes it to its final
+name. It logs in to Docker Hub only, with the request's `dockerhub_token`:
+with builds on, images are still published to Docker Hub (and the
+intermediate registry must be one that the workflow can pull from).
+
 ## Upgrading to FOCA 0.21 (API 2.0.0)
 
 From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA
@@ -200,7 +227,14 @@ From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA
   (see [Usage](usage.md#cancel-a-build)), and the status of builds has the
   new value `CANCELED`: clients that check `status` against a fixed list
   of values need to accept it. Completion reports of canceled builds get a
-  409.
+  409. The intermediate registry can be set with the chart values
+  `builds.registry` (see [Registries](#registries)); before, only with
+  `endpoints.builds.intermediate_registery_format`, which still works and
+  takes precedence. Images whose name has a registry host or no namespace
+  (e.g., `harbor.example.org/project/app`, `app`) are built under their
+  last name part, `app`; before, a registry host broke the build. The
+  credentials of a Docker Hub intermediate registry are stored under
+  Docker's key for Docker Hub, so that build pods can push there.
 - **Image:** it runs as user 1000 (group 0), and its app files are read-only;
   any user ID works, e.g., on OpenShift.
 - **MongoDB:** FOCA 0.21 needs MongoDB 4.4 or later; the chart's MongoDB is

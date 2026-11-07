@@ -66,11 +66,19 @@ spec:
                 secretKeyRef:
                   name: {{ $secret }}
                   key: cosign_private_key
+            {{- with .Values.builds.registry }}
+            - name: INTERMEDIATE_REGISTRY_HOST
+              value: {{ .host | default "docker.io" | quote }}
+            {{- with .namespace }}
+            - name: INTERMEDIATE_REGISTRY_NAMESPACE
+              value: {{ . | quote }}
+            {{- end }}
             - name: INTERMEDIATE_REGISTRY_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: {{ $secret }}
-                  key: intermediate_registry_token
+                  name: {{ .existingSecret | default $secret }}
+                  key: {{ .key | default "intermediate_registry_token" }}
+            {{- end }}
             {{- end }}
           {{- if or .Values.builds.enabled .Values.pubgrade.configSecret }}
           volumeMounts:
