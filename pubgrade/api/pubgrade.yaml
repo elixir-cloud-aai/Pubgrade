@@ -575,6 +575,43 @@ paths:
                     - callback_url
                     - access_token
               #additionalProperties: false    #shows error bad request on using
+      callbacks:
+        notification:
+          '{$request.body#/callback_url}':
+            put:
+              summary: Notification of a new image
+              description: Pubgrade calls the subscription's `callback_url`
+                when the repository publishes an image whose `head_commit`
+                matches the subscription's `type` and `value`. Only the status
+                of the response counts, the body isn't read; a 2xx status
+                means `delivered`, any other status, a redirect or no
+                response within `endpoints.subscriptions.notification_timeout`
+                means `failed` (see the build's `notifications`). Redirects
+                aren't followed. A subscriber that takes longer answers at
+                once (e.g., with 202) and acts in the background, as
+                Pubgrade-Sidecar does.
+              parameters:
+                - in: header
+                  name: X-Access-Token
+                  required: true
+                  schema:
+                    type: string
+                  description: The `access_token` given when registering the
+                    subscription, for the subscriber to check that the call
+                    comes from Pubgrade.
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      $ref: '#/components/schemas/NotificationRequest'
+              responses:
+                '2XX':
+                  description: The subscriber accepted the notification
+                    (`delivered`).
+                default:
+                  description: The subscriber didn't accept the notification
+                    (`failed`).
       responses:
         '200':
           description: 'Subcription successfully created'
@@ -1064,6 +1101,23 @@ components:
               - status
               - started_at
               - finished_at
+    NotificationRequest:
+      type: object
+      description: Body of the call that notifies a subscriber of a new image
+        (callback `notification` of `POST /subscriptions`).
+      properties:
+        image_name:
+          type: string
+          description: Name of the image, without its tag, as published.
+          example: elixircloud/tesk-api
+        tag:
+          type: string
+          description: Tag of the image.
+          example: v1.2.0
+      required:
+        - image_name
+        - tag
+      additionalProperties: false
     Notification:
       type: object
       description: Result of notifying one subscription of a build.

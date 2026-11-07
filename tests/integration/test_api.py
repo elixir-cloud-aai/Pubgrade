@@ -7,7 +7,9 @@ from typing import Any
 
 from flask.testing import FlaskClient
 import pytest
+import yaml
 
+from pubgrade.app import CONFIG_FILE
 from pubgrade.errors.exceptions import BuildCanceled, GitRefNotFound, exceptions
 from pubgrade.modules.endpoints import builds
 from pubgrade.settings import collection, endpoints
@@ -195,6 +197,33 @@ def test_publish_notifies_subscribers(api: FlaskClient, subscriber: Subscriber) 
     assert sorted(item["subscription_id"] for item in listed) == sorted(
         [matching, other]
     )
+
+
+def test_notification_matches_spec(api: FlaskClient, subscriber: Subscriber) -> None:
+    """The notification is what the API's callback `notification` describes.
+
+    The callback of `POST /subscriptions` documents the call for subscribers
+    that write their own listener.
+    """
+    config = yaml.safe_load(CONFIG_FILE.read_text())
+    spec = yaml.safe_load(
+        (CONFIG_FILE.parent / config["api"]["specs"]["pubgrade"]["path"]).read_text()
+    )
+    callback = spec["paths"]["/subscriptions"]["post"]["callbacks"]["notification"][
+        "{$request.body#/callback_url}"
+    ]["put"]
+    schema = spec["components"]["schemas"]["NotificationRequest"]
+    user = register_user(api)
+    repository = register_repository(api)
+    subscribe(api, user, repository["id"], subscriber.url)
+    publish(api, repository, "1")
+    [received] = subscriber.received
+    assert [parameter["name"] for parameter in callback["parameters"]] == [
+        "X-Access-Token"
+    ]
+    assert received["token"] == "subscriber-token"
+    assert set(received["body"]) == set(schema["properties"]) == set(schema["required"])
+    assert all(isinstance(value, str) for value in received["body"].values())
 
 
 def test_publish_with_error_response(api: FlaskClient, subscriber: Subscriber) -> None:

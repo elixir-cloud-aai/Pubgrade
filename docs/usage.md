@@ -91,6 +91,30 @@ Results per subscription, once all calls are done, are in the field
 - `failed`: another response, or none in time.
 - `skipped`: the subscription doesn't match the build.
 
+### Receiving notifications without the sidecar
+
+Each notification is a `PUT` to the subscription's `callback_url`, with the
+subscription's `access_token` in the header `X-Access-Token` and the image
+in the body, split into name and tag at its last colon:
+
+```bash
+curl --request PUT '<callback URL>' \
+  --header 'X-Access-Token: <subscriber access token>' \
+  --header 'Content-Type: application/json' \
+  --data '{"image_name": "elixircloud/tesk-api", "tag": "v1.2.0"}'
+```
+
+A listener of your own, instead of [Pubgrade-Sidecar](sidecar/index.md),
+checks the token, answers with a 2xx status if it accepts the notification,
+and does the actual work (e.g., triggering a CD pipeline) in the background:
+it must answer within `notification_timeout`. Pubgrade only reads the status
+of the response, not its body, and doesn't follow redirects (a redirect
+counts as `failed`). It doesn't repeat failed notifications. The API
+describes the call as the callback `notification` of `POST /subscriptions`,
+with the body `NotificationRequest` (see [API](api.md)); Pubgrade-Sidecar's
+`PUT /deployment/<deployment name>` is an example of such a listener (see
+its [API](sidecar/api.md)).
+
 ## Cancel a build
 
 The repository's access token also allows withdrawing a build, e.g., one
