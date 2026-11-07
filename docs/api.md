@@ -45,6 +45,11 @@ Registrations are open until they are closed in the
 reference for the request and response bodies and the headers that carry the
 tokens. See [Usage](usage.md) for the typical flow.
 
+Pubgrade also calls subscribers: the notification of a new image, a `PUT` to
+the subscription's `callback_url`, is described as the callback
+`notification` of `POST /subscriptions`, with the body `NotificationRequest`
+(see [Usage](usage.md#receiving-notifications-without-the-sidecar)).
+
 Since version 2.0.0 of the API, errors are
 [problem details](https://www.rfc-editor.org/rfc/rfc9457)
 (`application/problem+json`), with `title`, `status` (an integer) and

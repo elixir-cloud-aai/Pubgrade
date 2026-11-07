@@ -141,6 +141,7 @@ class Subscriber:
                     {
                         "path": self.path,
                         "token": self.headers["X-Access-Token"],
+                        "content_type": self.headers["Content-Type"],
                         "body": json.loads(self.rfile.read(length)),
                     }
                 )
