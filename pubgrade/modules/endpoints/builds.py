@@ -41,8 +41,8 @@ BASE_DIR = os.getenv("BASE_DIR", "/pubgrade_temp_files")
 # signing of an image
 REQUEST_TIMEOUT = 30
 
-# An abbreviated or full commit hash (SHA-1)
-COMMIT_HASH = re.compile(r"[0-9a-fA-F]{4,40}")
+# An abbreviated or full commit hash (SHA-1 or SHA-256)
+COMMIT_HASH = re.compile(r"[0-9a-fA-F]{4,64}")
 
 # An image with a tag (no digest), optionally with a registry and its port,
 # following Docker's rules for references
@@ -233,11 +233,13 @@ def start_build(build_data: dict[str, Any], repo_url: str, access_token: str) ->
     if "branch" in head_commit:
         branch = head_commit["branch"]
         commit_sha = head_commit.get("commit_sha", "")
+        name = branch
     else:
         branch = ""
         commit_sha = head_commit["tag"]
-    # Empty names would build the repository's default branch
-    if branch == "" and commit_sha == "":
+        name = commit_sha
+    # An empty branch or tag would build the repository's default branch
+    if name == "":
         raise GitRefNotFound
     intermediate_registry_format = endpoints()["builds"][
         "intermediate_registery_format"
@@ -458,7 +460,7 @@ def resolve_tag_or_commit(repo: Repo, name: str) -> str:
 
     Args:
         repo: Clone of the repository.
-        name: Name of a tag, or a commit hash with 4 to 40 hexadecimal digits.
+        name: Name of a tag, or a commit hash with 4 to 64 hexadecimal digits.
 
     Returns:
         The full hash of the commit.

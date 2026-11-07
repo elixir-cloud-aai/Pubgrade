@@ -105,13 +105,14 @@ requests that need them get a 403, as does
 
 Pubgrade clones the repository and checks out the `branch` (and the
 `commit_sha`, if given) or the `tag` in `head_commit`. Branches and tags must
-be given by their exact names, and `commit_sha` as a commit hash (4 to 40
+be given by their exact names, and `commit_sha` as a commit hash (4 to 64
 hexadecimal digits); revision expressions such as `dev~1` aren't accepted.
-If one of them is empty or isn't in the repository, the request gets a 400
-that says so (before: a 500). A build that can't start, for this or another
-reason (e.g., a build pod that can't be created, which still gets a 500), is
-removed again, with its files: only builds whose identifier the client got
-are kept. While the repository is cloned, the build is listed as `QUEUED`.
+If the branch or tag is empty, or one of them isn't in the repository or (a
+short hash) isn't unique, the request gets a 400 that says so (before: a
+500). A build that can't start, for this or another reason (e.g., a build
+pod that can't be created, which still gets a 500), is removed again, with
+its files: only builds whose identifier the client got are kept. While the
+repository is cloned, the build is listed as `QUEUED`.
 
 ## Upgrading to FOCA 0.21 (API 2.0.0)
 

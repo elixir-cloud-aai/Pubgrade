@@ -44,6 +44,7 @@ from pubgrade.modules.endpoints.builds import (
     git_clone_and_checkout,
     register_builds,
     remove_files,
+    start_build,
 )
 from tests.helpers import FocaApp, make_config
 from tests.mock_data import (
@@ -506,6 +507,61 @@ class TestBuild:
             assert builds.collection("builds").count_documents({}) == 0
         assert repository is not None
         assert repository["build_list"] == MOCK_REPOSITORY_2["build_list"]
+
+    @pytest.mark.parametrize(
+        ("head_commit", "branch", "commit"),
+        [
+            ({"branch": "dev"}, "dev", ""),
+            ({"branch": "dev", "commit_sha": "abc1234"}, "dev", "abc1234"),
+            ({"tag": "v1"}, "", "v1"),
+        ],
+    )
+    def test_start_build(
+        self, head_commit: dict[str, str], branch: str, commit: str
+    ) -> None:
+        """A build checks out the branch (and commit) or the tag.
+
+        Args:
+            head_commit: Branch, commit or tag of the request.
+            branch: Expected branch to check out.
+            commit: Expected commit or tag to check out.
+        """
+        self.setup()
+        build = {**copy.deepcopy(MOCK_BUILD_PAYLOAD), "id": "build123"}
+        build["head_commit"] = head_commit
+        with (
+            patch.object(builds, "create_build") as create,
+            self.app.app_context(),
+        ):
+            start_build(build, self.repository_url, "access_token")
+        create.assert_called_once()
+        assert create.call_args.kwargs["branch"] == branch
+        assert create.call_args.kwargs["commit"] == commit
+        assert (
+            create.call_args.kwargs["intermediate_registry_path"]
+            == "ttl.sh/test-updater:1h"
+        )
+
+    @pytest.mark.parametrize(
+        "head_commit",
+        [{"tag": ""}, {"branch": ""}, {"branch": "", "commit_sha": "abcd"}],
+    )
+    def test_start_build_empty_name(self, head_commit: dict[str, str]) -> None:
+        """An empty branch or tag is rejected, instead of the default branch.
+
+        Args:
+            head_commit: Branch, commit or tag of the request.
+        """
+        self.setup()
+        build = {**copy.deepcopy(MOCK_BUILD_PAYLOAD), "id": "build123"}
+        build["head_commit"] = head_commit
+        with (
+            patch.object(builds, "create_build") as create,
+            self.app.app_context(),
+            pytest.raises(GitRefNotFound),
+        ):
+            start_build(build, self.repository_url, "access_token")
+        create.assert_not_called()
 
     def test_register_builds_failed_removal(
         self, caplog: pytest.LogCaptureFixture

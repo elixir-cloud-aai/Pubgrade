@@ -214,7 +214,8 @@ exceptions = {
         "title": "Bad Request",
         "status": 400,
         "detail": (
-            "The branch, tag or commit in `head_commit` isn't in the repository."
+            "The branch, tag or commit in `head_commit` is empty, isn't in the"
+            " repository or isn't unique."
         ),
     },
     URLNotFound: {
