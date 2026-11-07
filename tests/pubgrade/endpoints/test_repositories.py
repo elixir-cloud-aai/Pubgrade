@@ -128,6 +128,11 @@ class TestRepository:
             assert res[0] not in ".-" + string.digits
             assert res[-1] not in ".-" + string.digits
 
+    def test_generate_id_unusable_charset(self):
+        """Characters that can't start or end a value are rejected."""
+        with pytest.raises(ValueError, match="No character for the start"):
+            generate_id("_.-0", 3)
+
     def test_generate_id_skips_underscores(self):
         """Values never contain `_`."""
         for _ in range(20):
@@ -156,8 +161,10 @@ class TestRepository:
             return choice(charset)
 
         monkeypatch.setattr(repositories.secrets, "choice", recording_choice)
-        self.app.config.foca.endpoints["access_token"]["charset"] = (
-            "string.ascii_uppercase"
+        monkeypatch.setitem(
+            self.app.config.foca.endpoints["access_token"],
+            "charset",
+            "string.ascii_uppercase",
         )
         with self.app.app_context():
             res = register_repository(data={"url": self.repository_url})

@@ -59,16 +59,22 @@ from the Secret given by `pubgrade.configSecret`. The environment variable
 - `repository.id_charset`, `user.uid_charset` and `access_token.charset`
   (default: lowercase letters, digits, `.` and `-`): the characters of
   generated identifiers and access tokens, drawn with Python's `secrets`
-  module. Each is a list of names of character sets (`string.ascii_letters`,
-  `string.ascii_lowercase`, `string.ascii_uppercase`, `string.digits`,
-  `string.hexdigits`) and literal characters (e.g., `[string.digits, '.',
-  '-', abc]`), a string joining such items with `+` and literal characters in
-  quotes (e.g., `string.ascii_lowercase + string.digits + '.' + '-'`), a single
-  name, or a string of literal characters (e.g., `abcdef`). Generated values
-  never contain `_`, and neither start nor end with `.`, `-` or a digit, so
-  each setting needs at least one other character. Pubgrade checks these
-  settings at start and stops with an error naming the setting if one can't
-  be used.
+  module. Each takes one of these forms:
+    - a list of names of character sets and literal characters, optionally
+      in quotes: `[string.ascii_lowercase, string.digits, '.', '-']`;
+    - a string joining such names and quoted literal characters with `+`, or
+      listing them in brackets: `string.ascii_lowercase + string.digits +
+      '.' + '-'`;
+    - a single name or quoted string: `string.ascii_letters`, `'abcdef'`;
+    - any other string, as literal characters: `abcdef`.
+
+    The names are `string.ascii_letters`, `string.ascii_lowercase`,
+    `string.ascii_uppercase`, `string.digits` and `string.hexdigits`; a string
+    that mentions `string.` in any other way is an error. Literal characters
+    are ASCII letters, digits, `.`, `-`, `~` and `_`. Generated values never
+    contain `_`, and neither start nor end with `.`, `-` or a digit, so each
+    setting needs at least one other character. Pubgrade checks these settings
+    at start and stops with an error naming the setting if one can't be used.
 
 Log messages name repositories, users, subscriptions, builds and pods by
 their identifiers; they contain no access tokens or other credentials.
@@ -105,9 +111,10 @@ From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA
   them. The settings under `endpoints` stay as they are, but the character
   sets (`repository.id_charset`, `user.uid_charset`, `access_token.charset`)
   take only the forms listed under [Configuration](#configuration): names of
-  character sets and literal characters, no other Python expressions. The
-  image's values are unchanged; a value that can't be used stops the app at
-  start, with an error naming the setting.
+  character sets and literal characters (ASCII letters, digits, `.`, `-`,
+  `~`, `_`), no other Python expressions. The image's values are unchanged;
+  a value that can't be used stops the app at start, with an error naming
+  the setting.
 - **Errors** are problem details (see [API](api.md)), with `title`, `status`
   and `detail` instead of `msg` and `status_code`.
 - **Timestamps** are in UTC with time zone, and `finished_at` of an

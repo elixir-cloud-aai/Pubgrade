@@ -1,12 +1,12 @@
 import logging
 
+from pubgrade.charsets import get_charset
 from pubgrade.errors.exceptions import (
     RegistrationDisabled,
     UserNotFound,
     InternalServerError,
     NameNotFound,
 )
-from pubgrade.charsets import resolve_charset
 from pubgrade.modules.endpoints.repositories import generate_id
 from foca import get_config
 from pymongo.errors import DuplicateKeyError
@@ -51,19 +51,11 @@ def register_user(data: dict):
     )
     retries = get_config().endpoints["user"]["retries"]
     id_length: int = get_config().endpoints["user"]["uid_length"]
-    id_charset: str = get_config().endpoints["user"][
-        "uid_charset"
-    ]
+    id_charset = get_charset("user", "uid_charset")
     access_token_length: int = get_config().endpoints[
         "access_token"
     ]["length"]
-    access_token_charset: str = get_config().endpoints[
-        "access_token"
-    ]["charset"]
-    id_charset = resolve_charset(id_charset, "endpoints.user.uid_charset")
-    access_token_charset = resolve_charset(
-        access_token_charset, "endpoints.access_token.charset"
-    )
+    access_token_charset = get_charset("access_token", "charset")
 
     for i in range(retries):
         logger.debug(f"Trying to insert/update object: try {i}")

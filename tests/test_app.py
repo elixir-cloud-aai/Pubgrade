@@ -95,9 +95,21 @@ def test_main_runs_on_configured_port(
     assert ports == [8080]
 
 
-def test_create_app_checks_charsets(collections: Dict[str, Any]) -> None:
-    """A character set setting that can't be used stops the app at start."""
-    FakeFoca.app.app.config.foca.endpoints["user"]["uid_charset"] = "string.foo"
+def test_create_app_checks_charsets(
+    collections: Dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A character set setting that can't be used stops the app at start.
+
+    Nothing is written to the database then.
+
+    Args:
+        collections: Fixture with the collections of the database.
+        monkeypatch: Fixture to change the configuration.
+    """
+    collections["builds"].insert_one({"id": "b", "finished_at": "NULL"})
+    endpoints = FakeFoca.app.app.config.foca.endpoints
+    monkeypatch.setitem(endpoints["user"], "uid_charset", "string.foo")
     with pytest.raises(CharsetError, match="endpoints.user.uid_charset"):
         create_app()
     assert collections["admin_users"].count_documents({}) == 0
+    assert collections["builds"].find_one({"id": "b"})["finished_at"] == "NULL"

@@ -15,6 +15,7 @@ from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized
 
 from pubgrade.timestamps import now, repaired_build
+from pubgrade.charsets import get_charset
 from pubgrade.errors.exceptions import (
     BuildsDisabled,
     InvalidImage,
@@ -25,7 +26,6 @@ from pubgrade.errors.exceptions import (
     GitCloningError,
     InternalServerError,
 )
-from pubgrade.charsets import resolve_charset
 from pubgrade.modules.endpoints.repositories import generate_id
 from pubgrade.modules.endpoints.subscriptions import notify_all_subscriptions
 
@@ -139,10 +139,7 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
     id_length: int = get_config().endpoints["repository"][
         "id_length"
     ]
-    id_charset: str = get_config().endpoints["repository"][
-        "id_charset"
-    ]
-    id_charset = resolve_charset(id_charset, "endpoints.repository.id_charset")
+    id_charset = get_charset("repository", "id_charset")
 
     data_from_db = db_collection_repositories.find_one({"id": repository_id})
 

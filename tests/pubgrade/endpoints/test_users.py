@@ -62,11 +62,12 @@ class TestUsers:
             assert "name" in response
             assert sanitise_text(name) == response["name"]
 
-    def test_register_user_charsets(self):
+    def test_register_user_charsets(self, monkeypatch):
         """Identifiers and tokens use the characters the settings name."""
         self.setup()
-        self.app.config.foca.endpoints["user"]["uid_charset"] = "string.ascii_uppercase"
-        self.app.config.foca.endpoints["access_token"]["charset"] = ["x", "y"]
+        endpoints = self.app.config.foca.endpoints
+        monkeypatch.setitem(endpoints["user"], "uid_charset", "string.ascii_uppercase")
+        monkeypatch.setitem(endpoints["access_token"], "charset", ["x", "y"])
         with self.app.app_context():
             response = register_user({"name": "Name"})
         assert set(response["uid"]) <= set(string.ascii_uppercase)

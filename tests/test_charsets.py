@@ -7,7 +7,15 @@ from typing import Any
 import pytest
 import yaml
 
-from pubgrade.charsets import CharsetError, check_charsets, resolve_charset
+from flask import Flask
+from foca.models.config import Config
+
+from pubgrade.charsets import (
+    CharsetError,
+    check_charsets,
+    get_charset,
+    resolve_charset,
+)
 from tests.mock_data import ENDPOINT_CONFIG
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,6 +30,8 @@ DEFAULT = "".join(sorted(string.ascii_lowercase + string.digits + ".-"))
         [" string.ascii_lowercase", "string.digits ", "'.'", '"-"'],
         "string.ascii_lowercase + string.digits + '.' + '-'",
         "string.ascii_lowercase+string.digits+'.-'",
+        "[ '.' , '-', string.ascii_lowercase, string.digits]",
+        "[string.ascii_lowercase,string.digits,'.-']",
     ],
 )
 def test_resolve_named_and_literal(value: Any) -> None:
@@ -44,7 +54,12 @@ def test_resolve_named_and_literal(value: Any) -> None:
         (["abc", "b"], "abc"),
         (["string.hexdigits"], "".join(sorted(set(string.hexdigits)))),
         (["string.ascii_letters"], "".join(sorted(string.ascii_letters))),
-        ("a+b", "+ab"),
+        ("'abcdef'", "abcdef"),
+        ('"abc"', "abc"),
+        ("~a", "a~"),
+        ("['a']", "a"),
+        # Without `string.`, a name is taken as literal characters
+        ("ascii_lowercase", "aceilorsw"),
     ],
 )
 def test_resolve(value: Any, expected: str) -> None:
@@ -63,6 +78,17 @@ def test_resolve(value: Any, expected: str) -> None:
         ("string.punctuation", "unknown character set 'string.punctuation'"),
         (["string.letters"], "unknown character set 'string.letters'"),
         ("string.digits + string.foo", "unknown character set"),
+        ("string.digits + abc", "can't read"),
+        ("string.digits abc", "can't read"),
+        ("[string.ascii_lowercase + string.digits]", "can't read"),
+        ("a+b", "characters '+' not allowed"),
+        ("'.' + '+' + 'a'", "characters '+' not allowed"),
+        ("a b", "characters ' ' not allowed"),
+        (["string.digits", "a b"], "characters ' ' not allowed"),
+        (["/?#a"], "characters '#/?' not allowed"),
+        (["'\\N'"], "not allowed"),
+        ("[]", "characters '[]' not allowed"),
+        ("+", "characters '+' not allowed"),
         (12, "expected a string or a list of strings, got int"),
         (["a", 1], "expected a string or a list of strings, got list"),
         (None, "got NoneType"),
@@ -82,11 +108,6 @@ def test_resolve_errors(value: Any, message: str) -> None:
     with pytest.raises(CharsetError, match="^endpoints.user.uid_charset: ") as error:
         resolve_charset(value, "endpoints.user.uid_charset")
     assert message in str(error.value)
-
-
-def test_quoted_literal_with_bad_escape() -> None:
-    """A quoted item that isn't a valid string literal counts as characters."""
-    assert resolve_charset(["'\\N'"]) == "'N\\"
 
 
 def test_check_charsets_default_config() -> None:
@@ -127,3 +148,11 @@ def test_check_charsets_errors(endpoints: dict[str, Any], message: str) -> None:
     """
     with pytest.raises(CharsetError, match=f"^{message}"):
         check_charsets(endpoints)
+
+
+def test_get_charset() -> None:
+    """The app's settings are read from its configuration."""
+    app = Flask(__name__)
+    app.config.foca = Config(endpoints={"user": {"uid_charset": "string.digits+'x'"}})
+    with app.app_context():
+        assert get_charset("user", "uid_charset") == "0123456789x"
