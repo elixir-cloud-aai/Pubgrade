@@ -2267,13 +2267,15 @@ def test_config_file_for_intermediate_registry(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """The credentials of the intermediate registry are stored under its key."""
-    monkeypatch.setenv("INTERMEDIATE_REGISTRY_TOKEN", "dXNlcjpwYXNzd2Q=")
+    # Base64 of `user:passwd`, a test value
+    token = "dXNlcjpwYXNzd2Q="  # gitleaks:allow
+    monkeypatch.setenv("INTERMEDIATE_REGISTRY_TOKEN", token)
     settings = {"builds": {"intermediate_registery_format": "docker.io/org/{}"}}
     path = tmp_path / "config.json"
     with patch.object(builds, "endpoints", return_value=settings):
         create_dockerhub_config_file("token", str(path))
     assert json.loads(path.read_text()) == {
-        "auths": {"https://index.docker.io/v1/": {"auth": "dXNlcjpwYXNzd2Q="}}
+        "auths": {"https://index.docker.io/v1/": {"auth": token}}
     }
 
 
