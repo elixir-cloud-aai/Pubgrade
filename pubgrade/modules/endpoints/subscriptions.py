@@ -1,7 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor, wait
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from flask import current_app
 from foca import get_config
@@ -243,7 +243,7 @@ def delete_subscription(uid: str, user_access_token: str, subscription_id: str):
 
 def notify_subscriptions(
     subscription_id: str, image: str, build_id: str
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Notify one subscription of an image, if it matches the build.
 
     Sends a request to the callback URL of the subscription, if its type and
@@ -324,8 +324,8 @@ def notify_subscriptions(
 
 
 def notify_all_subscriptions(
-    subscription_ids: List[str], image: str, build_id: str
-) -> List[Dict[str, Any]]:
+    subscription_ids: list[str], image: str, build_id: str
+) -> list[dict[str, Any]]:
     """Notify subscriptions concurrently and store the results on the build.
 
     One subscription that fails or hangs affects none of the others: up to the
@@ -345,7 +345,7 @@ def notify_all_subscriptions(
     """
     app = current_app._get_current_object()
 
-    def notify(subscription_id: str) -> Dict[str, Any]:
+    def notify(subscription_id: str) -> dict[str, Any]:
         """Notify one subscription, turning all errors into its result.
 
         Args:
@@ -364,7 +364,7 @@ def notify_all_subscriptions(
                 logger.exception(f"Notifying subscription {subscription_id} failed.")
                 return _notification_result(subscription_id, "failed")
 
-    results: List[Dict[str, Any]] = []
+    results: list[dict[str, Any]] = []
     if subscription_ids:
         executor = ThreadPoolExecutor(
             max_workers=min(len(subscription_ids), _max_subscriptions())
@@ -417,8 +417,8 @@ def _notification_timeout() -> float:
 
 
 def _notification_result(
-    subscription_id: str, result: str, http_status: Optional[int] = None
-) -> Dict[str, Any]:
+    subscription_id: str, result: str, http_status: int | None = None
+) -> dict[str, Any]:
     """Create the result of a notification.
 
     Args:

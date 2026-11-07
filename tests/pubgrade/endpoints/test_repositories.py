@@ -67,19 +67,17 @@ class TestRepository:
         """Registration can be closed by configuration."""
         self.setup()
         self.app.config.foca.endpoints["repository"]["registration_enabled"] = False
-        with self.app.app_context():
-            with pytest.raises(RegistrationDisabled):
-                register_repository(data={"url": self.repository_url})
+        with self.app.app_context(), pytest.raises(RegistrationDisabled):
+            register_repository(data={"url": self.repository_url})
 
     def test_register_repository_url_not_found(self):
         self.setup()
         data = {}
-        with self.app.app_context():
-            with pytest.raises(URLNotFound):
-                res = register_repository(data=data)
-                assert "id" in res
-                assert "access_token" in res
-                assert isinstance(res, dict)
+        with self.app.app_context(), pytest.raises(URLNotFound):
+            res = register_repository(data=data)
+            assert "id" in res
+            assert "access_token" in res
+            assert isinstance(res, dict)
 
     def test_register_repository_duplicate_key_error(self):
         app = Flask(__name__)
@@ -95,9 +93,8 @@ class TestRepository:
             "repositories"
         ].client.insert_one = mock_resp
         request_data = {"url": self.repository_url}
-        with app.app_context():
-            with pytest.raises(InternalServerError):
-                register_repository(data=request_data)
+        with app.app_context(), pytest.raises(InternalServerError):
+            register_repository(data=request_data)
 
     def test_get_repositories(self):
         self.app.config.foca = Config(
@@ -187,9 +184,8 @@ class TestRepository:
 
     def test_get_repository_repository_not_found(self):
         self.setup()
-        with self.app.app_context():
-            with pytest.raises(RepositoryNotFound):
-                get_repository("abcd")
+        with self.app.app_context(), pytest.raises(RepositoryNotFound):
+            get_repository("abcd")
 
     def test_modify_repository_info(self):
         self.setup()
@@ -206,18 +202,14 @@ class TestRepository:
     def test_modify_repository_info_repository_not_found(self):
         self.setup()
         data = {"url": self.repository_url}
-        with self.app.app_context():
-            with pytest.raises(RepositoryNotFound):
-                modify_repository_info(
-                    "abcd", MOCK_REPOSITORIES[1]["access_token"], data
-                )
+        with self.app.app_context(), pytest.raises(RepositoryNotFound):
+            modify_repository_info("abcd", MOCK_REPOSITORIES[1]["access_token"], data)
 
     def test_modify_repository_info_unauthorized(self):
         self.setup()
         data = {"url": self.repository_url}
-        with self.app.app_context():
-            with pytest.raises(Unauthorized):
-                modify_repository_info(MOCK_REPOSITORIES[1]["id"], "access_token", data)
+        with self.app.app_context(), pytest.raises(Unauthorized):
+            modify_repository_info(MOCK_REPOSITORIES[1]["id"], "access_token", data)
 
     def test_delete_repository(self):
         self.setup()
@@ -230,12 +222,10 @@ class TestRepository:
 
     def test_delete_repository_repository_not_found(self):
         self.setup()
-        with self.app.app_context():
-            with pytest.raises(RepositoryNotFound):
-                delete_repository("abcd", MOCK_REPOSITORIES[1]["access_token"])
+        with self.app.app_context(), pytest.raises(RepositoryNotFound):
+            delete_repository("abcd", MOCK_REPOSITORIES[1]["access_token"])
 
     def test_delete_repository_unauthorized(self):
         self.setup()
-        with self.app.app_context():
-            with pytest.raises(Unauthorized):
-                delete_repository(MOCK_REPOSITORIES[1]["id"], "access_token")
+        with self.app.app_context(), pytest.raises(Unauthorized):
+            delete_repository(MOCK_REPOSITORIES[1]["id"], "access_token")

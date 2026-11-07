@@ -1,20 +1,22 @@
-"""Mock data for testing"""
+"""Mock data for testing."""
 
-INDEX_CONFIG = {"keys": [("id", -1)]}
-INDEX_CONFIG_USERS = {"keys": [("uid", -1)]}
+from typing import Any
 
-COLLECTION_CONFIG = {
+INDEX_CONFIG: dict[str, Any] = {"keys": [("id", -1)]}
+INDEX_CONFIG_USERS: dict[str, Any] = {"keys": [("uid", -1)]}
+
+COLLECTION_CONFIG: dict[str, Any] = {
     "indexes": [INDEX_CONFIG],
 }
 
-COLLECTION_CONFIG_USERS = {
+COLLECTION_CONFIG_USERS: dict[str, Any] = {
     "indexes": [INDEX_CONFIG_USERS],
 }
-COLLECTION_CONFIG_ADMIN_USERS = {
+COLLECTION_CONFIG_ADMIN_USERS: dict[str, Any] = {
     "indexes": [INDEX_CONFIG_USERS],
 }
 
-DB_CONFIG = {
+DB_CONFIG: dict[str, Any] = {
     "collections": {
         "repositories": COLLECTION_CONFIG,
         "builds": COLLECTION_CONFIG,
@@ -24,14 +26,14 @@ DB_CONFIG = {
     },
 }
 
-MONGO_CONFIG = {
+MONGO_CONFIG: dict[str, Any] = {
     "host": "mongodb",
     "port": 27017,
     "dbs": {
         "pubgradeStore": DB_CONFIG,
     },
 }
-ENDPOINT_CONFIG = {
+ENDPOINT_CONFIG: dict[str, Any] = {
     "repository": {
         "id_charset": ["string.ascii_lowercase", "string.digits", ".", "-"],
         "id_length": 6,
@@ -60,31 +62,26 @@ ENDPOINT_CONFIG = {
     },
 }
 
-MOCK_REPOSITORY_1 = {
-    "url": "https://github.com/akash2237778/Pubgrade-test",
-    "id": "repo_123",
-    "access_token": "access_token",
-}
-MOCK_REPOSITORY_1 = {
+MOCK_REPOSITORY_1: dict[str, Any] = {
     "url": "https://github.com/akash2237778/Pubgrade-test",
     "id": "repo12",
     "access_token": "access_token",
 }
 
-MOCK_REPOSITORY_2 = {
+MOCK_REPOSITORY_2: dict[str, Any] = {
     "url": "https://github.com/akash2237778/Pubgrade-test",
     "id": "eiic.g",
     "access_token": "g.i.ssstitrti.ccier.tgsactt.iosg",
     "build_list": ["eiic.gngdgrs", "eiic.gnabmns"],
     "subscription_list": ["tnglot"],
 }
-MOCK_REPOSITORIES = [MOCK_REPOSITORY_1, MOCK_REPOSITORY_2]
-MOCK_POST_REPOSITORY = {
+MOCK_REPOSITORIES: list[dict[str, Any]] = [MOCK_REPOSITORY_1, MOCK_REPOSITORY_2]
+MOCK_POST_REPOSITORY: dict[str, Any] = {
     "access_token": "xxxxxxxxxxxxxx",
     "id": "repository_123",
 }
 
-MOCK_BUILD_INFO = {
+MOCK_BUILD_INFO: dict[str, Any] = {
     "images": [{"name": "akash7778/test-updater:0.0.1", "location": "./Dockerfile"}],
     "head_commit": {
         "branch": "main",
@@ -96,7 +93,7 @@ MOCK_BUILD_INFO = {
     "started_at": "2021-08-04T17:40:58.344809",
     "status": "QUEUED",
 }
-MOCK_BUILD_INFO_2 = {
+MOCK_BUILD_INFO_2: dict[str, Any] = {
     "images": [{"name": "akash7778/updater:0.0.1", "location": "./Dockerfile"}],
     "head_commit": {"tag": "0.4.2"},
     "dockerhub_token": "dockerhub token",
@@ -106,7 +103,7 @@ MOCK_BUILD_INFO_2 = {
     "status": "QUEUED",
 }
 
-MOCK_BUILD_PAYLOAD = {
+MOCK_BUILD_PAYLOAD: dict[str, Any] = {
     "images": [{"name": "akash7778/test-updater:0.0.1", "location": "./Dockerfile"}],
     "head_commit": {
         "branch": "main",
@@ -115,8 +112,8 @@ MOCK_BUILD_PAYLOAD = {
     "dockerhub_token": "dockerhub token",
 }
 
-MOCK_SUBSCRIPTION = {"subscription_id": "subscription-xyz"}
-MOCK_SUBSCRIPTION_INFO = {
+MOCK_SUBSCRIPTION: dict[str, Any] = {"subscription_id": "subscription-xyz"}
+MOCK_SUBSCRIPTION_INFO: dict[str, Any] = {
     "repository_id": "eiic.g",
     "callback_url": "https://ec2-54-203-145-132.compute-1.amazonaws.com/update",
     "access_token": "xxxxxxxxxxxx",
@@ -126,34 +123,34 @@ MOCK_SUBSCRIPTION_INFO = {
     "state": "Inactive",
 }
 
-MOCK_USER = {
+MOCK_USER: dict[str, Any] = {
     "uid": "9fe2c4e93f654fdbb24c02b15259716c",
     "user_access_token": "c42a6d44e3d0",
     "name": "Akash Saini",
     "isVerified": True,
 }
 
-MOCK_ADMIN_USER_1 = {
+MOCK_ADMIN_USER_1: dict[str, Any] = {
     "uid": "akash.saini",
     "user_access_token": "c42a6d44e3d0",
     "name": "Akash Saini",
 }
 
-MOCK_USER_NOT_VERIFIED = {
+MOCK_USER_NOT_VERIFIED: dict[str, Any] = {
     "uid": "9fe2c4e93f65424c02b15259716c",
     "user_access_token": "c42a6e3d0",
     "name": "Akash Saini",
     "isVerified": False,
 }
 
-MOCK_USER_DB = {
+MOCK_USER_DB: dict[str, Any] = {
     "uid": "9fe2c4e93f654fdbb24c02b15259716c",
     "name": "Akash Saini",
     "user_access_token": "c42a6d44e3d0",
     "isVerified": True,
     "subscription_list": ["tnglot"],
 }
-SUBSCRIPTION_PAYLOAD = {
+SUBSCRIPTION_PAYLOAD: dict[str, Any] = {
     "repository_id": "eiic.g",
     "callback_url": "https://ec2-54-203-145-132.compute-1.amazonaws.com/update",
     "access_token": "xxxxxxxxxxxx",
@@ -161,7 +158,7 @@ SUBSCRIPTION_PAYLOAD = {
     "value": "dev",
     "id": "tnglot",
 }
-MOCK_ENDPOINT = {
+MOCK_ENDPOINT: dict[str, Any] = {
     "repository": {
         "id_charset": "A",
         "id_length": 1,

@@ -8,7 +8,7 @@ can finish within Kubernetes' default grace period of 30 seconds.
 `GUNICORN_CMD_ARGS` overrides these settings.
 """
 
-from foca.gunicorn_config import *  # noqa: F401,F403
+from foca.gunicorn_config import *  # noqa: F403
 
 threads = 16
 graceful_timeout = 28

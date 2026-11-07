@@ -1,7 +1,7 @@
 """Tests for the timestamps of stored objects."""
 
 import datetime
-from typing import Any, Dict, List
+from typing import Any
 
 import mongomock
 
@@ -89,7 +89,7 @@ class _WrittenMeanwhile:
     subscription while the repair runs.
     """
 
-    def __init__(self, collection: Any, change: Dict[str, Any]) -> None:
+    def __init__(self, collection: Any, change: dict[str, Any]) -> None:
         """Wrap a collection.
 
         Args:
@@ -99,7 +99,7 @@ class _WrittenMeanwhile:
         self.collection = collection
         self.change = change
 
-    def find(self, *args: Any) -> List[Dict[str, Any]]:
+    def find(self, *args: Any) -> list[dict[str, Any]]:
         """Read documents, then let them change.
 
         Args:

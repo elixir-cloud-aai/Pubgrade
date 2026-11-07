@@ -75,9 +75,8 @@ def register_user(data: dict):
         )
         raise InternalServerError
 
-    if "_id" in user_object:
-        del user_object["_id"]
-        # del user_object['isVerified']
+    user_object.pop("_id", None)
+    # del user_object['isVerified']
     logger.info(f"Added user {user_object['uid']}.")
     return user_object
 

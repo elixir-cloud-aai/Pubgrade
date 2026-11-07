@@ -98,7 +98,7 @@ def on_config(config: MkDocsConfig) -> MkDocsConfig:
     nav: list[NavItem] | None = sidecar_config.get("nav")
     if not nav:
         raise PluginError(f"{SIDECAR}/mkdocs.yml has no `nav`")
-    config.nav = list(config.nav or []) + [{SECTION: [_prefix(i) for i in nav]}]
+    config.nav = [*list(config.nav or []), {SECTION: [_prefix(i) for i in nav]}]
     return config
 
 

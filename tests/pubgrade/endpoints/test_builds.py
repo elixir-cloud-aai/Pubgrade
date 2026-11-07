@@ -28,7 +28,7 @@ from pubgrade.errors.exceptions import (
     InvalidImage,
     RepositoryNotFound,
 )
-import pubgrade.modules.endpoints.builds as builds
+from pubgrade.modules.endpoints import builds
 from pubgrade.modules.endpoints.builds import (
     IMAGE_WITH_TAG,
     build_completed,
@@ -267,35 +267,32 @@ class TestBuild:
         self.app.config.foca.db.dbs["pubgradeStore"].collections[
             "builds"
         ].client.insert_one = mock_resp
-        with self.app.app_context():
-            with pytest.raises(InternalServerError):
-                register_builds(
-                    MOCK_REPOSITORIES[1]["id"],
-                    MOCK_REPOSITORIES[1]["access_token"],
-                    MOCK_BUILD_PAYLOAD,
-                )
+        with self.app.app_context(), pytest.raises(InternalServerError):
+            register_builds(
+                MOCK_REPOSITORIES[1]["id"],
+                MOCK_REPOSITORIES[1]["access_token"],
+                MOCK_BUILD_PAYLOAD,
+            )
 
     @patch("pubgrade.modules.endpoints.builds.create_build", mocked_create_build)
     def test_register_builds_unauthorized(self):
         self.setup()
-        with self.app.app_context():
-            with pytest.raises(Unauthorized):
-                register_builds(
-                    MOCK_REPOSITORIES[1]["id"],
-                    "access_token",
-                    MOCK_BUILD_PAYLOAD,
-                )
+        with self.app.app_context(), pytest.raises(Unauthorized):
+            register_builds(
+                MOCK_REPOSITORIES[1]["id"],
+                "access_token",
+                MOCK_BUILD_PAYLOAD,
+            )
 
     @patch("pubgrade.modules.endpoints.builds.create_build", mocked_create_build)
     def test_register_builds_repository_not_found(self):
         self.setup()
-        with self.app.app_context():
-            with pytest.raises(RepositoryNotFound):
-                register_builds(
-                    "id",
-                    MOCK_REPOSITORIES[1]["access_token"],
-                    MOCK_BUILD_PAYLOAD,
-                )
+        with self.app.app_context(), pytest.raises(RepositoryNotFound):
+            register_builds(
+                "id",
+                MOCK_REPOSITORIES[1]["access_token"],
+                MOCK_BUILD_PAYLOAD,
+            )
 
     def test_get_builds(self):
         self.setup_with_build()
@@ -306,15 +303,13 @@ class TestBuild:
 
     def test_get_builds_build_not_found(self):
         self.setup()
-        with self.app.app_context():
-            with pytest.raises(BuildNotFound):
-                get_builds(MOCK_REPOSITORIES[1]["id"])
+        with self.app.app_context(), pytest.raises(BuildNotFound):
+            get_builds(MOCK_REPOSITORIES[1]["id"])
 
     def test_get_builds_repository_not_found(self):
         self.setup()
-        with self.app.app_context():
-            with pytest.raises(RepositoryNotFound):
-                get_builds("abcd")
+        with self.app.app_context(), pytest.raises(RepositoryNotFound):
+            get_builds("abcd")
 
     def test_get_build_info(self):
         self.setup_with_build()
@@ -347,9 +342,8 @@ class TestBuild:
 
     def test_get_build_info_build_not_found(self):
         self.setup_with_build()
-        with self.app.app_context():
-            with pytest.raises(BuildNotFound):
-                get_build_info("abcd")
+        with self.app.app_context(), pytest.raises(BuildNotFound):
+            get_build_info("abcd")
 
     def test_git_clone_and_checkout(self):
         clone_path = git_clone_and_checkout(
@@ -537,55 +531,50 @@ class TestBuild:
             self.app.config.foca.db.dbs["pubgradeStore"].collections["builds"].client
         )
         builds_collection.insert_one({"id": "other", "status": "QUEUED"})
-        with self.app.app_context():
-            with pytest.raises(BuildNotFound):
-                build_completed(
-                    MOCK_REPOSITORY_2["id"],
-                    "other",
-                    MOCK_REPOSITORY_2["access_token"],
-                )
+        with self.app.app_context(), pytest.raises(BuildNotFound):
+            build_completed(
+                MOCK_REPOSITORY_2["id"],
+                "other",
+                MOCK_REPOSITORY_2["access_token"],
+            )
         assert builds_collection.find_one({"id": "other"})["status"] == "QUEUED"
 
     def test_build_completed_listed_build_is_gone(self):
         """A build listed at the repository, but no longer stored, isn't found."""
         self.setup()
-        with self.app.app_context():
-            with pytest.raises(BuildNotFound):
-                build_completed(
-                    MOCK_REPOSITORY_2["id"],
-                    MOCK_REPOSITORY_2["build_list"][0],
-                    MOCK_REPOSITORY_2["access_token"],
-                )
+        with self.app.app_context(), pytest.raises(BuildNotFound):
+            build_completed(
+                MOCK_REPOSITORY_2["id"],
+                MOCK_REPOSITORY_2["build_list"][0],
+                MOCK_REPOSITORY_2["access_token"],
+            )
 
     def test_build_completed_build_not_found(self):
         self.setup_with_build()
-        with self.app.app_context():
-            with pytest.raises(BuildNotFound):
-                build_completed(
-                    MOCK_REPOSITORY_2["id"],
-                    "build12",
-                    MOCK_REPOSITORY_2["access_token"],
-                )
+        with self.app.app_context(), pytest.raises(BuildNotFound):
+            build_completed(
+                MOCK_REPOSITORY_2["id"],
+                "build12",
+                MOCK_REPOSITORY_2["access_token"],
+            )
 
     def test_build_completed_unauthorized(self):
         self.setup_with_build()
-        with self.app.app_context():
-            with pytest.raises(Unauthorized):
-                build_completed(
-                    MOCK_REPOSITORY_2["id"],
-                    MOCK_REPOSITORY_2["build_list"][0],
-                    "123",
-                )
+        with self.app.app_context(), pytest.raises(Unauthorized):
+            build_completed(
+                MOCK_REPOSITORY_2["id"],
+                MOCK_REPOSITORY_2["build_list"][0],
+                "123",
+            )
 
     def test_build_completed_repository_not_found(self):
         self.setup_with_build()
-        with self.app.app_context():
-            with pytest.raises(RepositoryNotFound):
-                build_completed(
-                    "repo125",
-                    MOCK_REPOSITORY_2["build_list"][0],
-                    MOCK_REPOSITORY_2["access_token"],
-                )
+        with self.app.app_context(), pytest.raises(RepositoryNotFound):
+            build_completed(
+                "repo125",
+                MOCK_REPOSITORY_2["build_list"][0],
+                MOCK_REPOSITORY_2["access_token"],
+            )
 
     @patch("pubgrade.modules.endpoints.builds.delete_pod", mocked_delete_pod)
     def test_remove_files(self):
@@ -622,9 +611,8 @@ class TestBuild:
     @patch("kubernetes.config.kube_config.KubeConfigLoader", MockKubeConfigLoader)
     def test_build_push_image_using_kaniko_create_pod_error(self):
         builds.template_file = "pubgrade/modules/endpoints/kaniko/template.yaml"
-        with self.app.app_context():
-            with pytest.raises(CreatePodError):
-                build_push_image_using_kaniko(builds.template_file)
+        with self.app.app_context(), pytest.raises(CreatePodError):
+            build_push_image_using_kaniko(builds.template_file)
 
     @patch("kubernetes.client.api.core_v1_api.CoreV1Api", mocked_core_v1_api)
     @patch(
@@ -641,9 +629,8 @@ class TestBuild:
         mocked_delete_namespaced_pod_error,
     )
     def test_delete_pod_api_error(self):
-        with self.app.app_context():
-            with pytest.raises(DeletePodError):
-                builds.delete_pod("name", "namespace")
+        with self.app.app_context(), pytest.raises(DeletePodError):
+            builds.delete_pod("name", "namespace")
 
     @patch("kubernetes.config.load_incluster_config", mocked_load_incluster_config)
     @patch(
@@ -703,11 +690,10 @@ class TestBuild:
     ):
         """Errors of the Kubernetes API are logged by status and reason."""
         monkeypatch.delenv("KUBERNETES_SERVICE_HOST", raising=False)
-        with self.app.app_context():
-            with pytest.raises(CreatePodError) as raised:
-                build_push_image_using_kaniko(
-                    "pubgrade/modules/endpoints/kaniko/template.yaml"
-                )
+        with self.app.app_context(), pytest.raises(CreatePodError) as raised:
+            build_push_image_using_kaniko(
+                "pubgrade/modules/endpoints/kaniko/template.yaml"
+            )
         assert [(r.levelno, r.getMessage()) for r in caplog.records] == [
             (
                 logging.ERROR,
@@ -729,9 +715,8 @@ class TestBuild:
         monkeypatch.delenv("KUBERNETES_SERVICE_HOST", raising=False)
         deployment_file = tmp_path / "pod.yaml"
         deployment_file.write_text("kind: Pod\nmetadata: {}\n")
-        with self.app.app_context():
-            with pytest.raises(CreatePodError) as raised:
-                build_push_image_using_kaniko(str(deployment_file))
+        with self.app.app_context(), pytest.raises(CreatePodError) as raised:
+            build_push_image_using_kaniko(str(deployment_file))
         assert caplog.messages == ["Creating pod None failed: 422 Unprocessable Entity"]
         assert raised.value.__suppress_context__
 
@@ -742,9 +727,8 @@ class TestBuild:
     )
     def test_delete_pod_error_logs_no_body(self, caplog):
         """Errors of the Kubernetes API are logged by status and reason."""
-        with self.app.app_context():
-            with pytest.raises(DeletePodError) as raised:
-                builds.delete_pod("name", "namespace")
+        with self.app.app_context(), pytest.raises(DeletePodError) as raised:
+            builds.delete_pod("name", "namespace")
         assert [(r.levelno, r.getMessage()) for r in caplog.records] == [
             (
                 logging.ERROR,
@@ -915,9 +899,8 @@ class TestPublish:
 
     def test_publish_unauthorized_before_validation(self):
         """A wrong token gets a 401, whatever the request is."""
-        with self.app.app_context():
-            with pytest.raises(Unauthorized):
-                register_builds(self.repository["id"], "wrong", {"images": []})
+        with self.app.app_context(), pytest.raises(Unauthorized):
+            register_builds(self.repository["id"], "wrong", {"images": []})
 
     @patch("pubgrade.modules.endpoints.builds.create_build")
     def test_build_rejects_image_without_tag(self, create_build):
@@ -965,10 +948,9 @@ class TestPublish:
 
     def test_build_completed_rejected(self):
         """`PUT` on a build is rejected."""
-        with self.app.app_context():
-            with pytest.raises(BuildsDisabled):
-                build_completed(
-                    self.repository["id"],
-                    "build",
-                    self.repository["access_token"],
-                )
+        with self.app.app_context(), pytest.raises(BuildsDisabled):
+            build_completed(
+                self.repository["id"],
+                "build",
+                self.repository["access_token"],
+            )

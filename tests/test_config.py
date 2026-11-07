@@ -2,7 +2,7 @@
 
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Dict
+from typing import Any
 
 from flask import Flask
 from foca import Foca
@@ -16,7 +16,7 @@ from tests.mock_data import ENDPOINT_CONFIG, MONGO_CONFIG
 
 
 @pytest.fixture(name="config")
-def fixture_config() -> Dict[str, Any]:
+def fixture_config() -> dict[str, Any]:
     """Load the default configuration.
 
     Returns:
@@ -26,13 +26,13 @@ def fixture_config() -> Dict[str, Any]:
     return yaml.safe_load(path.read_text())
 
 
-def test_no_debug_mode(config: Dict[str, Any]) -> None:
+def test_no_debug_mode(config: dict[str, Any]) -> None:
     """Debug and development settings are off."""
     assert config["server"]["debug"] is False
     assert config["server"]["testing"] is False
 
 
-def test_request_bodies_limited(config: Dict[str, Any]) -> None:
+def test_request_bodies_limited(config: dict[str, Any]) -> None:
     """Request bodies are limited in size."""
     assert config["server"]["max_content_length"] == 1048576
 
@@ -44,12 +44,12 @@ def test_valid_for_foca() -> None:
     assert foca.conf.api.specs
 
 
-def test_no_users(config: Dict[str, Any]) -> None:
+def test_no_users(config: dict[str, Any]) -> None:
     """Deployments bring their own admin users and tokens."""
     assert config["endpoints"]["subscriptions"]["admin_users"] == []
 
 
-def test_builds_off(config: Dict[str, Any]) -> None:
+def test_builds_off(config: dict[str, Any]) -> None:
     """Builds are off, without settings for particular deployments."""
     builds = config["endpoints"]["builds"]
     assert builds["enabled"] is False

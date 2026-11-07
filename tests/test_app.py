@@ -1,7 +1,7 @@
 """Tests for the app factory and the entry point for development."""
 
 from types import SimpleNamespace
-from typing import Any, Dict, List
+from typing import Any
 
 from flask import Flask
 from foca.models.config import Config, MongoConfig
@@ -17,7 +17,7 @@ from tests.mock_data import ENDPOINT_CONFIG, MONGO_CONFIG
 class FakeFoca:
     """Stands in for FOCA: returns an app with in-memory collections."""
 
-    config_files: List[Any] = []
+    config_files: list[Any] = []
     app: Any = None
 
     def __init__(self, config_file: Any) -> None:
@@ -38,7 +38,7 @@ class FakeFoca:
 
 
 @pytest.fixture(name="collections")
-def fixture_collections(monkeypatch: pytest.MonkeyPatch) -> Dict[str, Any]:
+def fixture_collections(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     """Prepare a FOCA app with in-memory collections, and return them.
 
     Args:
@@ -69,7 +69,7 @@ def fixture_collections(monkeypatch: pytest.MonkeyPatch) -> Dict[str, Any]:
     return collections
 
 
-def test_create_app(collections: Dict[str, Any]) -> None:
+def test_create_app(collections: dict[str, Any]) -> None:
     """The factory creates the admin users and repairs stored timestamps."""
     collections["builds"].insert_one(
         {"id": "b", "started_at": "2026-01-02T03:04:05", "finished_at": "NULL"}
@@ -84,17 +84,31 @@ def test_create_app(collections: Dict[str, Any]) -> None:
 
 
 def test_main_runs_on_configured_port(
-    collections: Dict[str, Any], monkeypatch: pytest.MonkeyPatch
+    collections: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The development server runs the app on the configured port."""
-    ports: List[int] = []
-    monkeypatch.setattr(FakeFoca.app, "run", lambda port: ports.append(port))
+    """The development server runs the app on the configured port.
+
+    Args:
+        collections: Fixture with the collections of the database.
+        monkeypatch: Fixture to replace the server.
+    """
+    ports: list[int] = []
+
+    def run(port: int) -> None:
+        """Record the port instead of serving.
+
+        Args:
+            port: Port to serve on.
+        """
+        ports.append(port)
+
+    monkeypatch.setattr(FakeFoca.app, "run", run)
     main()
     assert ports == [8080]
 
 
 def test_create_app_checks_charsets(
-    collections: Dict[str, Any], monkeypatch: pytest.MonkeyPatch
+    collections: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A character set setting that can't be used stops the app at start.
 

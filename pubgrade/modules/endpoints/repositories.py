@@ -77,8 +77,7 @@ def register_repository(data: dict):
         )
         raise InternalServerError
 
-    if "_id" in repository_object:
-        del repository_object["_id"]
+    repository_object.pop("_id", None)
     del repository_object["url"]
     logger.info(f"Added repository {repository_object['id']}.")
     return repository_object

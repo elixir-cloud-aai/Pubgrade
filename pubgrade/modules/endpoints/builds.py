@@ -284,8 +284,7 @@ def create_build(
     dockerhub_token: str,
     project_access_token: str,
 ):
-    """
-    Create build and push to DockerHub.
+    """Create build and push to DockerHub.
 
     Args:
         repo_url (str): URL of git repository to be cloned.
@@ -356,7 +355,7 @@ def git_clone_and_checkout(
     clone_path = "%s/%s/%s" % (
         base_dir,
         build_id,
-        repo_url.split("/")[4].split(".")[0],
+        repo_url.split("/")[4].split(".", maxsplit=1)[0],
     )
     try:
         # Check if head commit is branch or tag.
@@ -409,7 +408,7 @@ def create_deployment_YAML(
     """
     try:
         build_id = deployment_file_location.split("/")[2]
-        file_stream = open(template_file, "r")
+        file_stream = open(template_file)
         data = yaml.load(file_stream, Loader=yaml.FullLoader)
         data["metadata"]["name"] = build_id
         data["spec"]["containers"][0]["args"] = [
@@ -486,10 +485,7 @@ def build_push_image_using_kaniko(deployment_file_location: str):
     """
     # Retrieve values of NAMESPACE and KUBERNETES_SERVICE_HOST from
     # environment variables.
-    if os.getenv("NAMESPACE"):
-        namespace = os.getenv("NAMESPACE")
-    else:
-        namespace = "default"
+    namespace = os.getenv("NAMESPACE") if os.getenv("NAMESPACE") else "default"
     if os.getenv("KUBERNETES_SERVICE_HOST"):
         config.load_incluster_config()
     else:

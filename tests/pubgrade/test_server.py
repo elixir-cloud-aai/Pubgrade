@@ -6,7 +6,7 @@ import pytest
 try:
     from unittest.mock import MagicMock, patch  # Python 3 @UnresolvedImport
 except Exception:
-    from mock import MagicMock, patch
+    from unittest.mock import MagicMock, patch
 
 from pubgrade.errors.exceptions import RepositoryNotFound
 from pubgrade.modules.server import (
@@ -73,7 +73,8 @@ def test_getRepositories():
 
 def test_postRepositories():
     """Test for creating a new repository with an auto-generated
-    identifier."""
+    identifier.
+    """
     app = Flask(__name__)
     app.config.foca = Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
     app.config.foca.db.dbs["pubgradeStore"].collections[

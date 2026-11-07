@@ -89,15 +89,13 @@ class TestUsers:
         """Registration can be closed by configuration."""
         self.setup()
         self.app.config.foca.endpoints["user"]["registration_enabled"] = False
-        with self.app.app_context():
-            with pytest.raises(RegistrationDisabled):
-                register_user({"name": "Name"})
+        with self.app.app_context(), pytest.raises(RegistrationDisabled):
+            register_user({"name": "Name"})
 
     def test_register_user_keyerror(self):
         self.setup()
-        with self.app.app_context():
-            with pytest.raises(NameNotFound):
-                register_user({"wrong_name_key": "Akash Saini"})
+        with self.app.app_context(), pytest.raises(NameNotFound):
+            register_user({"wrong_name_key": "Akash Saini"})
 
     def test_register_user_duplicate_key_error(self):
         app = Flask(__name__)
@@ -112,9 +110,8 @@ class TestUsers:
         app.config.foca.db.dbs["pubgradeStore"].collections[
             "users"
         ].client.insert_one = mock_resp
-        with app.app_context():
-            with pytest.raises(InternalServerError):
-                register_user({"name": "Akash Saini"})
+        with app.app_context(), pytest.raises(InternalServerError):
+            register_user({"name": "Akash Saini"})
 
     def test_delete_user(self):
         self.setup()
@@ -139,12 +136,11 @@ class TestUsers:
         self.app.config.foca.db.dbs["pubgradeStore"].collections[
             "subscriptions"
         ].client.insert_one(MOCK_SUBSCRIPTION_INFO)
-        with self.app.app_context():
-            with pytest.raises(UserNotFound):
-                delete_user(
-                    uid="wrong_uid",
-                    user_access_token=MOCK_USER["user_access_token"],
-                )
+        with self.app.app_context(), pytest.raises(UserNotFound):
+            delete_user(
+                uid="wrong_uid",
+                user_access_token=MOCK_USER["user_access_token"],
+            )
 
     def test_delete_user_unauthorized(self):
         self.setup()
@@ -154,12 +150,11 @@ class TestUsers:
         self.app.config.foca.db.dbs["pubgradeStore"].collections[
             "subscriptions"
         ].client.insert_one(MOCK_SUBSCRIPTION_INFO)
-        with self.app.app_context():
-            with pytest.raises(Unauthorized):
-                delete_user(
-                    uid=MOCK_USER["uid"],
-                    user_access_token="wrong_access_token",
-                )
+        with self.app.app_context(), pytest.raises(Unauthorized):
+            delete_user(
+                uid=MOCK_USER["uid"],
+                user_access_token="wrong_access_token",
+            )
 
     def test_delete_key_error(self):
         self.app.config.foca = Config(
@@ -189,9 +184,8 @@ class TestUsers:
 
     def test_get_users_user_not_found(self):
         self.setup()
-        with self.app.app_context():
-            with pytest.raises(UserNotFound):
-                get_users("wrong_uid", "wrong_user_access_token")
+        with self.app.app_context(), pytest.raises(UserNotFound):
+            get_users("wrong_uid", "wrong_user_access_token")
 
     def test_get_users_unauthorized(self):
         self.setup()
@@ -222,14 +216,13 @@ class TestUsers:
 
     def test_toggle_user_status_superuser_not_found(self):
         self.setup()
-        with self.app.app_context():
-            with pytest.raises(UserNotFound):
-                toggle_user_status(
-                    "wrong_uid",
-                    "wrong_user_access_token",
-                    MOCK_USER_DB["uid"],
-                    False,
-                )
+        with self.app.app_context(), pytest.raises(UserNotFound):
+            toggle_user_status(
+                "wrong_uid",
+                "wrong_user_access_token",
+                MOCK_USER_DB["uid"],
+                False,
+            )
 
     def test_toggle_user_status_unauthorized(self):
         self.setup()

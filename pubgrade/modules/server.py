@@ -35,7 +35,8 @@ def getRepositories():
     """Get available Repositories.
 
     Returns:
-        An array of Repository Objects"""
+        An array of Repository Objects
+    """
     return get_repositories()
 
 

@@ -162,13 +162,12 @@ class TestSubscriptions:
         """Registration can be closed by configuration."""
         self.setup()
         self.app.config.foca.endpoints["subscriptions"]["registration_enabled"] = False
-        with self.app.app_context():
-            with pytest.raises(RegistrationDisabled):
-                register_subscription(
-                    MOCK_USER["uid"],
-                    MOCK_USER["user_access_token"],
-                    SUBSCRIPTION_PAYLOAD,
-                )
+        with self.app.app_context(), pytest.raises(RegistrationDisabled):
+            register_subscription(
+                MOCK_USER["uid"],
+                MOCK_USER["user_access_token"],
+                SUBSCRIPTION_PAYLOAD,
+            )
 
     def test_register_subscription_limit(self):
         """A repository takes no more subscriptions than configured."""
@@ -193,50 +192,45 @@ class TestSubscriptions:
         self.app.config.foca.db.dbs["pubgradeStore"].collections[
             "subscriptions"
         ].client.insert_one = mock_resp
-        with self.app.app_context():
-            with pytest.raises(InternalServerError):
-                register_subscription(
-                    MOCK_USER["uid"],
-                    MOCK_USER["user_access_token"],
-                    SUBSCRIPTION_PAYLOAD,
-                )
+        with self.app.app_context(), pytest.raises(InternalServerError):
+            register_subscription(
+                MOCK_USER["uid"],
+                MOCK_USER["user_access_token"],
+                SUBSCRIPTION_PAYLOAD,
+            )
 
     def test_register_subscription_repo_not_found(self):
         self.setup()
-        with self.app.app_context():
-            with pytest.raises(RepositoryNotFound):
-                SUBSCRIPTION_PAYLOAD["repository_id"] = "abcd"
-                register_subscription(
-                    MOCK_USER["uid"],
-                    MOCK_USER["user_access_token"],
-                    SUBSCRIPTION_PAYLOAD,
-                )
+        with self.app.app_context(), pytest.raises(RepositoryNotFound):
+            SUBSCRIPTION_PAYLOAD["repository_id"] = "abcd"
+            register_subscription(
+                MOCK_USER["uid"],
+                MOCK_USER["user_access_token"],
+                SUBSCRIPTION_PAYLOAD,
+            )
 
     def test_register_subscription_user_not_verified(self):
         self.setup()
-        with self.app.app_context():
-            with pytest.raises(UserNotVerified):
-                register_subscription(
-                    MOCK_USER_NOT_VERIFIED["uid"],
-                    MOCK_USER_NOT_VERIFIED["user_access_token"],
-                    SUBSCRIPTION_PAYLOAD,
-                )
+        with self.app.app_context(), pytest.raises(UserNotVerified):
+            register_subscription(
+                MOCK_USER_NOT_VERIFIED["uid"],
+                MOCK_USER_NOT_VERIFIED["user_access_token"],
+                SUBSCRIPTION_PAYLOAD,
+            )
 
     def test_register_subscription_unauthorized(self):
         self.setup()
-        with self.app.app_context():
-            with pytest.raises(Unauthorized):
-                register_subscription(
-                    MOCK_USER["uid"], "user_access_token", SUBSCRIPTION_PAYLOAD
-                )
+        with self.app.app_context(), pytest.raises(Unauthorized):
+            register_subscription(
+                MOCK_USER["uid"], "user_access_token", SUBSCRIPTION_PAYLOAD
+            )
 
     def test_register_subscription_user_not_found(self):
         self.setup()
-        with self.app.app_context():
-            with pytest.raises(UserNotFound):
-                register_subscription(
-                    "uid", MOCK_USER["user_access_token"], SUBSCRIPTION_PAYLOAD
-                )
+        with self.app.app_context(), pytest.raises(UserNotFound):
+            register_subscription(
+                "uid", MOCK_USER["user_access_token"], SUBSCRIPTION_PAYLOAD
+            )
 
     def test_get_subscriptions(self):
         self.app.config.foca = Config(
@@ -277,33 +271,29 @@ class TestSubscriptions:
         self.app.config.foca.db.dbs["pubgradeStore"].collections[
             "users"
         ].client.insert_one(MOCK_USER_DB)
-        with self.app.app_context():
-            with pytest.raises(SubscriptionNotFound):
-                get_subscriptions(MOCK_USER["uid"], MOCK_USER["user_access_token"])
+        with self.app.app_context(), pytest.raises(SubscriptionNotFound):
+            get_subscriptions(MOCK_USER["uid"], MOCK_USER["user_access_token"])
 
     def test_get_subscriptions_unauthorized(self):
         self.setup()
         self.insert_subscription()
-        with self.app.app_context():
-            with pytest.raises(Unauthorized):
-                get_subscriptions(MOCK_USER["uid"], "user_access_token")
+        with self.app.app_context(), pytest.raises(Unauthorized):
+            get_subscriptions(MOCK_USER["uid"], "user_access_token")
 
     def test_get_subscriptions_user_not_found(self):
         self.setup()
         self.insert_subscription()
-        with self.app.app_context():
-            with pytest.raises(UserNotFound):
-                get_subscriptions("uid", MOCK_USER["user_access_token"])
+        with self.app.app_context(), pytest.raises(UserNotFound):
+            get_subscriptions("uid", MOCK_USER["user_access_token"])
 
     def test_get_subscriptions_user_not_verified(self):
         self.setup()
         self.insert_subscription()
-        with self.app.app_context():
-            with pytest.raises(UserNotVerified):
-                get_subscriptions(
-                    MOCK_USER_NOT_VERIFIED["uid"],
-                    MOCK_USER_NOT_VERIFIED["user_access_token"],
-                )
+        with self.app.app_context(), pytest.raises(UserNotVerified):
+            get_subscriptions(
+                MOCK_USER_NOT_VERIFIED["uid"],
+                MOCK_USER_NOT_VERIFIED["user_access_token"],
+            )
 
     def test_get_subscription_info(self):
         self.setup()
@@ -339,46 +329,42 @@ class TestSubscriptions:
 
     def test_get_subscription_info_subscription_not_found(self):
         self.setup()
-        with self.app.app_context():
-            with pytest.raises(SubscriptionNotFound):
-                get_subscription_info(
-                    MOCK_USER["uid"],
-                    MOCK_USER["user_access_token"],
-                    MOCK_SUBSCRIPTION_INFO["id"],
-                )
+        with self.app.app_context(), pytest.raises(SubscriptionNotFound):
+            get_subscription_info(
+                MOCK_USER["uid"],
+                MOCK_USER["user_access_token"],
+                MOCK_SUBSCRIPTION_INFO["id"],
+            )
 
     def test_get_subscription_info_unauthorized(self):
         self.setup()
         self.insert_subscription()
-        with self.app.app_context():
-            with pytest.raises(Unauthorized):
-                get_subscription_info(
-                    MOCK_USER["uid"],
-                    "access_token",
-                    MOCK_SUBSCRIPTION_INFO["id"],
-                )
+        with self.app.app_context(), pytest.raises(Unauthorized):
+            get_subscription_info(
+                MOCK_USER["uid"],
+                "access_token",
+                MOCK_SUBSCRIPTION_INFO["id"],
+            )
 
     def test_get_subscription_info_user_not_found(self):
         self.setup()
         self.insert_subscription()
-        with self.app.app_context():
-            with pytest.raises(UserNotFound):
-                get_subscription_info(
-                    "uid",
-                    MOCK_USER["user_access_token"],
-                    MOCK_SUBSCRIPTION_INFO["id"],
-                )
+        with self.app.app_context(), pytest.raises(UserNotFound):
+            get_subscription_info(
+                "uid",
+                MOCK_USER["user_access_token"],
+                MOCK_SUBSCRIPTION_INFO["id"],
+            )
 
     def test_get_subscription_info_user_not_verified(self):
         self.setup()
         self.insert_subscription()
-        with self.app.app_context():
-            with pytest.raises(UserNotVerified):
-                get_subscription_info(
-                    MOCK_USER_NOT_VERIFIED["uid"],
-                    MOCK_USER_NOT_VERIFIED["user_access_token"],
-                    MOCK_SUBSCRIPTION_INFO["id"],
-                )
+        with self.app.app_context(), pytest.raises(UserNotVerified):
+            get_subscription_info(
+                MOCK_USER_NOT_VERIFIED["uid"],
+                MOCK_USER_NOT_VERIFIED["user_access_token"],
+                MOCK_SUBSCRIPTION_INFO["id"],
+            )
 
     def test_delete_subscription(self):
         self.setup()
@@ -392,44 +378,38 @@ class TestSubscriptions:
 
     def test_delete_subscription_subscription_not_found(self):
         self.setup()
-        with self.app.app_context():
-            with pytest.raises(SubscriptionNotFound):
-                delete_subscription(
-                    MOCK_USER["uid"], MOCK_USER["user_access_token"], "id"
-                )
+        with self.app.app_context(), pytest.raises(SubscriptionNotFound):
+            delete_subscription(MOCK_USER["uid"], MOCK_USER["user_access_token"], "id")
 
     def test_delete_subscription_unauthorized(self):
         self.setup()
         self.insert_subscription()
-        with self.app.app_context():
-            with pytest.raises(Unauthorized):
-                delete_subscription(
-                    MOCK_USER["uid"],
-                    "access_token",
-                    MOCK_SUBSCRIPTION_INFO["id"],
-                )
+        with self.app.app_context(), pytest.raises(Unauthorized):
+            delete_subscription(
+                MOCK_USER["uid"],
+                "access_token",
+                MOCK_SUBSCRIPTION_INFO["id"],
+            )
 
     def test_delete_subscription_user_not_found(self):
         self.setup()
         self.insert_subscription()
-        with self.app.app_context():
-            with pytest.raises(UserNotFound):
-                delete_subscription(
-                    "uid",
-                    MOCK_USER["user_access_token"],
-                    MOCK_SUBSCRIPTION_INFO["id"],
-                )
+        with self.app.app_context(), pytest.raises(UserNotFound):
+            delete_subscription(
+                "uid",
+                MOCK_USER["user_access_token"],
+                MOCK_SUBSCRIPTION_INFO["id"],
+            )
 
     def test_delete_subscription_user_not_verified(self):
         self.setup()
         self.insert_subscription()
-        with self.app.app_context():
-            with pytest.raises(UserNotVerified):
-                delete_subscription(
-                    MOCK_USER_NOT_VERIFIED["uid"],
-                    MOCK_USER_NOT_VERIFIED["user_access_token"],
-                    MOCK_SUBSCRIPTION_INFO["id"],
-                )
+        with self.app.app_context(), pytest.raises(UserNotVerified):
+            delete_subscription(
+                MOCK_USER_NOT_VERIFIED["uid"],
+                MOCK_USER_NOT_VERIFIED["user_access_token"],
+                MOCK_SUBSCRIPTION_INFO["id"],
+            )
 
     @patch("requests.request", mocked_request_api)
     def test_notify_subscriptions(self):
@@ -454,25 +434,23 @@ class TestSubscriptions:
     def test_notify_subscriptions_subscription_not_found(self):
         self.setup()
         self.insert_subscription()
-        with self.app.app_context():
-            with pytest.raises(SubscriptionNotFound):
-                notify_subscriptions(
-                    "id",
-                    "elixir-cloud-aai/pubgrade:0.0.1",
-                    MOCK_BUILD_INFO["id"],
-                )
+        with self.app.app_context(), pytest.raises(SubscriptionNotFound):
+            notify_subscriptions(
+                "id",
+                "elixir-cloud-aai/pubgrade:0.0.1",
+                MOCK_BUILD_INFO["id"],
+            )
 
     @patch("requests.request", mocked_request_api)
     def test_notify_subscriptions_build_not_found(self):
         self.setup()
         self.insert_subscription()
-        with self.app.app_context():
-            with pytest.raises(BuildNotFound):
-                notify_subscriptions(
-                    MOCK_SUBSCRIPTION_INFO["id"],
-                    "elixir-cloud-aai/pubgrade:0.0.1",
-                    "id",
-                )
+        with self.app.app_context(), pytest.raises(BuildNotFound):
+            notify_subscriptions(
+                MOCK_SUBSCRIPTION_INFO["id"],
+                "elixir-cloud-aai/pubgrade:0.0.1",
+                "id",
+            )
 
     @patch("requests.request", mocked_request_api_timeout_error)
     def test_notify_subscriptions_timeout(self):
@@ -788,13 +766,12 @@ class TestSubscriptions:
         self.app.config.foca.db.dbs["pubgradeStore"].collections[
             "subscriptions"
         ].client.insert_one(MOCK_SUBSCRIPTION_INFO)
-        with self.app.app_context():
-            with pytest.raises(SubscriptionNotFound):
-                get_subscription_info(
-                    MOCK_USER["uid"],
-                    MOCK_USER["user_access_token"],
-                    MOCK_SUBSCRIPTION_INFO["id"],
-                )
+        with self.app.app_context(), pytest.raises(SubscriptionNotFound):
+            get_subscription_info(
+                MOCK_USER["uid"],
+                MOCK_USER["user_access_token"],
+                MOCK_SUBSCRIPTION_INFO["id"],
+            )
 
     def test_delete_subscription_of_other_user(self):
         """Users only delete their own subscriptions."""
@@ -802,13 +779,12 @@ class TestSubscriptions:
         self.app.config.foca.db.dbs["pubgradeStore"].collections[
             "subscriptions"
         ].client.insert_one(MOCK_SUBSCRIPTION_INFO)
-        with self.app.app_context():
-            with pytest.raises(SubscriptionNotFound):
-                delete_subscription(
-                    MOCK_USER["uid"],
-                    MOCK_USER["user_access_token"],
-                    MOCK_SUBSCRIPTION_INFO["id"],
-                )
+        with self.app.app_context(), pytest.raises(SubscriptionNotFound):
+            delete_subscription(
+                MOCK_USER["uid"],
+                MOCK_USER["user_access_token"],
+                MOCK_SUBSCRIPTION_INFO["id"],
+            )
 
     def test_subscription_gone_but_listed(self):
         """A subscription listed for its user, but deleted, isn't found."""
