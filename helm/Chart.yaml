@@ -2,5 +2,11 @@ apiVersion: v2
 name: pubgrade
 description: Pubgrade, a publish-subscribe service that notifies deployments of updates
 type: application
+# One version for the app and the chart: the release workflow checks that the
+# tag `vX.Y.Z` matches `version` (its SemVer form, e.g., `1.2.3-rc1` for
+# `1.2.3rc1`), `appVersion` and `__version__` in `pubgrade/__init__.py`, which
+# the release-prep pull request sets (see "Versioning and releases" in
+# `docs/development.md`). The packaged chart of a release defaults to the
+# images of the release
 version: 0.2.0
 appVersion: 0.1.0

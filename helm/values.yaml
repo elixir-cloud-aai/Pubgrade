@@ -18,13 +18,17 @@ builds:
     storageClass: ""
     size: 2Gi
   updater:
-    # `dev` follows the branch; pin `sha-<commit>` to control upgrades
+    # In the repository `dev`, which follows the branch; the chart of a
+    # release uses the image of the release. Pin `X.Y.Z` or `sha-<commit>` to
+    # control upgrades
     image: elixircloud/pubgrade-updater:dev
     imagePullPolicy: Always
     resources: {}
 
 pubgrade:
-  # `dev` follows the branch; pin `sha-<commit>` to control upgrades
+  # In the repository `dev`, which follows the branch; the chart of a release
+  # uses the image of the release. Pin `X.Y.Z` or `sha-<commit>` to control
+  # upgrades
   image: elixircloud/pubgrade:dev
   imagePullPolicy: Always
   replicaCount: 1

@@ -54,7 +54,8 @@ The job `CI passed` sums up all other jobs and is the only required check.
 
 Pushes to `dev` publish `elixircloud/pubgrade` and
 `elixircloud/pubgrade-updater`, signed with Sigstore and tagged `dev` and
-`sha-<commit>`. The tag `latest` stays as it is until there are releases.
+`sha-<commit>`; releases tag `X.Y.Z` and `latest` (see
+[Versioning and releases](#versioning-and-releases)).
 Publishing runs in the environment `dev-images` (branch `dev` only), with the
 Docker Hub secrets `DOCKERHUB_LOGIN` and `DOCKERHUB_TOKEN`; the variable
 `DOCKERHUB_ORG` sets the Docker Hub organization (by default `elixircloud`),
@@ -100,8 +101,72 @@ python -m venv .venv
 
 The build fails on warnings, e.g. of broken links.
 
-## Versioning
+## Versioning and releases
 
-The project follows [semantic versioning](https://semver.org/). It has no
-releases yet and is in beta, so the API may change without notice; use the
-image tags `dev` or `sha-<commit>` (see [CI](#ci)).
+The project follows [semantic versioning](https://semver.org/). It is in
+beta, so the API may change without notice. The app, its two images and its
+chart are released together, with one version: the tag `vX.Y.Z` (or
+`vX.Y.ZaN`, `vX.Y.ZbN` and `vX.Y.ZrcN` for pre-releases), `__version__` in
+`pubgrade/__init__.py`, the chart's `appVersion` and `version` (the SemVer
+form, e.g., `1.2.3-rc1` for `1.2.3rc1`), and the version in `CITATION.cff`.
+Until 1.0.0, all releases are GitHub pre-releases.
+
+For the first release, the chart's `version` (0.2.0, from before the release
+workflow) and the app's version (0.1.0) differ; the release-prep pull request
+sets both, e.g., to 0.2.0.
+
+1. Release-prep pull request to `dev`: set the version in
+   `pubgrade/__init__.py`, `helm/Chart.yaml` (`version` and `appVersion`) and
+   `CITATION.cff` (`python scripts/citation.py set <version>`, which also sets
+   the release date).
+2. Once CI has passed for its commit on `dev`, bring that commit to `main`.
+3. Tag it on `main` with a signed, annotated tag and push the tag:
+   `git tag -s v<version> -m v<version>`, then
+   `git push origin v<version>`.
+
+The [release workflow](https://github.com/elixir-cloud-aai/Pubgrade/blob/dev/.github/workflows/release.yml)
+checks the tag (a release version, annotated, with a signature that GitHub
+verified, on `main`), that the versions above match it
+(`scripts/check_versions.py` and `scripts/citation.py check`) and that CI
+passed for a push of the commit. It packages the chart, with the images of
+the release as defaults (`elixircloud/pubgrade:X.Y.Z` and
+`elixircloud/pubgrade-updater:X.Y.Z`), pushes both images by digest, scans
+them, then attests and signs the images and the chart, tags the images
+`X.Y.Z` (and `latest` if it is the highest stable release;
+`scripts/release_version.py`) and creates the GitHub release, with the chart
+and its Sigstore bundle attached. Pushing the images and publishing the
+release each need approval in the environment `release`, which holds the
+Docker Hub secrets `DOCKERHUB_LOGIN` and `DOCKERHUB_TOKEN`. Verify a released
+image's signature with:
+
+```bash
+cosign verify elixircloud/pubgrade:<version> \
+  --certificate-identity-regexp '^https://github\.com/elixir-cloud-aai/Pubgrade/\.github/workflows/release\.yml@refs/tags/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+The release gets GitHub's generated notes; for a first release (no published
+release before it), `scripts/release_notes.py` builds them instead, because
+without a previous tag GitHub starts at an older tag of its own choice. Edit
+the notes by hand into the agreed format after publishing: the notes of
+immutable releases stay editable, their assets don't. So the release is
+created as a draft, gets its assets and is published last
+(`scripts/release_assets.py`); a re-run of failed jobs finishes it. Don't
+re-run all jobs of a release that was published: that builds new image
+digests and moves the release's image tags to them before it fails at the
+release.
+
+The images are scanned for known vulnerabilities with Trivy: in CI, in the
+release workflow before the images are signed and tagged, and weekly for
+`latest`
+([`scan.yml`](https://github.com/elixir-cloud-aai/Pubgrade/blob/dev/.github/workflows/scan.yml)).
+The scans of the app's image in CI and of releases fail on critical and high
+vulnerabilities that have a fix; accept a finding only with a reason and an
+expiry date, in `.trivyignore.yaml`. The updater's image, which isn't built
+on FOCA, is reported only. The weekly scan doesn't fail until the first
+release, as `latest` is still an image from January 2025 on FOCA 0.7; once
+the first release has published `latest`, drop `fail: "false"` there for
+`pubgrade` so that it fails too.
+
+The scripts in `scripts/` use only the standard library and are tested in
+`tests/scripts/`, with the app's coverage.

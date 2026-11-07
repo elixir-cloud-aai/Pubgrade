@@ -31,8 +31,10 @@ for all values. Pubgrade's pods run as any user ID in group 0, with no fixed
 ID, as OpenShift assigns its own.
 
 The images are `elixircloud/pubgrade` and `elixircloud/pubgrade-updater` on
-Docker Hub. Until there are releases, use the tag `dev`, which follows the
-branch `dev`, or `sha-<commit>` to control upgrades; `latest` is outdated.
+Docker Hub. The chart of a release (attached to the GitHub release) uses the
+images of that release (`X.Y.Z`); the chart in the repository uses `dev`,
+which follows the branch `dev`. Pin `X.Y.Z` or `sha-<commit>` to control
+upgrades. Until the first release, `latest` is outdated.
 
 ## Configuration
 
