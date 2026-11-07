@@ -73,8 +73,11 @@ from the Secret given by `pubgrade.configSecret`. The environment variable
     `string.ascii_uppercase`, `string.digits` and `string.hexdigits`; anything
     else that looks like a name (e.g., in quotes, misspelt, or without
     `string.`) is an error. Literal characters are ASCII letters, digits,
-    `.`, `-` and `~`. Generated values neither start nor end with `.`, `-` or
-    a digit, so each setting needs at least one other character. Pubgrade checks these settings
+    `.`, `-` and `~`; for `repository.id_charset`, whose identifiers also
+    name the Kubernetes pods of builds, only lowercase letters, digits, `.`
+    and `-`. Each setting needs at least two characters. Generated values
+    neither start nor end with `.`, `-` or a digit, so each setting needs at
+    least one other character. Pubgrade checks these settings
     at start and stops with an error naming the setting if one can't be used.
 
 Log messages name repositories, users, subscriptions, builds and pods by
@@ -113,9 +116,11 @@ From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA
   sets (`repository.id_charset`, `user.uid_charset`, `access_token.charset`)
   take only the forms listed under [Configuration](#configuration): names of
   character sets and literal characters (ASCII letters, digits, `.`, `-`,
-  `~`), no other Python expressions and no other characters (e.g., `_`,
-  spaces, `!`, non-ASCII). The image's values are unchanged; a value that
-  can't be used stops the app at start, with an error naming the setting.
+  `~`; for `repository.id_charset` only lowercase letters, digits, `.` and
+  `-`), at least two of them, no other Python expressions and no other
+  characters (e.g., `_`, spaces, `!`, non-ASCII). The image's values are
+  unchanged; a value that can't be used stops the app at start, with an
+  error naming the setting.
 - **Errors** are problem details (see [API](api.md)), with `title`, `status`
   and `detail` instead of `msg` and `status_code`.
 - **Timestamps** are in UTC with time zone, and `finished_at` of an

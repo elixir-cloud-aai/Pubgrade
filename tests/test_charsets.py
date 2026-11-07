@@ -49,14 +49,14 @@ def test_resolve_named_and_literal(value: Any) -> None:
         ("string.digits + 'a'", "0123456789a"),
         ("string.ascii_uppercase", string.ascii_uppercase),
         ("abca", "abc"),
-        ("A", "A"),
+        ("AB", "AB"),
         (["abc", "b"], "abc"),
         (["string.hexdigits"], "".join(sorted(set(string.hexdigits)))),
         (["string.ascii_letters"], "".join(sorted(string.ascii_letters))),
         ("'abcdef'", "abcdef"),
         ('"abc"', "abc"),
         ("~a", "a~"),
-        ("['a']", "a"),
+        ("['ab']", "ab"),
     ],
 )
 def test_resolve(value: Any, expected: str) -> None:
@@ -89,8 +89,10 @@ def test_resolve(value: Any, expected: str) -> None:
         (12, "expected a string or a list of strings, got int"),
         (["a", 1], "expected a string or a list of strings, got list"),
         (None, "got NoneType"),
-        ("", "needs at least one character"),
-        ([], "needs at least one character"),
+        ("", "needs at least two characters"),
+        ([], "needs at least two characters"),
+        ("a", "needs at least two characters"),
+        (["a", "a"], "needs at least two characters"),
         ("string.digits", "needs at least one character"),
         ([".", "-", "0"], "needs at least one character"),
         ("a_b", "characters '_' not allowed"),
@@ -146,6 +148,14 @@ def test_check_charsets_mock_config() -> None:
             {**ENDPOINT_CONFIG, "access_token": None},
             "endpoints.access_token.charset: missing",
         ),
+        (
+            {**ENDPOINT_CONFIG, "repository": {"id_charset": "string.ascii_letters"}},
+            "endpoints.repository.id_charset: characters 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'",
+        ),
+        (
+            {**ENDPOINT_CONFIG, "repository": {"id_charset": "ab~"}},
+            "endpoints.repository.id_charset: characters '~' not allowed",
+        ),
     ],
 )
 def test_check_charsets_errors(endpoints: dict[str, Any], message: str) -> None:
@@ -165,3 +175,11 @@ def test_get_charset() -> None:
     app.config.foca = Config(endpoints={"user": {"uid_charset": "string.digits+'x'"}})
     with app.app_context():
         assert get_charset("user", "uid_charset") == "0123456789x"
+
+
+def test_get_charset_repository() -> None:
+    """Repository identifiers take lowercase letters, digits, `.` and `-` only."""
+    app = Flask(__name__)
+    app.config.foca = Config(endpoints={"repository": {"id_charset": "AB"}})
+    with app.app_context(), pytest.raises(CharsetError, match="'AB' not allowed"):
+        get_charset("repository", "id_charset")

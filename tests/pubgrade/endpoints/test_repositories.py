@@ -170,6 +170,7 @@ class TestRepository:
             res = register_repository(data={"url": self.repository_url})
         expected = "".join(sorted(string.ascii_lowercase + string.digits + ".-"))
         assert set(charsets) == {expected, string.ascii_uppercase}
+        assert len(res["id"]) == 6
         assert set(res["id"]) <= set(expected)
         assert len(res["access_token"]) == 32
         assert set(res["access_token"]) <= set(string.ascii_uppercase)

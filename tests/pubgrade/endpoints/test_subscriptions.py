@@ -124,7 +124,7 @@ class TestSubscriptions:
         """Identifiers use the characters of the repositories' setting."""
         self.setup()
         monkeypatch.setitem(
-            self.app.config.foca.endpoints["repository"], "id_charset", "Q"
+            self.app.config.foca.endpoints["repository"], "id_charset", "qz"
         )
         with self.app.app_context():
             res = register_subscription(
@@ -132,7 +132,8 @@ class TestSubscriptions:
                 MOCK_USER["user_access_token"],
                 SUBSCRIPTION_PAYLOAD,
             )
-        assert set(res["subscription_id"]) == {"Q"}
+        assert len(res["subscription_id"]) == 6
+        assert set(res["subscription_id"]) <= {"q", "z"}
 
     def test_register_subscription(self):
         self.setup()

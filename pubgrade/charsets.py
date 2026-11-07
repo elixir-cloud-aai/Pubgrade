@@ -14,7 +14,9 @@ identifiers and access tokens consist of, as one of:
 - any other string, as literal characters (e.g., `abcdef`).
 
 Literal characters are ASCII letters, digits, `.`, `-` and `~`, which URLs
-take as they are.
+take as they are; repository identifiers, which also name Kubernetes
+resources of builds, only lowercase letters, digits, `.` and `-`. Each
+setting needs at least two characters.
 The app checks the settings at start (`check_charsets()`), so that a mistake
 stops it with an error instead of failing requests.
 """
@@ -39,6 +41,9 @@ NAMED: dict[str, str] = {
 
 # Characters that the settings may contain
 ALLOWED = frozenset(string.ascii_letters + string.digits + ".-~")
+# Characters of repository identifiers, which also name Kubernetes resources
+# of builds (lowercase RFC 1123 names)
+ALLOWED_REPOSITORY = frozenset(string.ascii_lowercase + string.digits + ".-")
 
 # Characters that generated values never contain (`EXCLUDED`), or not at
 # their start or end (`NOT_AT_ENDS`); cf. `generate_id()`
@@ -137,20 +142,35 @@ def _item(item: str, setting: str) -> str:
     return item
 
 
-def resolve_charset(value: Any, setting: str = "charset") -> str:
+def _allowed(section: str) -> frozenset[str]:
+    """Return the characters that a section's character set may contain.
+
+    Args:
+        section: Section under `endpoints`, e.g., `repository`.
+
+    Returns:
+        `ALLOWED_REPOSITORY` for repositories, otherwise `ALLOWED`.
+    """
+    return ALLOWED_REPOSITORY if section == "repository" else ALLOWED
+
+
+def resolve_charset(
+    value: Any, setting: str = "charset", allowed: frozenset[str] = ALLOWED
+) -> str:
     """Return the characters that a character set setting names.
 
     Args:
         value: Value of the setting (see the module's docstring).
         setting: Name of the setting, for error messages.
+        allowed: Characters that the setting may contain.
 
     Returns:
         The characters, each once, in sorted order.
 
     Raises:
         CharsetError: If the value has the wrong type, can't be read, names
-            an unknown character set, has characters other than ASCII
-            letters, digits, `.`, `-` and `~`, or leaves no character for the
+            an unknown character set, has characters other than `allowed`,
+            has fewer than two characters, or leaves no character for the
             start and end of generated values (anything but `.`, `-` and
             digits).
     """
@@ -172,11 +192,13 @@ def resolve_charset(value: Any, setting: str = "charset") -> str:
             f"got {type(value).__name__}"
         )
     characters = set("".join(_item(item, setting) for item in items))
-    if characters - ALLOWED:
+    if characters - allowed:
         raise CharsetError(
-            f"{setting}: characters {''.join(sorted(characters - ALLOWED))!r} "
-            f"not allowed; use ASCII letters, digits, '.', '-' and '~'"
+            f"{setting}: characters {''.join(sorted(characters - allowed))!r} "
+            f"not allowed; use {''.join(sorted(allowed))!r}"
         )
+    if len(characters) < 2:
+        raise CharsetError(f"{setting}: needs at least two characters")
     if not usable("".join(characters)):
         raise CharsetError(
             f"{setting}: needs at least one character other than "
@@ -200,7 +222,7 @@ def check_charsets(endpoints: Mapping[str, Any]) -> None:
             value = endpoints[section][key]
         except (KeyError, TypeError):
             raise CharsetError(f"{setting}: missing") from None
-        resolve_charset(value, setting)
+        resolve_charset(value, setting, _allowed(section))
 
 
 def get_charset(section: str, key: str) -> str:
@@ -214,4 +236,4 @@ def get_charset(section: str, key: str) -> str:
         The characters (cf. `resolve_charset()`).
     """
     value = get_config().endpoints[section][key]
-    return resolve_charset(value, f"endpoints.{section}.{key}")
+    return resolve_charset(value, f"endpoints.{section}.{key}", _allowed(section))

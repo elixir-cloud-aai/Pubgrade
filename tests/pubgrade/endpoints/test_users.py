@@ -70,7 +70,9 @@ class TestUsers:
         monkeypatch.setitem(endpoints["access_token"], "charset", ["x", "y"])
         with self.app.app_context():
             response = register_user({"name": "Name"})
+        assert len(response["uid"]) == 6
         assert set(response["uid"]) <= set(string.ascii_uppercase)
+        assert len(response["user_access_token"]) == 32
         assert set(response["user_access_token"]) <= {"x", "y"}
 
     def test_register_user_logs_no_token(self, caplog):
