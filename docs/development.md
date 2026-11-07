@@ -62,8 +62,8 @@ Code style, type hints and the absence of secrets are checked with
 - [actionlint](https://github.com/rhysd/actionlint) checks the GitHub
   workflows, and further hooks the YAML syntax, whitespace and file endings.
 
-`make lint` runs all hooks on all files, as CI does. To run them on each
-commit, install them once:
+`make lint` runs all hooks on all files, including the scan of all files
+for secrets, as CI does. To run them on each commit, install them once:
 
 ```bash
 uv sync --all-groups  # mypy also checks the hook of the docs build

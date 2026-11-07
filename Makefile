@@ -23,6 +23,7 @@ test: ## Installs the locked dependencies (uv), runs the unit tests with coverag
 lint: ## Runs the linters, type checks and security checks of pre-commit on all files.
 	uv sync --locked --all-groups
 	uv run --locked pre-commit run --all-files
+	uv run --locked pre-commit run --all-files --hook-stage manual gitleaks-all
 
 install-pubgrade: # build ## Install pubgrade on cluster using helm (values in HELM_ARGS, see the README).
 #	kubectl create namespace $(APP_NAME) --dry-run=client -o yaml | kubectl apply -f -

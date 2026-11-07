@@ -307,13 +307,13 @@ def create_build(
     """
     # Build identifiers are generated, but keep the files of a build in
     # `base_dir` regardless
-    build_dir = os.path.normpath(os.path.join(base_dir, build_id))
-    if not build_dir.startswith(os.path.normpath(base_dir) + os.sep):
+    base = os.path.abspath(base_dir)
+    build_dir = os.path.abspath(os.path.join(base, build_id))
+    # `join(base, "")` ends in a separator, also for the root directory
+    if not build_dir.startswith(os.path.join(base, "")):
         logger.error("Directory of build %s is outside the base directory.", build_id)
         raise InternalServerError
-    deployment_file_location = os.path.join(
-        build_dir, f"{os.path.basename(build_dir)}.yaml"
-    )
+    deployment_file_location = f"{base_dir}/{build_id}/{build_id}.yaml"
     config_file_location = os.path.join(build_dir, "config.json")
 
     # Clone project repository.

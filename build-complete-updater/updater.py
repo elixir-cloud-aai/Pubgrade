@@ -71,9 +71,11 @@ def report_build(pod: Any) -> None:
         "Content-Type": "application/json",
     }
     try:
-        requests.request(
+        response = requests.request(
             "PUT", url, headers=headers, data=payload, timeout=REQUEST_TIMEOUT
         )
+        # Error responses fail too (`HTTPError`)
+        response.raise_for_status()
     except requests.exceptions.RequestException as error:
         # Only the type: messages of requests can quote the headers
         logger.error("Reporting build %s failed: %s", build_name, type(error).__name__)

@@ -161,6 +161,20 @@ def test_report_build_failed(
     assert "token" not in caplog.text
 
 
+def test_report_build_error_response(
+    updater: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """An error response of Pubgrade is logged as a failed report."""
+    response = MagicMock()
+    response.raise_for_status.side_effect = requests.exceptions.HTTPError("500")
+    monkeypatch.setattr(updater.requests, "request", MagicMock(return_value=response))
+    with caplog.at_level(logging.ERROR):
+        updater.report_build(make_pod(env=BUILD_ENV))
+    assert "Reporting build abcdefghijkl failed: HTTPError" in caplog.text
+
+
 def test_report_builds(updater: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
     """All pods of the namespace are checked."""
     pods = [make_pod(env=BUILD_ENV), make_pod(phase="Running", env=BUILD_ENV)]

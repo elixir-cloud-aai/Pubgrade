@@ -672,6 +672,54 @@ class TestBuild:
         clone.assert_not_called()
         assert list(tmp_path.iterdir()) == [base_dir]
 
+    @pytest.mark.parametrize(
+        ("base_dir", "config_file"),
+        [
+            (".", os.path.abspath("build123/config.json")),
+            ("/", "/build123/config.json"),
+            ("/base/", "/base/build123/config.json"),
+        ],
+    )
+    @patch("pubgrade.modules.endpoints.builds.build_push_image_using_kaniko")
+    @patch("pubgrade.modules.endpoints.builds.create_dockerhub_config_file")
+    @patch("pubgrade.modules.endpoints.builds.create_deployment_YAML")
+    @patch("pubgrade.modules.endpoints.builds.git_clone_and_checkout")
+    def test_create_build_base_dir(
+        self,
+        clone: MagicMock,
+        deployment: MagicMock,
+        config_file_writer: MagicMock,
+        push_image: MagicMock,
+        base_dir: str,
+        config_file: str,
+    ) -> None:
+        """Builds are accepted in any base directory, including `.` and `/`.
+
+        Args:
+            clone: Mock of the function that clones the repository.
+            deployment: Mock of the function that writes the deployment file.
+            config_file_writer: Mock of the function that writes the config file.
+            push_image: Mock of the function that pushes the image.
+            base_dir: Base directory of the builds.
+            config_file: Expected location of the config file.
+        """
+        create_build(
+            repo_url=self.repository_url,
+            branch="dev",
+            commit="",
+            base_dir=base_dir,
+            build_id="build123",
+            dockerfile_location="Dockerfile",
+            intermediate_registry_path="registry/image",
+            dockerhub_token="token",
+            project_access_token="access_token",
+        )
+        clone.assert_called_once()
+        config_file_writer.assert_called_once_with(
+            dockerhub_token="token", config_file_location=config_file
+        )
+        push_image.assert_called_once()
+
     @patch("pubgrade.modules.endpoints.builds.build_push_image_using_kaniko")
     def test_create_build(self, push_image: MagicMock) -> None:
         """Test create build.
