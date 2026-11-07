@@ -243,7 +243,8 @@ paths:
         prebuilt image with a tag and no `location` or `dockerhub_token`, and
         Pubgrade notifies the repository's subscriptions of it; the build's
         `notifications` hold the results. With builds switched on, this endpoint
-        triggers a build at Pubgrade.
+        triggers a build at Pubgrade; a branch, tag or commit in `head_commit`
+        that isn't in the repository gets a 400, and no build is recorded.
       operationId: postBuild
       tags:
         - builds

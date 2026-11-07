@@ -103,6 +103,12 @@ builds don't work under OpenShift's default restrictions. With builds off,
 requests that need them get a 403, as does
 `PUT /repositories/{id}/builds/{build_id}`.
 
+Pubgrade clones the repository and checks out the `branch` (and its
+`commit_sha`, if given) or the `tag` in `head_commit`. If one of them isn't
+in the repository, the request gets a 400 that says so, instead of a
+500 as before. A build that can't start, for this or another reason, is not
+recorded, and its files are removed.
+
 ## Upgrading to FOCA 0.21 (API 2.0.0)
 
 From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA
