@@ -116,6 +116,11 @@ cloned, the build is listed as `QUEUED`. If only creating the build pod
 fails (a 500), the build and its files are kept, as the pod may have been
 created nonetheless.
 
+Deleting a repository (`DELETE /repositories/{id}`) stops its builds that
+haven't finished: their pods are deleted and their files removed. If a pod
+can't be deleted, the request gets a 500 and the repository stays as it is,
+so the request can be repeated.
+
 ## Upgrading to FOCA 0.21 (API 2.0.0)
 
 From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA
@@ -163,6 +168,11 @@ From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA
   up to 28 seconds, within Kubernetes' default grace period of 30 seconds;
   with a `notification_timeout` above 10, a publish may be cut off then. Request bodies larger
   than 1 MiB are rejected.
+- **Repositories:** `PUT /repositories/{id}` changes only the URL; before,
+  the repository lost its builds and subscriptions. `DELETE
+  /repositories/{id}` also deletes the repository's builds and subscriptions
+  and stops its unfinished builds (see [Builds](#builds)); before, they were
+  left behind. Unknown repositories get a 404 for both.
 - **Image:** it runs as user 1000 (group 0), and its app files are read-only;
   any user ID works, e.g., on OpenShift.
 - **MongoDB:** FOCA 0.21 needs MongoDB 4.4 or later; the chart's MongoDB is

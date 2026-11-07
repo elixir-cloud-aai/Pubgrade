@@ -10,8 +10,8 @@ Endpoint                                        Who
 GET     /repositories                           anyone
 POST    /repositories                           anyone, while registration is open
 GET     /repositories/{id}                      anyone
-PUT     /repositories/{id}                      the repository (its access token)
-DELETE  /repositories/{id}                      the repository
+PUT     /repositories/{id}                      the repository (its access token): new URL
+DELETE  /repositories/{id}                      the repository: with builds, subscriptions
 GET     /repositories/{id}/builds               anyone
 POST    /repositories/{id}/builds               the repository: publish an image
 GET     /repositories/{id}/builds/{build_id}    anyone
