@@ -81,7 +81,7 @@ def register_subscription(
         raise UserNotVerified
     if data_from_db_user["user_access_token"] != user_access_token:
         raise Unauthorized
-    if data_from_db_repository is None or data_from_db_repository.get("deleting"):
+    if data_from_db_repository is None or "deleting" in data_from_db_repository:
         raise RepositoryNotFound
     if (
         db_collection_subscriptions.count_documents(

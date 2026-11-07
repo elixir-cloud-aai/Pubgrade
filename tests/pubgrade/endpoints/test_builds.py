@@ -1303,6 +1303,25 @@ class TestBuild:
         with self.app.app_context(), pytest.raises(DeletePodError):
             builds.delete_pod("name", "namespace")
 
+    def test_ignore_missing(self) -> None:
+        """Removing a directory ignores files that are gone, nothing else."""
+        builds._ignore_missing(os.unlink, "gone", FileNotFoundError())
+        with pytest.raises(PermissionError):
+            builds._ignore_missing(os.unlink, "locked", PermissionError())
+
+    def test_delete_pod_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Deleting a pod waits for the Kubernetes API for a limited time.
+
+        Args:
+            monkeypatch: Fixture to replace the Kubernetes API.
+        """
+        api = MagicMock()
+        monkeypatch.setattr(builds.client, "CoreV1Api", lambda: api)
+        builds.delete_pod("name", "namespace")
+        api.delete_namespaced_pod.assert_called_once_with(
+            "name", "namespace", _request_timeout=builds.KUBERNETES_TIMEOUT
+        )
+
     @pytest.mark.parametrize("missing_ok", [True, False])
     def test_delete_pod_missing(
         self, monkeypatch: pytest.MonkeyPatch, missing_ok: bool

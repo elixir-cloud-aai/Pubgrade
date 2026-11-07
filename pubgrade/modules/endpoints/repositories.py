@@ -4,6 +4,7 @@ import logging
 import secrets
 import string
 from typing import Any
+import uuid
 
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
@@ -22,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 # Matches repositories that take new builds and subscriptions: not those that
 # are being deleted
-ACCEPTING: dict[str, Any] = {"deleting": {"$ne": True}}
+ACCEPTING: dict[str, Any] = {"deleting": {"$exists": False}}
 # Fields of repositories that responses leave out
 HIDDEN: dict[str, Any] = {"access_token": False, "_id": False, "deleting": False}
 
@@ -266,9 +267,12 @@ def delete_repository(repo_id: str, access_token: str) -> None:
     if data["access_token"] != access_token:
         raise Unauthorized
     # The builds as of the mark: builds registered later remove themselves
+    # Each deletion has its own mark, so that one that fails removes only
+    # its own, not that of another one in progress
+    mark = uuid.uuid4().hex
     data = db_collection.find_one_and_update(
         {"id": repo_id},
-        {"$set": {"deleting": True}},
+        {"$set": {"deleting": mark}},
         return_document=ReturnDocument.AFTER,
     )
     if data is None:
@@ -301,7 +305,9 @@ def delete_repository(repo_id: str, access_token: str) -> None:
     except Exception:
         # The repository takes builds and subscriptions again until the
         # request is repeated
-        db_collection.update_one({"id": repo_id}, {"$unset": {"deleting": ""}})
+        db_collection.update_one(
+            {"id": repo_id, "deleting": mark}, {"$unset": {"deleting": ""}}
+        )
         raise
     if deleted == 0:
         raise RepositoryNotFound

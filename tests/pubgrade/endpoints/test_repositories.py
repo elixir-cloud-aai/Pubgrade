@@ -481,6 +481,68 @@ class TestRepository:
             )
         assert (tmp_path / "outside").is_dir()
 
+    def test_delete_repository_file_error(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """If a build's files can't be removed, the data stays for a retry.
+
+        Args:
+            monkeypatch: Fixture to fail the removal.
+            tmp_path: Temporary directory for the builds' files.
+        """
+        self.setup_cascade(builds_enabled=True)
+        (tmp_path / MOCK_BUILD_INFO["id"]).mkdir()
+        monkeypatch.setattr(builds, "BASE_DIR", str(tmp_path))
+        monkeypatch.setattr(builds, "load_cluster_config", MagicMock())
+        monkeypatch.setattr(builds, "delete_pod", MagicMock())
+        monkeypatch.setattr(
+            builds.shutil, "rmtree", MagicMock(side_effect=PermissionError)
+        )
+        with self.app.app_context(), pytest.raises(PermissionError):
+            delete_repository(
+                MOCK_REPOSITORY_2["id"], MOCK_REPOSITORY_2["access_token"]
+            )
+        with self.app.app_context():
+            assert len(self.remaining("builds")) == 3
+        assert (tmp_path / MOCK_BUILD_INFO["id"]).is_dir()
+
+    def test_failed_delete_keeps_other_mark(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A failed deletion leaves the mark of another one in progress.
+
+        Args:
+            monkeypatch: Fixture to start another deletion and fail this one.
+        """
+        self.setup_cascade(builds_enabled=True)
+        monkeypatch.setattr(builds, "load_cluster_config", MagicMock())
+
+        def other_deletion(*args: Any, **kwargs: Any) -> None:
+            """Mark the repository for another deletion, then fail.
+
+            Args:
+                *args: Arguments of `delete_pod`.
+                **kwargs: Keyword arguments of `delete_pod`.
+
+            Raises:
+                DeletePodError: Always.
+            """
+            collection_of(self.app, "repositories").update_one(
+                {"id": MOCK_REPOSITORY_2["id"]}, {"$set": {"deleting": "other"}}
+            )
+            raise DeletePodError
+
+        monkeypatch.setattr(builds, "delete_pod", other_deletion)
+        with self.app.app_context(), pytest.raises(DeletePodError):
+            delete_repository(
+                MOCK_REPOSITORY_2["id"], MOCK_REPOSITORY_2["access_token"]
+            )
+        repository = collection_of(self.app, "repositories").find_one(
+            {"id": MOCK_REPOSITORY_2["id"]}
+        )
+        assert repository is not None
+        assert repository["deleting"] == "other"
+
     def test_delete_repository_unmarks_on_error(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:

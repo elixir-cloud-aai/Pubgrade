@@ -37,6 +37,14 @@ def test_request_bodies_limited(config: dict[str, Any]) -> None:
     assert config["server"]["max_content_length"] == 1048576
 
 
+def test_subscriptions_indexed_by_repository(config: dict[str, Any]) -> None:
+    """Subscriptions are indexed by repository, for limits and deletion."""
+    indexes = config["db"]["dbs"]["pubgradeStore"]["collections"]["subscriptions"][
+        "indexes"
+    ]
+    assert {"keys": {"repository_id": 1}} in indexes
+
+
 def test_valid_for_foca() -> None:
     """FOCA accepts the configuration, with errors as problem details."""
     foca = Foca(config_file=CONFIG_FILE)

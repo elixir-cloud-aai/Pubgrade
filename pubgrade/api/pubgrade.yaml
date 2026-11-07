@@ -200,8 +200,8 @@ paths:
         builds and subscriptions; the subscriptions also disappear from their
         users' lists. Only the repository's access token allows it. Builds
         and subscriptions registered meanwhile get a 404. With builds
-        switched on, the builds' pods and files are removed first; if a pod
-        can't be deleted, the request fails, the repository with its builds
+        switched on, the builds' pods and files are removed first; if one
+        can't be removed, the request fails, the repository with its builds
         and subscriptions stays, and the request can be repeated.
         Deployments that have been notified keep their images.
       operationId: deleteRepository

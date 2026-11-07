@@ -37,6 +37,9 @@ db:
                               id: 1
                           options:
                             'unique': True
+                        # Subscriptions of a repository: its limit, its deletion
+                        - keys:
+                              repository_id: 1
                 users:
                     indexes:
                         - keys:

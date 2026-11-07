@@ -118,10 +118,12 @@ created nonetheless.
 
 Deleting a repository (`DELETE /repositories/{id}`) stops its builds: their
 pods are deleted and their files removed, also the files left by finished
-builds whose cleanup failed. A build started while the repository is deleted is stopped
-and removed again, and its request gets a 404. If a pod can't be deleted, the
-request gets a 500; the repository, its builds and subscriptions stay (pods
-and files removed until then stay removed), so the request can be repeated.
+builds whose cleanup failed. A build started while the repository is deleted
+is stopped and removed again, and its request gets a 404. If a pod or a
+build's files can't be removed (the Kubernetes API gets 10 seconds per pod),
+the request gets a 500; the repository, its builds and subscriptions stay
+(pods and files removed until then stay removed), so the request can be
+repeated.
 
 ## Upgrading to FOCA 0.21 (API 2.0.0)
 
@@ -174,7 +176,10 @@ From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA
   the repository lost its builds and subscriptions. `DELETE
   /repositories/{id}` also deletes the repository's builds and subscriptions
   and stops its builds (see [Builds](#builds)); before, they were left
-  behind. Unknown repositories get a 404 for both.
+  behind. Unknown repositories get a 404 for both. A configuration of your
+  own should add the index on `repository_id` of the collection
+  `subscriptions` (see `pubgrade/config.yaml`), which speeds up deletions
+  and the limit of subscriptions per repository.
 - **Image:** it runs as user 1000 (group 0), and its app files are read-only;
   any user ID works, e.g., on OpenShift.
 - **MongoDB:** FOCA 0.21 needs MongoDB 4.4 or later; the chart's MongoDB is

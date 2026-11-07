@@ -44,6 +44,9 @@ BASE_DIR = os.getenv("BASE_DIR", "/pubgrade_temp_files")
 # Seconds to connect to GitHub and for its response, when triggering the
 # signing of an image
 REQUEST_TIMEOUT = 30
+# Seconds to connect to the Kubernetes API and for its response, when
+# deleting a pod
+KUBERNETES_TIMEOUT = 10
 
 # States of builds that have finished
 FINISHED = ["SUCCEEDED", "FAILED"]
@@ -776,7 +779,9 @@ def delete_pod(name: str, namespace: str, missing_ok: bool = False) -> Any:
     """
     try:
         api_instance = client.CoreV1Api()
-        api_response = api_instance.delete_namespaced_pod(name, namespace)
+        api_response = api_instance.delete_namespaced_pod(
+            name, namespace, _request_timeout=KUBERNETES_TIMEOUT
+        )
         return api_response
     except ApiException as e:
         if missing_ok and e.status == 404:
@@ -800,6 +805,7 @@ def stop_builds(build_ids: list[str]) -> None:
     Raises:
         DeletePodError: Raised when a pod can't be deleted; the builds after
             it are left as they are.
+        OSError: Raised when a build's files can't be removed.
     """
     if not builds_enabled() or not build_ids:
         return
@@ -825,8 +831,24 @@ def stop_builds(build_ids: list[str]) -> None:
         delete_pod(build_id, namespace, missing_ok=True)
         build_dir = build_dirs[build_id]
         if build_dir is not None:
-            remove_build_dir(build_dir, build_id)
+            # Errors stop the deletion, which can then be repeated
+            shutil.rmtree(build_dir, ignore_errors=False, onexc=_ignore_missing)
         logger.info("Stopped build %s.", build_id)
+
+
+def _ignore_missing(function: Any, path: str, error: BaseException) -> None:
+    """Ignore files that are gone already, when removing a directory.
+
+    Args:
+        function: Function that failed.
+        path: Path it failed on.
+        error: The error.
+
+    Raises:
+        BaseException: The error, unless the file is missing.
+    """
+    if not isinstance(error, FileNotFoundError):
+        raise error
 
 
 def build_dir_of(build_id: str) -> str | None:
