@@ -9,6 +9,7 @@ import mongomock
 import pytest
 
 from pubgrade.errors.exceptions import RepositoryNotFound
+from pubgrade.modules.endpoints import builds
 from pubgrade.modules.server import (
     deleteRepository,
     deleteSubscription,
@@ -138,13 +139,19 @@ def test_putRepositories() -> None:
         assert res["id"] == MOCK_REPOSITORIES[1]["id"]
 
 
-def test_deleteRepository() -> None:
-    """The `deleteRepository` controller works."""
+def test_deleteRepository(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The `deleteRepository` controller works.
+
+    Args:
+        monkeypatch: Fixture to replace the calls to Kubernetes.
+    """
+    monkeypatch.setattr(builds, "stop_builds", lambda build_ids: None)
     app = Flask(__name__)
     set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-    foca_config(app).db.dbs["pubgradeStore"].collections[
-        "repositories"
-    ].client = mongomock.MongoClient().db.collection
+    for name in ("repositories", "builds", "subscriptions", "users"):
+        foca_config(app).db.dbs["pubgradeStore"].collections[
+            name
+        ].client = mongomock.MongoClient().db[name]
     for repository in MOCK_REPOSITORIES:
         foca_config(app).db.dbs["pubgradeStore"].collections[
             "repositories"
@@ -455,7 +462,6 @@ def test_deleteSubscription() -> None:
 @pytest.mark.parametrize(
     ("controller", "function"),
     [
-        (deleteRepository, "delete_repository"),
         (deleteSubscription, "delete_subscription"),
     ],
 )

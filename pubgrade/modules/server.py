@@ -70,7 +70,7 @@ def getRepository(id: str) -> dict[str, Any]:
 
 @log_traffic
 def putRepositories(id: str) -> dict[str, Any]:
-    """Modify already registered Repository.
+    """Change the URL of a registered Repository.
 
     Args:
         id: Identifier of Repository to be modified.
@@ -86,19 +86,17 @@ def putRepositories(id: str) -> dict[str, Any]:
 
 
 @log_traffic
-def deleteRepository(id: str) -> dict[str, str] | None:
-    """Delete Repository.
+def deleteRepository(id: str) -> dict[str, str]:
+    """Delete Repository with its builds and subscriptions.
 
     Args:
         id: Identifier of Repository to be deleted
 
     Returns:
         "message": "Repository deleted successfully"
-
     """
-    if delete_repository(id, request.headers["X-Project-Access-Token"]) != 0:
-        return {"message": "Repository deleted successfully"}
-    return None
+    delete_repository(id, request.headers["X-Project-Access-Token"])
+    return {"message": "Repository deleted successfully"}
 
 
 @log_traffic

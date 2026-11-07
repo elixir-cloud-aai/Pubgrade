@@ -134,7 +134,9 @@ paths:
           $ref: '#/components/responses/Error'
     put:
       summary: Modify registered repository
-      description: Modify already registered repository for any changes.
+      description: Change the URL of a registered repository. Only the
+        repository's access token allows it. The repository keeps its
+        identifier, access token, builds and subscriptions.
       operationId: putRepositories
       tags:
         - repositories
@@ -186,15 +188,22 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
         default:
           $ref: '#/components/responses/Error'
     delete:
       summary: 'Delete repository'
-      description: Delete repository from pubgrade permanently. It removes
-        available builds and discard administrator's subscription for the
-        repository.
+      description: Delete a repository from Pubgrade permanently, with its
+        builds and subscriptions; the subscriptions also disappear from their
+        users' lists. Only the repository's access token allows it. Builds
+        and subscriptions registered meanwhile get a 404. With builds
+        switched on, the builds' pods and files are removed first; if one
+        can't be removed, the request fails, the repository with its builds
+        and subscriptions stays, and the request can be repeated.
+        Deployments that have been notified keep their images.
       operationId: deleteRepository
       tags:
         - repositories
@@ -230,6 +239,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
         default:
@@ -299,6 +310,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
         default:
@@ -507,6 +520,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
         default:

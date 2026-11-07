@@ -1303,6 +1303,44 @@ class TestBuild:
         with self.app.app_context(), pytest.raises(DeletePodError):
             builds.delete_pod("name", "namespace")
 
+    def test_ignore_missing(self) -> None:
+        """Removing a directory ignores files that are gone, nothing else."""
+        builds._ignore_missing(os.unlink, "gone", FileNotFoundError())
+        with pytest.raises(PermissionError):
+            builds._ignore_missing(os.unlink, "locked", PermissionError())
+
+    def test_delete_pod_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Deleting a pod waits for the Kubernetes API for a limited time.
+
+        Args:
+            monkeypatch: Fixture to replace the Kubernetes API.
+        """
+        api = MagicMock()
+        monkeypatch.setattr(builds.client, "CoreV1Api", lambda: api)
+        builds.delete_pod("name", "namespace")
+        api.delete_namespaced_pod.assert_called_once_with(
+            "name", "namespace", _request_timeout=builds.KUBERNETES_TIMEOUT
+        )
+
+    @pytest.mark.parametrize("missing_ok", [True, False])
+    def test_delete_pod_missing(
+        self, monkeypatch: pytest.MonkeyPatch, missing_ok: bool
+    ) -> None:
+        """A missing pod counts as deleted only with `missing_ok`.
+
+        Args:
+            monkeypatch: Fixture to replace the Kubernetes API.
+            missing_ok: Whether a missing pod counts as deleted.
+        """
+        api = MagicMock()
+        api.delete_namespaced_pod.side_effect = ApiException(status=404)
+        monkeypatch.setattr(builds.client, "CoreV1Api", lambda: api)
+        if missing_ok:
+            assert builds.delete_pod("name", "namespace", missing_ok=True) is None
+        else:
+            with pytest.raises(DeletePodError):
+                builds.delete_pod("name", "namespace")
+
     @patch("kubernetes.config.load_incluster_config", mocked_load_incluster_config)
     @patch(
         "kubernetes.client.api.core_v1_api.CoreV1Api.create_namespaced_pod",

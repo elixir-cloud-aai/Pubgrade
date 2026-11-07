@@ -27,6 +27,10 @@ GET     /subscriptions/{subscription_id}        the subscription's user
 DELETE  /subscriptions/{subscription_id}        the subscription's user
 ```
 
+`PUT /repositories/{id}` changes only the repository's URL. `DELETE
+/repositories/{id}` also deletes the repository's builds and subscriptions
+(see [Usage](usage.md#change-or-delete-a-repository)).
+
 Registrations are open until they are closed in the
 [configuration](deployment.md#configuration). The specification is the
 reference for the request and response bodies and the headers that carry the

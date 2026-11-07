@@ -28,7 +28,11 @@ from pubgrade.errors.exceptions import (
     InvalidImage,
     RepositoryNotFound,
 )
-from pubgrade.modules.endpoints.repositories import generate_id
+from pubgrade.modules.endpoints.repositories import (
+    ACCEPTING,
+    accepts_additions,
+    generate_id,
+)
 from pubgrade.modules.endpoints.subscriptions import notify_all_subscriptions
 from pubgrade.settings import collection, endpoints
 from pubgrade.timestamps import now, repaired_build
@@ -40,6 +44,12 @@ BASE_DIR = os.getenv("BASE_DIR", "/pubgrade_temp_files")
 # Seconds to connect to GitHub and for its response, when triggering the
 # signing of an image
 REQUEST_TIMEOUT = 30
+# Seconds to connect to the Kubernetes API and for its response, when
+# deleting a pod
+KUBERNETES_TIMEOUT = 10
+
+# States of builds that have finished
+FINISHED = ["SUCCEEDED", "FAILED"]
 
 # An abbreviated or full commit hash (SHA-1 or SHA-256)
 COMMIT_HASH = re.compile(r"[0-9a-fA-F]{4,64}")
@@ -126,7 +136,8 @@ def register_builds(
         Unauthorized: Raised when access_token is invalid or not specified
         in request.
         RepositoryNotFound: Raised when repository is not found with given
-        identifier.
+        identifier, or is being deleted; a build registered meanwhile is
+        removed again.
         BuildsDisabled: Raised when the request asks for a build, with builds
         switched off.
         InvalidImage: Raised when there is no image, an image isn't a valid
@@ -164,9 +175,12 @@ def register_builds(
             charset=id_charset,
             length=id_length,
         )
-        db_collection_repositories.update_one(
-            {"id": repository_id}, {"$push": {"build_list": build_data["id"]}}
+        pushed = db_collection_repositories.update_one(
+            {"id": repository_id, **ACCEPTING},
+            {"$push": {"build_list": build_data["id"]}},
         )
+        if pushed.matched_count == 0:
+            raise RepositoryNotFound
         try:
             build_data["finished_at"] = None
             build_data["started_at"] = now()
@@ -186,6 +200,9 @@ def register_builds(
         )
         raise InternalServerError
     if not build_path:
+        # The repository's deletion may have started after the build was
+        # listed, and missed it in the database
+        ensure_accepting(repository_id, build_data["id"])
         publish_prebuilt_image(
             build_data["id"],
             build_data["images"][0]["name"],
@@ -196,6 +213,7 @@ def register_builds(
         start_build(build_data, data_from_db["url"], access_token)
     except CreatePodError:
         # The pod may have been created nonetheless, and reports to the build
+        ensure_accepting(repository_id, build_data["id"])
         raise
     except Exception:
         # The client gets an error instead of the build's identifier, so the
@@ -216,6 +234,7 @@ def register_builds(
         else:
             logger.info("Removed build %s, which could not start.", build_data["id"])
         raise
+    ensure_accepting(repository_id, build_data["id"])
     return {"id": build_data["id"]}
 
 
@@ -422,7 +441,7 @@ def create_build(
 
 
 def remove_build_dir(build_dir: str, build_id: str) -> None:
-    """Remove the directory of a build that didn't start, if there is one.
+    """Remove the directory of a build that didn't start or was stopped, if any.
 
     Args:
         build_dir: Directory of the build.
@@ -622,6 +641,18 @@ def create_dockerhub_config_file(
         config_file.write(template_config_file)
 
 
+def load_cluster_config() -> None:
+    """Load the configuration of the Kubernetes API.
+
+    In a cluster (`KUBERNETES_SERVICE_HOST` is set), from its service
+    account; otherwise from the kubeconfig.
+    """
+    if os.getenv("KUBERNETES_SERVICE_HOST"):
+        config.load_incluster_config()
+    else:
+        config.load_kube_config()
+
+
 def build_push_image_using_kaniko(deployment_file_location: str) -> None:
     """Create kaniko deployment. Build and push image.
 
@@ -631,13 +662,8 @@ def build_push_image_using_kaniko(deployment_file_location: str) -> None:
     Raises:
         CreatePodError: Raised when unable to create deployment.
     """
-    # Retrieve values of NAMESPACE and KUBERNETES_SERVICE_HOST from
-    # environment variables.
     namespace = os.getenv("NAMESPACE") or "default"
-    if os.getenv("KUBERNETES_SERVICE_HOST"):
-        config.load_incluster_config()
-    else:
-        config.load_kube_config()
+    load_cluster_config()
     v1 = client.CoreV1Api()
 
     # Create namespaced pod using kubernetes CoreV1Api from kaniko
@@ -735,27 +761,151 @@ def remove_files(dir_location: str, pod_name: str, namespace: str) -> None:
     delete_pod(pod_name, namespace)
 
 
-def delete_pod(name: str, namespace: str) -> Any:
+def delete_pod(name: str, namespace: str, missing_ok: bool = False) -> Any:
     """Delete pod.
 
     Args:
         name (str): Name of kaniko pod which is completed and needs to be
         deleted.
         namespace (str): Namespace of pod.
+        missing_ok: Whether a pod that doesn't exist counts as deleted.
 
     Returns:
-        Response of CoreV1Api on deleting pod.
+        Response of CoreV1Api on deleting pod; None for a missing pod, with
+        `missing_ok`.
 
     Raises:
         DeletePodError: Raised when encountered an error while deleting pod.
     """
     try:
         api_instance = client.CoreV1Api()
-        api_response = api_instance.delete_namespaced_pod(name, namespace)
+        api_response = api_instance.delete_namespaced_pod(
+            name, namespace, _request_timeout=KUBERNETES_TIMEOUT
+        )
         return api_response
     except ApiException as e:
+        if missing_ok and e.status == 404:
+            return None
         logger.error("Deleting pod %s failed: %s %s", name, e.status, e.reason)
         raise DeletePodError from None
+
+
+def stop_builds(build_ids: list[str]) -> None:
+    """Remove the pods and files of builds that may still have them.
+
+    Only with builds switched on, as only then do builds have pods and
+    files. Unfinished builds are stopped this way, and finished builds
+    whose files are left because their cleanup failed are cleaned up. Pods
+    that no longer exist count as deleted, so this can be repeated after an
+    error.
+
+    Args:
+        build_ids: Identifiers of the builds.
+
+    Raises:
+        DeletePodError: Raised when a pod can't be deleted; the builds after
+            it are left as they are.
+        OSError: Raised when a build's files can't be removed.
+    """
+    if not builds_enabled() or not build_ids:
+        return
+    unfinished = {
+        build["id"]
+        for build in collection("builds").find(
+            {"id": {"$in": build_ids}, "status": {"$nin": FINISHED}},
+            {"id": True, "_id": False},
+        )
+    }
+    # Directories of the builds; identifiers that would lead outside
+    # `BASE_DIR` get none
+    base = os.path.join(os.path.abspath(BASE_DIR), "")
+    build_dirs: dict[str, str | None] = {}
+    for build_id in build_ids:
+        build_dir = os.path.abspath(os.path.join(base, build_id))
+        if build_dir.startswith(base):
+            build_dirs[build_id] = build_dir
+        else:
+            logger.error(
+                "Directory of build %s is outside the base directory.", build_id
+            )
+            build_dirs[build_id] = None
+    stopping = [
+        build_id
+        for build_id, build_dir in build_dirs.items()
+        if build_id in unfinished
+        or (build_dir is not None and os.path.isdir(build_dir))
+    ]
+    if not stopping:
+        return
+    load_cluster_config()
+    namespace = os.getenv("NAMESPACE") or "default"
+    for build_id in stopping:
+        delete_pod(build_id, namespace, missing_ok=True)
+        stopped_dir = build_dirs[build_id]
+        # Checked again here, where the files are removed
+        if stopped_dir is not None and stopped_dir.startswith(base):
+            # Errors stop the deletion, which can then be repeated
+            shutil.rmtree(stopped_dir, ignore_errors=False, onexc=_ignore_missing)
+        logger.info("Stopped build %s.", build_id)
+
+
+def _ignore_missing(function: Any, path: str, error: BaseException) -> None:
+    """Ignore files that are gone already, when removing a directory.
+
+    Args:
+        function: Function that failed.
+        path: Path it failed on.
+        error: The error.
+
+    Raises:
+        BaseException: The error, unless the file is missing.
+    """
+    if not isinstance(error, FileNotFoundError):
+        raise error
+
+
+def ensure_accepting(repository_id: str, build_id: str) -> None:
+    """Withdraw a new build if its repository is being deleted.
+
+    The repository's deletion may have started after the build was listed,
+    and missed its document or pod.
+
+    Args:
+        repository_id: Identifier of the repository.
+        build_id: Identifier of the build.
+
+    Raises:
+        RepositoryNotFound: Raised when the repository is being deleted or
+            is gone; the build has been withdrawn then.
+    """
+    if accepts_additions(repository_id):
+        return
+    withdraw_build(repository_id, build_id)
+    raise RepositoryNotFound
+
+
+def withdraw_build(repository_id: str, build_id: str) -> None:
+    """Remove a build whose repository is being deleted.
+
+    The build leaves the repository's list first, in case the deletion
+    fails and the repository stays. Its pod and files, if any, are removed
+    as far as possible; errors are logged, as the client gets a 404 anyway.
+
+    Args:
+        repository_id: Identifier of the repository.
+        build_id: Identifier of the build.
+    """
+    collection("repositories").update_one(
+        {"id": repository_id}, {"$pull": {"build_list": build_id}}
+    )
+    try:
+        stop_builds([build_id])
+    except Exception as error:
+        logger.error(
+            "Build %s could not be stopped: %s", build_id, type(error).__name__
+        )
+    collection("builds").delete_one({"id": build_id})
+    logger.info("Removed build %s, whose repository is being deleted.", build_id)
 
 
 def trigger_signing_image(
