@@ -95,9 +95,10 @@ configuration and `builds.enabled` in the chart, which must match, with the
 other values under `builds`. Publishing then also needs a `location` for the
 image and a `dockerhub_token`. This adds an updater, a shared volume and rights
 to manage pods in the namespace. Every 5 seconds, the updater reports build
-pods that succeeded to Pubgrade; each report may take up to 30 seconds, and a
-report that fails is logged and doesn't stop the others. The volume needs a storage class with
-`ReadWriteMany` (`builds.volume.storageClass`). Build pods run as root, so
+pods that succeeded to Pubgrade, waiting up to 30 seconds to connect and
+again for the response; a report that fails is logged and doesn't stop the
+others. The volume needs a storage class with `ReadWriteMany`
+(`builds.volume.storageClass`). Build pods run as root, so
 builds don't work under OpenShift's default restrictions. With builds off,
 requests that need them get a 403, as does
 `PUT /repositories/{id}/builds/{build_id}`.

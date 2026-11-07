@@ -21,11 +21,9 @@ logger = logging.getLogger(__name__)
 NAMESPACE = os.getenv("NAMESPACE") or "broker"
 SLEEP_INTERVAL = 5
 BUILD_ID_LENGTH = 6
-BROKER_URL = (
-    os.getenv("BROKER_URL", "") + "/repositories/{}/builds/{}"
-    if os.getenv("BROKER_URL")
-    else ""
-)
+_BROKER = os.getenv("BROKER_URL", "")
+# URL of the build endpoint, with placeholders for the repository and build
+BROKER_URL = f"{_BROKER}/repositories/{{}}/builds/{{}}" if _BROKER else ""
 # Seconds to connect to Pubgrade and for its response
 REQUEST_TIMEOUT = 30
 

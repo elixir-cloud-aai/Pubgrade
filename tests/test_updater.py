@@ -1,6 +1,5 @@
 """Tests for the build-complete updater (`build-complete-updater/updater.py`)."""
 
-from collections.abc import Iterator
 import importlib.util
 import json
 import logging
@@ -38,16 +37,16 @@ def load_updater(monkeypatch: pytest.MonkeyPatch, **env: str) -> ModuleType:
 
 
 @pytest.fixture
-def updater(monkeypatch: pytest.MonkeyPatch) -> Iterator[ModuleType]:
+def updater(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
     """Get the updater, configured for a Pubgrade at `http://pubgrade`.
 
     Args:
         monkeypatch: Pytest's monkeypatch fixture.
 
-    Yields:
+    Returns:
         The updater module.
     """
-    yield load_updater(monkeypatch, NAMESPACE="builds", BROKER_URL="http://pubgrade")
+    return load_updater(monkeypatch, NAMESPACE="builds", BROKER_URL="http://pubgrade")
 
 
 def make_pod(
