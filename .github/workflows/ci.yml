@@ -105,10 +105,35 @@ jobs:
         run: pipx run --spec cffconvert==2.0.0 cffconvert --validate -i CITATION.cff
 
   # With the locked dependencies (`uv.lock`), as in the image
+  # The same tests with mongomock, which reports coverage, and against
+  # MongoDB (`MONGODB_TEST_URI`, see `tests/integration/conftest.py`), the
+  # chart's default version (`helm/values.yaml`)
   test:
-    name: Test
+    name: Test (${{ matrix.database }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - database: mongomock
+            image: ""
+            uri: ""
+          - database: MongoDB 7.0
+            image: mongo:7.0
+            uri: mongodb://localhost:27017
+    services:
+      # Not started for an empty image (the `mongomock` entry)
+      mongodb:
+        image: ${{ matrix.image }}
+        ports: ["27017:27017"]
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping: 1}).ok'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      MONGODB_TEST_URI: ${{ matrix.uri }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -128,11 +153,19 @@ jobs:
           uv sync --locked --python 3.13
           echo "${PWD}/.venv/bin" >> "$GITHUB_PATH"
       # Fails below 100% coverage (`fail_under` in `pyproject.toml`)
-      - name: Run unit tests with coverage
+      - name: Run tests with coverage
+        if: ${{ matrix.uri == '' }}
         run: pytest --cov --cov-report=term-missing --cov-report=xml
+      # Fails instead of falling back to mongomock if the URI is missing
+      - name: Run tests against MongoDB
+        if: ${{ matrix.uri != '' }}
+        run: |
+          test -n "${MONGODB_TEST_URI}"
+          pytest
       # Upload errors fail the workflow only on pushes, because pull requests
       # from forks and Dependabot get no access to the Codecov token
       - name: Submit report to Codecov
+        if: ${{ matrix.uri == '' }}
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
