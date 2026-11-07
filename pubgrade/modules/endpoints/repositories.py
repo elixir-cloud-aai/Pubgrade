@@ -172,18 +172,20 @@ def modify_repository_info(
 ) -> dict[str, Any]:
     """Modify registered repository.
 
+    Only the URL changes: the repository keeps its identifier, access token,
+    builds and subscriptions.
+
     Args:
         repo_id (str): Unique identifier for the repository.
         access_token (str): Secret used to verify source is authorized.
         data (dict): Request data containing modified url of the repository.
 
     Returns:
-        repository_object (dict): Dictionary object of created repository
-        containing it's identifier and access_token.
+        repository_object (dict): Identifier and access token of the
+        repository.
 
     Raises:
-        MongoError: Raised when object is unable to replace existing
-        repository_object in mongodb.
+        URLNotFound: Raised when request data does not have url string.
         Unauthorized: Raised when access_token is invalid or not specified
         in request.
         RepositoryNotFound: Raised when repository is not found with given
@@ -196,32 +198,46 @@ def modify_repository_info(
         raise RepositoryNotFound
     if data_from_db["access_token"] != access_token:
         raise Unauthorized
-    data["id"] = repo_id
-    data["access_token"] = str(access_token)
-    db_collection_repository.replace_one(filter={"id": repo_id}, replacement=data)
-    del data["url"]
-    return data
+    try:
+        url = data["url"]
+    except KeyError:
+        raise URLNotFound from None
+    result = db_collection_repository.update_one(
+        {"id": repo_id}, {"$set": {"url": url}}
+    )
+    if result.matched_count == 0:
+        raise RepositoryNotFound
+    logger.info("Modified repository %s.", repo_id)
+    return {"id": repo_id, "access_token": data_from_db["access_token"]}
 
 
-def delete_repository(repo_id: str, access_token: str) -> int:
-    """Delete repository.
+def delete_repository(repo_id: str, access_token: str) -> None:
+    """Delete a repository with its builds and subscriptions.
+
+    With builds switched on, the repository's unfinished builds are stopped
+    first: their pods are deleted and their files removed. Then its
+    subscriptions (also from their users' lists), its builds and the
+    repository itself are deleted, the repository last, so that a request
+    that fails midway can be repeated. Deployments that have been notified
+    keep their images.
 
     Args:
         repo_id (str): Unique identifier for the repository.
         access_token (str): Secret used to verify source is authorized.
 
-    Returns:
-        repository delete count. (1 if repository is deleted, 0 if not
-        deleted.)
-
     Raises:
-        MongoError: Raised when object is unable to replace existing
-        repository object in mongodb.
         Unauthorized: Raised when access_token is invalid or not specified
         in request.
         RepositoryNotFound: Raised when repository is not found with given
-        identifier.
+        identifier, also if another request deleted it meanwhile.
+        DeletePodError: Raised when the pod of an unfinished build can't be
+        deleted; nothing is deleted then.
     """
+    # Imported here, as the module of builds imports this one (`generate_id`)
+    from pubgrade.modules.endpoints.builds import (  # noqa: PLC0415
+        stop_unfinished_builds,
+    )
+
     db_collection = collection("repositories")
     data = db_collection.find_one({"id": repo_id})
     if data is None:
@@ -229,5 +245,34 @@ def delete_repository(repo_id: str, access_token: str) -> int:
         raise RepositoryNotFound
     if data["access_token"] != access_token:
         raise Unauthorized
-    is_deleted = db_collection.delete_one({"id": repo_id})
-    return is_deleted.deleted_count
+    build_ids: list[str] = data.get("build_list", [])
+    stop_unfinished_builds(build_ids)
+
+    db_collection_subscriptions = collection("subscriptions")
+    subscription_ids = list(
+        {
+            *data.get("subscription_list", []),
+            *(
+                subscription["id"]
+                for subscription in db_collection_subscriptions.find(
+                    {"repository_id": repo_id}, {"id": True, "_id": False}
+                )
+            ),
+        }
+    )
+    if subscription_ids:
+        collection("users").update_many(
+            {"subscription_list": {"$in": subscription_ids}},
+            {"$pull": {"subscription_list": {"$in": subscription_ids}}},
+        )
+        db_collection_subscriptions.delete_many({"id": {"$in": subscription_ids}})
+    if build_ids:
+        collection("builds").delete_many({"id": {"$in": build_ids}})
+    if db_collection.delete_one({"id": repo_id}).deleted_count == 0:
+        raise RepositoryNotFound
+    logger.info(
+        "Deleted repository %s with %s builds and %s subscriptions.",
+        repo_id,
+        len(build_ids),
+        len(subscription_ids),
+    )

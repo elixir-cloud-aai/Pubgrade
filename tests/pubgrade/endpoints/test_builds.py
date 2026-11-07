@@ -1303,6 +1303,25 @@ class TestBuild:
         with self.app.app_context(), pytest.raises(DeletePodError):
             builds.delete_pod("name", "namespace")
 
+    @pytest.mark.parametrize("missing_ok", [True, False])
+    def test_delete_pod_missing(
+        self, monkeypatch: pytest.MonkeyPatch, missing_ok: bool
+    ) -> None:
+        """A missing pod counts as deleted only with `missing_ok`.
+
+        Args:
+            monkeypatch: Fixture to replace the Kubernetes API.
+            missing_ok: Whether a missing pod counts as deleted.
+        """
+        api = MagicMock()
+        api.delete_namespaced_pod.side_effect = ApiException(status=404)
+        monkeypatch.setattr(builds.client, "CoreV1Api", lambda: api)
+        if missing_ok:
+            assert builds.delete_pod("name", "namespace", missing_ok=True) is None
+        else:
+            with pytest.raises(DeletePodError):
+                builds.delete_pod("name", "namespace")
+
     @patch("kubernetes.config.load_incluster_config", mocked_load_incluster_config)
     @patch(
         "kubernetes.client.api.core_v1_api.CoreV1Api.create_namespaced_pod",

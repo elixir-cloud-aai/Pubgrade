@@ -142,9 +142,10 @@ def test_deleteRepository() -> None:
     """The `deleteRepository` controller works."""
     app = Flask(__name__)
     set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-    foca_config(app).db.dbs["pubgradeStore"].collections[
-        "repositories"
-    ].client = mongomock.MongoClient().db.collection
+    for name in ("repositories", "builds", "subscriptions", "users"):
+        foca_config(app).db.dbs["pubgradeStore"].collections[
+            name
+        ].client = mongomock.MongoClient().db[name]
     for repository in MOCK_REPOSITORIES:
         foca_config(app).db.dbs["pubgradeStore"].collections[
             "repositories"
@@ -455,7 +456,6 @@ def test_deleteSubscription() -> None:
 @pytest.mark.parametrize(
     ("controller", "function"),
     [
-        (deleteRepository, "delete_repository"),
         (deleteSubscription, "delete_subscription"),
     ],
 )

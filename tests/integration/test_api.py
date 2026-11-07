@@ -345,3 +345,159 @@ def test_build_of_unknown_ref(
         stored = collection("repositories").find_one({"id": repository["id"]})
     assert stored is not None
     assert not stored.get("build_list")
+
+
+def test_modify_repository_keeps_builds_and_subscriptions(
+    api: FlaskClient, subscriber: Subscriber
+) -> None:
+    """Modifying a repository changes its URL, nothing else.
+
+    Regression test: the repository lost its builds and subscriptions, so
+    they were neither listed nor notified any more.
+    """
+    user = register_user(api)
+    repository = register_repository(api)
+    subscribe(api, user, repository["id"], subscriber.url, value="*")
+    publish(api, repository, "1")
+    url = "https://github.com/elixir-cloud-aai/other.git"
+    path = f"/repositories/{repository['id']}"
+    check(
+        api.put(path, json={"url": url}, headers={"X-Project-Access-Token": "x"}), 401
+    )
+    modified = check(
+        api.put(
+            path,
+            json={"url": url},
+            headers={"X-Project-Access-Token": repository["access_token"]},
+        )
+    )
+    assert modified == repository
+    stored = check(api.get(path))
+    assert stored["url"] == url
+    assert len(stored["build_list"]) == 1
+    assert len(check(api.get(f"{path}/builds"))) == 1
+    second = publish(api, repository, "2")
+    assert [result for result, _ in results(second).values()] == ["delivered"]
+    assert len(subscriber.received) == 2
+
+
+def test_modify_unknown_repository(api: FlaskClient) -> None:
+    """Modifying an unknown repository gets a 404."""
+    check(
+        api.put(
+            "/repositories/unknown",
+            json={"url": "https://github.com/elixir-cloud-aai/app.git"},
+            headers={"X-Project-Access-Token": "x"},
+        ),
+        404,
+    )
+
+
+def test_delete_repository_removes_builds_and_subscriptions(
+    api: FlaskClient, subscriber: Subscriber
+) -> None:
+    """Deleting a repository removes its builds and subscriptions.
+
+    Only the repository's own access token allows it; other repositories
+    keep theirs.
+    """
+    user = register_user(api)
+    repository = register_repository(api)
+    other = register_repository(api)
+    subscription = subscribe(api, user, repository["id"], subscriber.url, value="*")
+    kept = subscribe(api, user, other["id"], subscriber.url, value="*")
+    publish(api, repository, "1")
+    publish(api, other, "1")
+    path = f"/repositories/{repository['id']}"
+    check(api.delete(path, headers={"X-Project-Access-Token": "wrong"}), 401)
+    check(
+        api.delete(path, headers={"X-Project-Access-Token": other["access_token"]}), 401
+    )
+    headers = {"X-Project-Access-Token": repository["access_token"]}
+    assert check(api.delete(path, headers=headers)) == {
+        "message": "Repository deleted successfully"
+    }
+    check(api.get(path), 404)
+    check(api.get(f"{path}/builds"), 404)
+    check(api.get(f"/subscriptions/{subscription}", headers=user), 404)
+    assert check(api.get("/subscriptions", headers=user)) == [{"subscription_id": kept}]
+    assert [item["id"] for item in check(api.get("/repositories"))] == [other["id"]]
+    assert len(check(api.get(f"/repositories/{other['id']}/builds"))) == 1
+    with api.application.app_context():
+        assert collection("builds").count_documents({}) == 1
+    assert subscriptions(api) == 1
+    check(api.delete(path, headers=headers), 404)
+
+
+def test_delete_repository_stops_running_build(
+    api: FlaskClient,
+    drs_filer: SimpleNamespace,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With builds switched on, deleting a repository stops its running builds.
+
+    The build's pod is deleted and its files are removed; the report of the
+    finished pod then finds no repository. Kubernetes is replaced by mocks;
+    Git clones from a local copy (fixture `drs_filer`).
+
+    Args:
+        api: Client of the API.
+        drs_filer: Local copy of the repository `drs-filer`.
+        tmp_path: Temporary directory for the builds' files.
+        monkeypatch: Pytest's monkeypatch fixture.
+    """
+    builds_dir = tmp_path / "builds"
+    builds_dir.mkdir()
+    monkeypatch.setattr(builds, "BASE_DIR", str(builds_dir))
+    monkeypatch.setattr(
+        builds,
+        "template_file",
+        str(Path(builds.__file__).parent / "kaniko" / "template.yaml"),
+    )
+    pods: list[str] = []
+    monkeypatch.setattr(builds, "load_cluster_config", lambda: None)
+    monkeypatch.setattr(
+        builds, "build_push_image_using_kaniko", lambda deployment_file_location: None
+    )
+    monkeypatch.setattr(
+        builds,
+        "delete_pod",
+        lambda name, namespace, missing_ok=False: pods.append(name),
+    )
+    with api.application.app_context():
+        settings = endpoints()["builds"]
+    monkeypatch.setitem(settings, "enabled", True)
+    monkeypatch.setitem(
+        settings, "intermediate_registery_format", "registry.example.org/{}"
+    )
+    repository = check(
+        api.post(
+            "/repositories",
+            json={"url": "https://github.com/elixir-cloud-aai/drs-filer"},
+        )
+    )
+    headers = {"X-Project-Access-Token": repository["access_token"]}
+    build = check(
+        api.post(
+            f"/repositories/{repository['id']}/builds",
+            headers=headers,
+            json={
+                "images": [{"name": "org/image:1", "location": "Dockerfile"}],
+                "head_commit": {"tag": drs_filer.tag},
+                "dockerhub_token": "dXNlcjpwYXNzd2Q=",  # user:passwd  gitleaks:allow
+            },
+        )
+    )
+    assert [path.name for path in builds_dir.iterdir()] == [build["id"]]
+    check(api.delete(f"/repositories/{repository['id']}", headers=headers))
+    assert pods == [build["id"]]
+    assert list(builds_dir.iterdir()) == []
+    check(
+        api.put(
+            f"/repositories/{repository['id']}/builds/{build['id']}",
+            headers=headers,
+            json={"id": build["id"]},
+        ),
+        404,
+    )

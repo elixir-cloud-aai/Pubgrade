@@ -41,6 +41,9 @@ BASE_DIR = os.getenv("BASE_DIR", "/pubgrade_temp_files")
 # signing of an image
 REQUEST_TIMEOUT = 30
 
+# States of builds that have finished
+FINISHED = ["SUCCEEDED", "FAILED"]
+
 # An abbreviated or full commit hash (SHA-1 or SHA-256)
 COMMIT_HASH = re.compile(r"[0-9a-fA-F]{4,64}")
 
@@ -622,6 +625,18 @@ def create_dockerhub_config_file(
         config_file.write(template_config_file)
 
 
+def load_cluster_config() -> None:
+    """Load the configuration of the Kubernetes API.
+
+    In a cluster (`KUBERNETES_SERVICE_HOST` is set), from its service
+    account; otherwise from the kubeconfig.
+    """
+    if os.getenv("KUBERNETES_SERVICE_HOST"):
+        config.load_incluster_config()
+    else:
+        config.load_kube_config()
+
+
 def build_push_image_using_kaniko(deployment_file_location: str) -> None:
     """Create kaniko deployment. Build and push image.
 
@@ -631,13 +646,8 @@ def build_push_image_using_kaniko(deployment_file_location: str) -> None:
     Raises:
         CreatePodError: Raised when unable to create deployment.
     """
-    # Retrieve values of NAMESPACE and KUBERNETES_SERVICE_HOST from
-    # environment variables.
     namespace = os.getenv("NAMESPACE") or "default"
-    if os.getenv("KUBERNETES_SERVICE_HOST"):
-        config.load_incluster_config()
-    else:
-        config.load_kube_config()
+    load_cluster_config()
     v1 = client.CoreV1Api()
 
     # Create namespaced pod using kubernetes CoreV1Api from kaniko
@@ -735,16 +745,18 @@ def remove_files(dir_location: str, pod_name: str, namespace: str) -> None:
     delete_pod(pod_name, namespace)
 
 
-def delete_pod(name: str, namespace: str) -> Any:
+def delete_pod(name: str, namespace: str, missing_ok: bool = False) -> Any:
     """Delete pod.
 
     Args:
         name (str): Name of kaniko pod which is completed and needs to be
         deleted.
         namespace (str): Namespace of pod.
+        missing_ok: Whether a pod that doesn't exist counts as deleted.
 
     Returns:
-        Response of CoreV1Api on deleting pod.
+        Response of CoreV1Api on deleting pod; None for a missing pod, with
+        `missing_ok`.
 
     Raises:
         DeletePodError: Raised when encountered an error while deleting pod.
@@ -754,8 +766,44 @@ def delete_pod(name: str, namespace: str) -> Any:
         api_response = api_instance.delete_namespaced_pod(name, namespace)
         return api_response
     except ApiException as e:
+        if missing_ok and e.status == 404:
+            return None
         logger.error("Deleting pod %s failed: %s %s", name, e.status, e.reason)
         raise DeletePodError from None
+
+
+def stop_unfinished_builds(build_ids: list[str]) -> None:
+    """Stop builds that haven't finished, removing their pods and files.
+
+    Only with builds switched on, as only then do builds have pods and
+    files. Builds that have finished have already been cleaned up when they
+    were reported. Pods that no longer exist count as deleted, so this can
+    be repeated after an error.
+
+    Args:
+        build_ids: Identifiers of the builds.
+
+    Raises:
+        DeletePodError: Raised when a pod can't be deleted; the builds after
+            it are left as they are.
+    """
+    if not builds_enabled() or not build_ids:
+        return
+    unfinished = [
+        build["id"]
+        for build in collection("builds").find(
+            {"id": {"$in": build_ids}, "status": {"$nin": FINISHED}},
+            {"id": True, "_id": False},
+        )
+    ]
+    if not unfinished:
+        return
+    load_cluster_config()
+    namespace = os.getenv("NAMESPACE") or "default"
+    for build_id in unfinished:
+        delete_pod(build_id, namespace, missing_ok=True)
+        remove_build_dir(os.path.join(BASE_DIR, build_id), build_id)
+        logger.info("Stopped build %s.", build_id)
 
 
 def trigger_signing_image(
