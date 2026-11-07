@@ -11,6 +11,7 @@ from typing import Any
 from git import GitCommandError, Repo
 from kubernetes import client, config
 from kubernetes.client import ApiException
+from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 import requests
 from werkzeug.exceptions import Unauthorized
@@ -18,6 +19,7 @@ import yaml
 
 from pubgrade.charsets import get_charset
 from pubgrade.errors.exceptions import (
+    BuildCanceled,
     BuildNotFound,
     BuildsDisabled,
     CreatePodError,
@@ -50,6 +52,13 @@ KUBERNETES_TIMEOUT = 10
 
 # States of builds that have finished
 FINISHED = ["SUCCEEDED", "FAILED"]
+# State of builds that have been withdrawn (`cancel_build()`); they keep it
+CANCELED = "CANCELED"
+# Matches builds that haven't been withdrawn
+NOT_CANCELED: dict[str, Any] = {"status": {"$ne": CANCELED}}
+# Field that marks canceled builds whose pod and files may be left, as
+# stopping them failed; responses leave it out
+STOPPING = "stopping"
 
 # An abbreviated or full commit hash (SHA-1 or SHA-256)
 COMMIT_HASH = re.compile(r"[0-9a-fA-F]{4,64}")
@@ -93,15 +102,22 @@ def validate_prebuilt_image(build_data: dict[str, Any]) -> None:
 def publish_prebuilt_image(build_id: str, image: str, subscriptions: list[str]) -> None:
     """Notify subscriptions of a prebuilt image and finish its build.
 
+    A build withdrawn before the notifications start notifies no one; one
+    withdrawn meanwhile stays `CANCELED`, and notifications already started
+    go ahead.
+
     Args:
         build_id: Identifier of the build.
         image: Name and tag of the image.
         subscriptions: Identifiers of the repository's subscriptions.
     """
+    if is_canceled(build_id):
+        logger.info("Build %s was canceled; no one is notified.", build_id)
+        return
     results = notify_all_subscriptions(subscriptions, image, build_id)
     failed = any(result["result"] == "failed" for result in results)
     collection("builds").update_one(
-        {"id": build_id},
+        {"id": build_id, **NOT_CANCELED},
         {
             "$set": {
                 "status": "FAILED" if failed else "SUCCEEDED",
@@ -214,17 +230,28 @@ def register_builds(
     except CreatePodError:
         # The pod may have been created nonetheless, and reports to the build
         ensure_accepting(repository_id, build_data["id"])
+        stop_canceled_build(build_data["id"])
         raise
     except Exception:
         # The client gets an error instead of the build's identifier, so the
         # build is not kept; the client gets the original error even if this
         # fails. The repository's list goes first: a listed build that is
-        # missing would break the listing of the repository's builds.
+        # missing would break the listing of the repository's builds. A build
+        # canceled meanwhile (e.g., while its repository was cloned, which
+        # then failed) is kept, as its cancellation promised.
         try:
             db_collection_repositories.update_one(
                 {"id": repository_id}, {"$pull": {"build_list": build_data["id"]}}
             )
-            db_collection_builds.delete_one({"id": build_data["id"]})
+            deleted = db_collection_builds.delete_one(
+                {"id": build_data["id"], **NOT_CANCELED}
+            ).deleted_count
+            if deleted == 0:
+                # Canceled: listed again
+                db_collection_repositories.update_one(
+                    {"id": repository_id},
+                    {"$addToSet": {"build_list": build_data["id"]}},
+                )
         except Exception as error:
             logger.error(
                 "Removing build %s, which could not start, failed: %s",
@@ -232,9 +259,15 @@ def register_builds(
                 type(error).__name__,
             )
         else:
-            logger.info("Removed build %s, which could not start.", build_data["id"])
+            if deleted:
+                logger.info(
+                    "Removed build %s, which could not start.", build_data["id"]
+                )
+            else:
+                stop_canceled_build(build_data["id"])
         raise
     ensure_accepting(repository_id, build_data["id"])
+    stop_canceled_build(build_data["id"])
     return {"id": build_data["id"]}
 
 
@@ -342,6 +375,7 @@ def get_build_info(build_id: str) -> dict[str, Any]:
         )
         del build_object["id"]
         build_object.pop("dockerhub_token", None)
+        build_object.pop(STOPPING, None)
         return repaired_build(build_object)
     except StopIteration:
         raise BuildNotFound from None
@@ -682,7 +716,16 @@ def build_push_image_using_kaniko(deployment_file_location: str) -> None:
 def build_completed(
     repository_id: str, build_id: str, project_access_token: str
 ) -> dict[str, str]:
-    """Update build completion.
+    """Record the completion of a build, reported by its pod.
+
+    This is the internal callback of the build pods (via the updater), not a
+    way to change a build: a changed build is registered anew. The build is
+    recorded as `SUCCEEDED` before its image is sent for signing, and gets
+    its previous state back if that fails. A build that has been withdrawn
+    (`CANCELED`) before doesn't succeed, its image isn't signed, and the
+    pod and files it may still have are removed. A build withdrawn after its
+    completion was recorded counts as finished: its image is signed, but its
+    subscriptions aren't notified any more.
 
     Args:
         repository_id (str): Repository identifier.
@@ -698,6 +741,7 @@ def build_completed(
         BuildNotFound: Raised when object with given build identifier was
         not found.
         BuildsDisabled: Raised when builds are switched off.
+        BuildCanceled: Raised when the build has been withdrawn.
     """
     if not builds_enabled():
         raise BuildsDisabled
@@ -715,12 +759,26 @@ def build_completed(
         data = (
             db_collection_builds.find({"id": build_id}, {"_id": False}).limit(1).next()
         )
-        data["status"] = "SUCCEEDED"
-        data["finished_at"] = now()
-
-        intermediate_registry_format = endpoints()["builds"][
-            "intermediate_registery_format"
-        ]
+    except StopIteration:
+        raise BuildNotFound from None
+    # Recorded before the signing, so that a cancellation from now on finds
+    # a finished build and doesn't stop it
+    finished_at = now()
+    previous = db_collection_builds.find_one_and_update(
+        {"id": build_id, **NOT_CANCELED},
+        {"$set": {"status": "SUCCEEDED", "finished_at": finished_at}},
+        projection={"_id": False, "status": True, "finished_at": True},
+        return_document=ReturnDocument.BEFORE,
+    )
+    if previous is None:
+        # A pod that started after its build was canceled, or that wasn't
+        # removed, would be reported again and again
+        stop_canceled_build(build_id)
+        raise BuildCanceled
+    intermediate_registry_format = endpoints()["builds"][
+        "intermediate_registery_format"
+    ]
+    try:
         trigger_signing_image(
             image_path=data["images"][0]["name"],
             dockerhub_token=data["dockerhub_token"],
@@ -729,23 +787,105 @@ def build_completed(
             ),
             push_tag=data["images"][0]["name"],
         )
-
-        db_collection_builds.update_one({"id": data["id"]}, {"$set": data})
-        remove_files(
-            f"{BASE_DIR}/{build_id}",
-            build_id,
-            os.getenv("NAMESPACE", "default"),
+    except Exception:
+        # The pod reports the build again; not if it was canceled meanwhile
+        db_collection_builds.update_one(
+            {"id": build_id, "status": "SUCCEEDED", "finished_at": finished_at},
+            {
+                "$set": {
+                    "status": previous.get("status"),
+                    "finished_at": previous.get("finished_at"),
+                }
+            },
         )
-
-        # Notifies available subscriptions registered for the repository.
-        notify_all_subscriptions(
-            data_from_db.get("subscription_list", []),
-            data["images"][0]["name"],
-            build_id,
-        )
+        raise
+    remove_files(
+        f"{BASE_DIR}/{build_id}",
+        build_id,
+        os.getenv("NAMESPACE", "default"),
+    )
+    # A build canceled meanwhile notifies no one
+    if is_canceled(build_id):
+        logger.info("Build %s was canceled; no one is notified.", build_id)
         return {"id": build_id}
-    except StopIteration:
-        raise BuildNotFound from None
+    # Notifies available subscriptions registered for the repository.
+    notify_all_subscriptions(
+        data_from_db.get("subscription_list", []),
+        data["images"][0]["name"],
+        build_id,
+    )
+    return {"id": build_id}
+
+
+def cancel_build(
+    repository_id: str, build_id: str, access_token: str
+) -> dict[str, str]:
+    """Withdraw a build, keeping its record.
+
+    The build is marked `CANCELED` and stays listed; a build that hadn't
+    finished gets its `finished_at`. With builds switched on, its pod and
+    files are removed (see `stop_builds()`), and its completion is no longer
+    recorded: it doesn't succeed, and no one is notified. If the pod or the
+    files can't be removed, the build stays canceled and keeps the mark
+    `STOPPING`, so that the request can be repeated: a repeated request for
+    a marked build stops it again, instead of getting a 409. Deployments
+    that have been notified keep
+    what they pulled: nothing is undeployed, notified again or deleted from
+    a registry.
+
+    Args:
+        repository_id: Identifier of the repository.
+        build_id: Identifier of the build.
+        access_token: Access token of the repository.
+
+    Returns:
+        The identifier of the build.
+
+    Raises:
+        RepositoryNotFound: Raised when the repository is not found.
+        Unauthorized: Raised when the access token isn't the repository's.
+        BuildNotFound: Raised when the build is not found, or isn't the
+            repository's.
+        BuildCanceled: Raised when the build has been withdrawn already.
+        DeletePodError: Raised when the build's pod can't be deleted.
+        OSError: Raised when the build's files can't be removed.
+    """
+    repository = collection("repositories").find_one({"id": repository_id})
+    if repository is None:
+        raise RepositoryNotFound
+    if repository["access_token"] != access_token:
+        raise Unauthorized
+    if build_id not in repository.get("build_list", []):
+        raise BuildNotFound
+    db_collection_builds = collection("builds")
+    # Unfinished builds also get their end and the mark, in the same update;
+    # finished ones are only marked as canceled. A build can finish between
+    # the two updates, not go back, so one of them finds a build that isn't
+    # canceled.
+    canceled = db_collection_builds.update_one(
+        {"id": build_id, "status": {"$nin": [*FINISHED, CANCELED]}},
+        {"$set": {"status": CANCELED, "finished_at": now(), STOPPING: True}},
+    )
+    if canceled.matched_count == 0:
+        finished = db_collection_builds.update_one(
+            {"id": build_id, "status": {"$in": FINISHED}},
+            {"$set": {"status": CANCELED}},
+        )
+        if finished.matched_count:
+            logger.info("Canceled build %s, which had finished.", build_id)
+            return {"id": build_id}
+        build = db_collection_builds.find_one({"id": build_id}, {"_id": False})
+        if build is None:
+            raise BuildNotFound
+        # Canceled, but stopping it failed: stopped again
+        if not build.get(STOPPING):
+            raise BuildCanceled
+    # Errors leave the mark, so that the request can be repeated; the build
+    # stays canceled meanwhile, and its completion stops it too
+    stop_builds([build_id], force=True)
+    db_collection_builds.update_one({"id": build_id}, {"$unset": {STOPPING: ""}})
+    logger.info("Canceled build %s.", build_id)
+    return {"id": build_id}
 
 
 def remove_files(dir_location: str, pod_name: str, namespace: str) -> None:
@@ -790,17 +930,20 @@ def delete_pod(name: str, namespace: str, missing_ok: bool = False) -> Any:
         raise DeletePodError from None
 
 
-def stop_builds(build_ids: list[str]) -> None:
+def stop_builds(build_ids: list[str], force: bool = False) -> None:
     """Remove the pods and files of builds that may still have them.
 
     Only with builds switched on, as only then do builds have pods and
     files. Unfinished builds are stopped this way, and finished builds
-    whose files are left because their cleanup failed are cleaned up. Pods
-    that no longer exist count as deleted, so this can be repeated after an
-    error.
+    whose files are left because their cleanup failed are cleaned up.
+    Canceled builds count as finished: they were stopped when they were
+    canceled. Pods that no longer exist count as deleted, so this can be
+    repeated after an error.
 
     Args:
         build_ids: Identifiers of the builds.
+        force: Whether to stop the builds whatever their state, e.g., a
+            build that is being canceled.
 
     Raises:
         DeletePodError: Raised when a pod can't be deleted; the builds after
@@ -809,13 +952,24 @@ def stop_builds(build_ids: list[str]) -> None:
     """
     if not builds_enabled() or not build_ids:
         return
-    unfinished = {
-        build["id"]
-        for build in collection("builds").find(
-            {"id": {"$in": build_ids}, "status": {"$nin": FINISHED}},
-            {"id": True, "_id": False},
-        )
-    }
+    unfinished = (
+        set(build_ids)
+        if force
+        else {
+            build["id"]
+            for build in collection("builds").find(
+                {
+                    "id": {"$in": build_ids},
+                    # Canceled builds whose stop failed may have pods left
+                    "$or": [
+                        {"status": {"$nin": [*FINISHED, CANCELED]}},
+                        {STOPPING: True},
+                    ],
+                },
+                {"id": True, "_id": False},
+            )
+        }
+    )
     # Directories of the builds; identifiers that would lead outside
     # `BASE_DIR` get none
     base = os.path.join(os.path.abspath(BASE_DIR), "")
@@ -882,6 +1036,43 @@ def ensure_accepting(repository_id: str, build_id: str) -> None:
         return
     withdraw_build(repository_id, build_id)
     raise RepositoryNotFound
+
+
+def is_canceled(build_id: str) -> bool:
+    """Check whether a build has been canceled.
+
+    Args:
+        build_id: Identifier of the build.
+
+    Returns:
+        Whether the build exists and is `CANCELED`.
+    """
+    found = collection("builds").find_one(
+        {"id": build_id, "status": CANCELED}, {"_id": True}
+    )
+    return found is not None
+
+
+def stop_canceled_build(build_id: str) -> None:
+    """Stop a build that was canceled, if it may still have a pod or files.
+
+    A build is listed before its pod and files exist, so its cancellation
+    may have found nothing to remove. Errors are logged: the build stays
+    canceled, and its completion gets a 409 anyway.
+
+    Args:
+        build_id: Identifier of the build.
+    """
+    if not is_canceled(build_id):
+        return
+    try:
+        stop_builds([build_id], force=True)
+    except Exception as error:
+        logger.error(
+            "Build %s could not be stopped: %s", build_id, type(error).__name__
+        )
+    else:
+        logger.info("Stopped build %s, which was canceled.", build_id)
 
 
 def withdraw_build(repository_id: str, build_id: str) -> None:

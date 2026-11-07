@@ -11,6 +11,7 @@ import pytest
 from pubgrade.errors.exceptions import RepositoryNotFound
 from pubgrade.modules.endpoints import builds
 from pubgrade.modules.server import (
+    deleteBuild,
     deleteRepository,
     deleteSubscription,
     deleteUser,
@@ -350,6 +351,40 @@ def test_updateBuild() -> None:
     ):
         res = unwrap(updateBuild)(MOCK_REPOSITORIES[1]["id"], MOCK_BUILD_INFO["id"])
         assert isinstance(res, dict)
+
+
+def test_deleteBuild(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The `deleteBuild` controller withdraws a build.
+
+    Args:
+        monkeypatch: Fixture to replace the calls to Kubernetes.
+    """
+    monkeypatch.setattr(builds, "stop_builds", lambda build_ids, force=False: None)
+    app = Flask(__name__)
+    set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
+    for name in ("repositories", "builds"):
+        foca_config(app).db.dbs["pubgradeStore"].collections[
+            name
+        ].client = mongomock.MongoClient().db[name]
+    for repository in MOCK_REPOSITORIES:
+        foca_config(app).db.dbs["pubgradeStore"].collections[
+            "repositories"
+        ].client.insert_one(dict(repository))
+    foca_config(app).db.dbs["pubgradeStore"].collections["builds"].client.insert_one(
+        dict(MOCK_BUILD_INFO)
+    )
+    with app.test_request_context(
+        headers={"X-Project-Access-Token": MOCK_REPOSITORIES[1]["access_token"]}
+    ):
+        res = unwrap(deleteBuild)(MOCK_REPOSITORIES[1]["id"], MOCK_BUILD_INFO["id"])
+    assert res == {"id": MOCK_BUILD_INFO["id"]}
+    stored = (
+        foca_config(app)
+        .db.dbs["pubgradeStore"]
+        .collections["builds"]
+        .client.find_one({"id": MOCK_BUILD_INFO["id"]})
+    )
+    assert stored["status"] == "CANCELED"
 
 
 def test_postSubscription() -> None:

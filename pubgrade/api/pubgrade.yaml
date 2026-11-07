@@ -393,9 +393,13 @@ paths:
         default:
           $ref: '#/components/responses/Error'
     put:
-      summary: 'Update build info to pubgrade'
-      description: Used by kaniko pod to update build complete info at pubgrade.
-        Returns 403 with builds switched off.
+      summary: 'Record the completion of a build (internal callback)'
+      description: Internal callback, used with builds switched on by the
+        updater to report that a build's pod has succeeded; not a way to
+        change a build, which is registered anew with
+        `POST /repositories/{id}/builds` instead. Returns 403 with builds
+        switched off, and 409 for a build that has been canceled, which then
+        doesn't succeed and notifies no one.
       operationId: updateBuild
       tags:
         - builds
@@ -454,6 +458,77 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      summary: 'Cancel build'
+      description: Withdraw a build. Only the repository's access token
+        allows it. The build is kept and stays listed, with the status
+        `CANCELED`; `finished_at` is set if it hadn't finished. With builds
+        switched on, a build that is still running is stopped, its pod and
+        files removed; if they can't be removed, the request fails, the build
+        stays canceled, and the request can be repeated to stop it again. Its
+        completion then gets a 409, so it doesn't succeed and notifies no
+        one. Finished builds are only marked. Deployments that have been
+        notified keep what they pulled; nothing is undeployed, notified
+        again or deleted from a registry. A build that has been canceled
+        (and stopped) already gets a 409; an unknown build, or one of another
+        repository, gets a 404. There is no way to change a build; register a
+        new one instead.
+      operationId: deleteBuild
+      tags:
+        - builds
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Identifier generated when first registering the
+            repository via `POST /repositories`.
+        - in: path
+          name: build_id
+          required: true
+          schema:
+            type: string
+          description: Identifier generated when registering new build via
+            `POST /repositories/{id}/builds`
+        - in: header
+          name: X-Project-Access-Token
+          required: true
+          schema:
+            type: string
+          description: Secret used to identify source, generated when first
+            registering the repository via `POST /repositories`
+      responses:
+        '200':
+          description: 'The build was canceled.'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                    id:
+                      type: string
+                      description: Identifier of the canceled build.
+                      example: build_123
+                additionalProperties: false
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '500':
           $ref: '#/components/responses/InternalServerError'
         default:
@@ -925,6 +1000,12 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Error'
+    Conflict:
+      description: 'Conflict ([RFC 7231](https://tools.ietf.org/html/rfc7231))'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
     InternalServerError:
       description: 'Internal server error
        ([RFC 7231](https://tools.ietf.org/html/rfc7231))'
@@ -955,8 +1036,12 @@ components:
                   - DELETING
                   - SUCCEEDED
                   - FAILED
+                  - CANCELED
                 example: QUEUED
-                description: Current condition/state of build.
+                description: Current condition/state of build. `CANCELED`
+                  builds have been withdrawn by the repository
+                  (`DELETE /repositories/{id}/builds/{build_id}`); they keep
+                  that status.
               started_at:
                 type: string
                 format: date-time

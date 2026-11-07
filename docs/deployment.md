@@ -125,6 +125,22 @@ the request gets a 500; the repository, its builds and subscriptions stay
 (pods and files removed until then stay removed), so the request can be
 repeated.
 
+Canceling a running build (`DELETE /repositories/{id}/builds/{build_id}`, see
+[Usage](usage.md#cancel-a-build)) stops it the same way: its pod is deleted
+and its files are removed, and the build is kept with the status `CANCELED`.
+If the pod or the files can't be removed, the request gets a 500, and the
+build stays canceled; repeat the request to stop it again (it gets a 409
+only once the build is stopped). Deleting the repository stops it too. A build canceled while it starts is stopped
+once its pod has been created. When the updater reports a canceled build as
+finished, it gets a 409: the build doesn't succeed, its image isn't signed,
+no one is notified, and a pod that is left is deleted. Pubgrade records a
+build as `SUCCEEDED` before it triggers the signing of its image (back to its
+previous status if that fails); a build canceled from then on counts as
+finished: the signing goes ahead, and subscriptions aren't notified unless
+the notifications have started already. Finished builds are only marked;
+their files, if their cleanup failed, are removed when their repository is
+deleted.
+
 ## Upgrading to FOCA 0.21 (API 2.0.0)
 
 From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA
@@ -180,6 +196,11 @@ From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA
   own should add the index on `repository_id` of the collection
   `subscriptions` (see `pubgrade/config.yaml`), which speeds up deletions
   and the limit of subscriptions per repository.
+- **Builds:** `DELETE /repositories/{id}/builds/{build_id}` cancels a build
+  (see [Usage](usage.md#cancel-a-build)), and the status of builds has the
+  new value `CANCELED`: clients that check `status` against a fixed list
+  of values need to accept it. Completion reports of canceled builds get a
+  409.
 - **Image:** it runs as user 1000 (group 0), and its app files are read-only;
   any user ID works, e.g., on OpenShift.
 - **MongoDB:** FOCA 0.21 needs MongoDB 4.4 or later; the chart's MongoDB is
