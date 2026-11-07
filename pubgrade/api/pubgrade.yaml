@@ -1166,8 +1166,9 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Image'
-          description: Image of the build, as a list. Only the first entry
-           counts; publish further images as builds of their own.
+          description: Image of the build, as a list. A prebuilt image must
+           be the only entry; with builds on, only the first entry counts.
+           Publish further images as builds of their own.
         head_commit:
           type: object
           oneOf:
