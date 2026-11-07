@@ -245,7 +245,7 @@ paths:
         `notifications` hold the results. With builds switched on, this endpoint
         triggers a build at Pubgrade; a branch, tag or commit in `head_commit`
         that is empty or isn't in the repository gets a 400. A build that
-        can't start isn't kept.
+        can't start isn't kept, unless only creating its pod failed.
       operationId: postBuild
       tags:
         - builds

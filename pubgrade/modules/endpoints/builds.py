@@ -194,15 +194,19 @@ def register_builds(
         return {"id": build_data["id"]}
     try:
         start_build(build_data, data_from_db["url"], access_token)
+    except CreatePodError:
+        # The pod may have been created nonetheless, and reports to the build
+        raise
     except Exception:
         # The client gets an error instead of the build's identifier, so the
         # build is not kept; the client gets the original error even if this
-        # fails
+        # fails. The repository's list goes first: a listed build that is
+        # missing would break the listing of the repository's builds.
         try:
-            db_collection_builds.delete_one({"id": build_data["id"]})
             db_collection_repositories.update_one(
                 {"id": repository_id}, {"$pull": {"build_list": build_data["id"]}}
             )
+            db_collection_builds.delete_one({"id": build_data["id"]})
         except Exception as error:
             logger.error(
                 "Removing build %s, which could not start, failed: %s",
@@ -232,7 +236,11 @@ def start_build(build_data: dict[str, Any], repo_url: str, access_token: str) ->
     head_commit = build_data["head_commit"]
     if "branch" in head_commit:
         branch = head_commit["branch"]
-        commit_sha = head_commit.get("commit_sha", "")
+        commit_sha = head_commit.get("commit_sha")
+        # An empty `commit_sha` would build the branch's head
+        if commit_sha == "":
+            raise GitRefNotFound
+        commit_sha = commit_sha or ""
         name = branch
     else:
         branch = ""
@@ -333,7 +341,8 @@ def create_build(
 ) -> None:
     """Create build and push to DockerHub.
 
-    If the build can't start, its directory is removed again.
+    If the build can't start, its directory is removed again, unless creating
+    its pod failed: the pod may have been created nonetheless.
 
     Args:
         repo_url (str): URL of git repository to be cloned.
@@ -355,6 +364,7 @@ def create_build(
             `base_dir`.
         GitRefNotFound: If the branch, tag or commit isn't in the
             repository.
+        CreatePodError: If creating the build's pod failed.
     """
     # Build identifiers are generated, but keep the files of a build in
     # `base_dir` regardless
@@ -392,13 +402,40 @@ def create_build(
             dockerhub_token=dockerhub_token,
             config_file_location=config_file_location,
         )
-
-        # Create kaniko deployment to build and publish image.
-        build_push_image_using_kaniko(deployment_file_location=deployment_file_location)
     except Exception:
         # No pod uses the files of a build that didn't start
-        shutil.rmtree(build_dir, ignore_errors=True)
+        remove_build_dir(build_dir, build_id)
         raise
+
+    # Create kaniko deployment to build and publish image. The pod may have
+    # been created even if this fails (e.g., a lost response), so the build's
+    # files are kept
+    try:
+        build_push_image_using_kaniko(deployment_file_location=deployment_file_location)
+    except CreatePodError:
+        raise
+    except Exception as error:
+        logger.error(
+            "Creating the pod of build %s failed: %s", build_id, type(error).__name__
+        )
+        raise CreatePodError from None
+
+
+def remove_build_dir(build_dir: str, build_id: str) -> None:
+    """Remove the directory of a build that didn't start, if there is one.
+
+    Args:
+        build_dir: Directory of the build.
+        build_id: Identifier of the build.
+    """
+    try:
+        shutil.rmtree(build_dir)
+    except FileNotFoundError:
+        pass
+    except OSError as error:
+        logger.error(
+            "Removing the files of build %s failed: %s", build_id, type(error).__name__
+        )
 
 
 def git_clone_and_checkout(
@@ -441,9 +478,13 @@ def git_clone_and_checkout(
             repo.git.show_ref("--verify", "--quiet", remote_branch)
         target = ""
         if commit != "":
-            target = resolve_tag_or_commit(repo, commit)
-    except GitCommandError:
-        raise GitRefNotFound from None
+            # With a branch, `commit` is a `commit_sha`, not a tag
+            target = resolve_tag_or_commit(repo, commit, tags=branch == "")
+    except GitCommandError as error:
+        # Git's lookups exit with 1 for unknown (and ambiguous) names
+        if error.status == 1:
+            raise GitRefNotFound from None
+        raise GitCloningError from None
     try:
         if branch != "":
             repo.git.checkout("-B", branch, remote_branch)
@@ -455,30 +496,34 @@ def git_clone_and_checkout(
     return clone_path
 
 
-def resolve_tag_or_commit(repo: Repo, name: str) -> str:
+def resolve_tag_or_commit(repo: Repo, name: str, tags: bool = True) -> str:
     """Get the commit of a tag or of an abbreviated or full commit hash.
 
     Args:
         repo: Clone of the repository.
         name: Name of a tag, or a commit hash with 4 to 64 hexadecimal digits.
+        tags: Whether `name` may be a tag; if not, only commit hashes are
+            accepted.
 
     Returns:
         The full hash of the commit.
 
     Raises:
-        GitRefNotFound: If `name` is neither a tag nor a commit hash of the
-            repository.
-        GitCommandError: If Git can't resolve the tag or hash to a commit.
+        GitRefNotFound: If `name` is neither a tag nor a commit hash.
+        GitCommandError: If Git can't resolve the tag or hash to a commit
+            (status 1 if it isn't in the repository or isn't unique).
     """
-    tag = f"refs/tags/{name}"
-    try:
-        repo.git.show_ref("--verify", "--quiet", tag)
-    except GitCommandError:
-        if not COMMIT_HASH.fullmatch(name):
-            raise GitRefNotFound from None
-        revision = name
-    else:
-        revision = tag
+    revision = name
+    if tags:
+        tag = f"refs/tags/{name}"
+        try:
+            repo.git.show_ref("--verify", "--quiet", tag)
+            revision = tag
+        except GitCommandError as error:
+            if error.status != 1:
+                raise
+    if revision == name and not COMMIT_HASH.fullmatch(name):
+        raise GitRefNotFound
     commit: str = repo.git.rev_parse("--verify", "--quiet", f"{revision}^{{commit}}")
     return commit
 

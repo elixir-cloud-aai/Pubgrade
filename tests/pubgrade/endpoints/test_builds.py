@@ -43,6 +43,7 @@ from pubgrade.modules.endpoints.builds import (
     get_builds,
     git_clone_and_checkout,
     register_builds,
+    remove_build_dir,
     remove_files,
     start_build,
 )
@@ -477,9 +478,7 @@ class TestBuild:
                 MOCK_BUILD_PAYLOAD,
             )
 
-    @pytest.mark.parametrize(
-        "error", [GitRefNotFound, GitCloningError, CreatePodError, RuntimeError]
-    )
+    @pytest.mark.parametrize("error", [GitRefNotFound, GitCloningError, RuntimeError])
     def test_register_builds_failed_build_not_recorded(
         self, error: type[Exception]
     ) -> None:
@@ -507,6 +506,27 @@ class TestBuild:
             assert builds.collection("builds").count_documents({}) == 0
         assert repository is not None
         assert repository["build_list"] == MOCK_REPOSITORY_2["build_list"]
+
+    def test_register_builds_pod_error_keeps_build(self) -> None:
+        """A build whose pod may have been created is kept."""
+        self.setup()
+        repository_id = MOCK_REPOSITORY_2["id"]
+        with (
+            patch.object(builds, "create_build", side_effect=CreatePodError),
+            self.app.app_context(),
+        ):
+            with pytest.raises(CreatePodError):
+                register_builds(
+                    repository_id,
+                    MOCK_REPOSITORY_2["access_token"],
+                    copy.deepcopy(MOCK_BUILD_PAYLOAD),
+                )
+            repository = builds.collection("repositories").find_one(
+                {"id": repository_id}
+            )
+            assert builds.collection("builds").count_documents({}) == 1
+        assert repository is not None
+        assert len(repository["build_list"]) == len(MOCK_REPOSITORY_2["build_list"]) + 1
 
     @pytest.mark.parametrize(
         ("head_commit", "branch", "commit"),
@@ -544,7 +564,12 @@ class TestBuild:
 
     @pytest.mark.parametrize(
         "head_commit",
-        [{"tag": ""}, {"branch": ""}, {"branch": "", "commit_sha": "abcd"}],
+        [
+            {"tag": ""},
+            {"branch": ""},
+            {"branch": "", "commit_sha": "abcd"},
+            {"branch": "dev", "commit_sha": ""},
+        ],
     )
     def test_start_build_empty_name(self, head_commit: dict[str, str]) -> None:
         """An empty branch or tag is rejected, instead of the default branch.
@@ -738,6 +763,7 @@ class TestBuild:
             ("", "origin/dev"),
             ("dev", "HEAD~1"),
             ("dev", "v1~0"),
+            ("dev", "v1"),
         ],
     )
     def test_git_clone_and_checkout_unknown_ref(
@@ -782,6 +808,35 @@ class TestBuild:
                 repo_url=self.repository_url,
                 branch="dev",
                 commit=drs_filer.commit,
+                base_dir=str(tmp_path),
+                build_id="build123",
+            )
+
+    @pytest.mark.parametrize(("branch", "commit"), [("dev", ""), ("", "v1")])
+    def test_git_clone_and_checkout_lookup_error(
+        self, drs_filer: SimpleNamespace, tmp_path: Path, branch: str, commit: str
+    ) -> None:
+        """A lookup that fails for another reason than an unknown name is a 500.
+
+        Args:
+            drs_filer: Local copy of the repository.
+            tmp_path: Temporary directory, holding the base directory.
+            branch: Branch to check out.
+            commit: Tag to check out.
+        """
+        with (
+            patch.object(
+                Git,
+                "show_ref",
+                side_effect=GitCommandError("show-ref", 128),
+                create=True,
+            ),
+            pytest.raises(GitCloningError),
+        ):
+            git_clone_and_checkout(
+                repo_url=self.repository_url,
+                branch=branch,
+                commit=commit,
                 base_dir=str(tmp_path),
                 build_id="build123",
             )
@@ -987,6 +1042,75 @@ class TestBuild:
         assert os.path.isdir("basedir/build123/drs-filer/.git")
         push_image.assert_called_once_with(deployment_file_location=deployment_file)
         shutil.rmtree("basedir")
+
+    @pytest.mark.parametrize("error", [CreatePodError, RuntimeError])
+    @patch("pubgrade.modules.endpoints.builds.create_dockerhub_config_file")
+    @patch("pubgrade.modules.endpoints.builds.create_deployment_YAML")
+    @patch("pubgrade.modules.endpoints.builds.git_clone_and_checkout")
+    def test_create_build_pod_error(
+        self,
+        clone: MagicMock,
+        deployment: MagicMock,
+        config_file_writer: MagicMock,
+        error: type[Exception],
+        tmp_path: Path,
+    ) -> None:
+        """If creating the pod fails, the build's files are kept.
+
+        The pod may have been created nonetheless.
+
+        Args:
+            clone: Mock of the function that clones the repository.
+            deployment: Mock of the function that writes the deployment file.
+            config_file_writer: Mock of the function that writes the config file.
+            error: Error of creating the pod.
+            tmp_path: Temporary directory, holding the base directory.
+        """
+        build_dir = tmp_path / "build123"
+        build_dir.mkdir()
+        with (
+            patch.object(builds, "build_push_image_using_kaniko", side_effect=error),
+            pytest.raises(CreatePodError),
+        ):
+            create_build(
+                repo_url=self.repository_url,
+                branch="dev",
+                commit="",
+                base_dir=str(tmp_path),
+                build_id="build123",
+                dockerfile_location="Dockerfile",
+                intermediate_registry_path="registry/image",
+                dockerhub_token="token",
+                project_access_token="access_token",
+            )
+        assert build_dir.is_dir()
+
+    def test_remove_build_dir_missing(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A build without files is fine.
+
+        Args:
+            tmp_path: Temporary directory, without the build's directory.
+            caplog: Pytest's fixture of log messages.
+        """
+        remove_build_dir(str(tmp_path / "build123"), "build123")
+        assert not caplog.messages
+
+    def test_remove_build_dir_error(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Files of a build that can't be removed are logged.
+
+        Args:
+            tmp_path: Temporary directory, holding the build's directory.
+            caplog: Pytest's fixture of log messages.
+        """
+        with patch.object(shutil, "rmtree", side_effect=PermissionError):
+            remove_build_dir(str(tmp_path), "build123")
+        assert "Removing the files of build build123 failed: PermissionError" in (
+            caplog.messages
+        )
 
     @patch("pubgrade.modules.endpoints.builds.build_push_image_using_kaniko")
     def test_create_build_unknown_ref(
