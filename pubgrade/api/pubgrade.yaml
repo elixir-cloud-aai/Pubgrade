@@ -244,7 +244,8 @@ paths:
         Pubgrade notifies the repository's subscriptions of it; the build's
         `notifications` hold the results. With builds switched on, this endpoint
         triggers a build at Pubgrade; a branch, tag or commit in `head_commit`
-        that isn't in the repository gets a 400, and no build is recorded.
+        that is empty or isn't in the repository gets a 400. A build that
+        can't start isn't kept.
       operationId: postBuild
       tags:
         - builds
@@ -1010,7 +1011,10 @@ components:
             - $ref: '#/components/schemas/Branch'
             - $ref: '#/components/schemas/Tag'
           description: "Reference to the `commit` or `tag` which is to be used
-           for source code checkout"
+           for source code checkout. With builds switched on, the branch and
+           the tag must be exact names in the repository, and `commit_sha` a
+           commit hash in it (4 to 40 hexadecimal digits); otherwise the
+           request gets a 400."
           example: {"branch": "dev", "commit_sha": "4714900" }
       required:
           - images

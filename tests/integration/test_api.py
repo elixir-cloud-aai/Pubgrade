@@ -281,6 +281,9 @@ def test_repositories_hide_tokens(api: FlaskClient) -> None:
         {"branch": "missing"},
         {"branch": "dev", "commit_sha": "0000000"},
         {"tag": "v9"},
+        {"tag": "HEAD~1"},
+        {"tag": ""},
+        {"branch": ""},
     ],
 )
 def test_build_of_unknown_ref(
@@ -293,7 +296,9 @@ def test_build_of_unknown_ref(
     """A build of a branch, tag or commit that the repository lacks gets a 400.
 
     Regression test for issue #28, where it got a 500. The build isn't
-    recorded and leaves no files.
+    recorded and leaves no files. Git clones the repository's URL on GitHub
+    from the local copy (fixture `drs_filer`), so the URL must not end in
+    `.git`.
 
     Args:
         api: Client of the API.
@@ -329,7 +334,11 @@ def test_build_of_unknown_ref(
         ),
         400,
     )
-    assert error["detail"] == exceptions[GitRefNotFound]["detail"]
+    assert error == {
+        "title": "Bad Request",
+        "status": 400,
+        "detail": exceptions[GitRefNotFound]["detail"],
+    }
     assert list(builds_dir.iterdir()) == []
     with api.application.app_context():
         assert collection("builds").count_documents({}) == 0

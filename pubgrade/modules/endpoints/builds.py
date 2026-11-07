@@ -41,6 +41,9 @@ BASE_DIR = os.getenv("BASE_DIR", "/pubgrade_temp_files")
 # signing of an image
 REQUEST_TIMEOUT = 30
 
+# An abbreviated or full commit hash (SHA-1)
+COMMIT_HASH = re.compile(r"[0-9a-fA-F]{4,40}")
+
 # An image with a tag (no digest), optionally with a registry and its port,
 # following Docker's rules for references
 IMAGE_WITH_TAG = re.compile(
@@ -107,7 +110,8 @@ def register_builds(
     prebuilt image, and the repository's subscriptions are notified of it.
     With builds switched on, a build that can't start (e.g., of an unknown
     branch) is removed again: only builds whose identifier the client got are
-    kept.
+    kept. Until then, while the repository is cloned, the build is listed as
+    `QUEUED`.
 
     Args:
         repository_id (str): Identifier for repository.
@@ -192,12 +196,21 @@ def register_builds(
         start_build(build_data, data_from_db["url"], access_token)
     except Exception:
         # The client gets an error instead of the build's identifier, so the
-        # build is not kept
-        db_collection_builds.delete_one({"id": build_data["id"]})
-        db_collection_repositories.update_one(
-            {"id": repository_id}, {"$pull": {"build_list": build_data["id"]}}
-        )
-        logger.info("Removed build %s, which could not start.", build_data["id"])
+        # build is not kept; the client gets the original error even if this
+        # fails
+        try:
+            db_collection_builds.delete_one({"id": build_data["id"]})
+            db_collection_repositories.update_one(
+                {"id": repository_id}, {"$pull": {"build_list": build_data["id"]}}
+            )
+        except Exception as error:
+            logger.error(
+                "Removing build %s, which could not start, failed: %s",
+                build_data["id"],
+                type(error).__name__,
+            )
+        else:
+            logger.info("Removed build %s, which could not start.", build_data["id"])
         raise
     return {"id": build_data["id"]}
 
@@ -206,9 +219,15 @@ def start_build(build_data: dict[str, Any], repo_url: str, access_token: str) ->
     """Start a registered build.
 
     Args:
-        build_data: The build, as registered.
-        repo_url: URL of the repository.
-        access_token: Access token of the repository.
+        build_data (dict): The build, as registered.
+        repo_url (str): URL of the repository.
+        access_token (str): Access token of the repository.
+
+    Raises:
+        GitRefNotFound: Raised when the branch, tag or commit isn't in the
+            repository.
+        GitCloningError: Raised when cloning or checking out the repository
+            fails.
     """
     head_commit = build_data["head_commit"]
     if "branch" in head_commit:
@@ -217,6 +236,9 @@ def start_build(build_data: dict[str, Any], repo_url: str, access_token: str) ->
     else:
         branch = ""
         commit_sha = head_commit["tag"]
+    # Empty names would build the repository's default branch
+    if branch == "" and commit_sha == "":
+        raise GitRefNotFound
     intermediate_registry_format = endpoints()["builds"][
         "intermediate_registery_format"
     ]
@@ -309,6 +331,8 @@ def create_build(
 ) -> None:
     """Create build and push to DockerHub.
 
+    If the build can't start, its directory is removed again.
+
     Args:
         repo_url (str): URL of git repository to be cloned.
         branch (str): Branch of git repository used for checkout to build
@@ -329,8 +353,6 @@ def create_build(
             `base_dir`.
         GitRefNotFound: If the branch, tag or commit isn't in the
             repository.
-
-    If the build can't start, its directory is removed again.
     """
     # Build identifiers are generated, but keep the files of a build in
     # `base_dir` regardless
@@ -405,17 +427,19 @@ def git_clone_and_checkout(
     except GitCommandError:
         raise GitCloningError from None
     # Look the branch and the tag or commit up before checking them out, so
-    # that unknown ones are told apart from other errors, and never passed to
-    # Git as options or as revisions with a suffix (e.g. `dev~1`)
+    # that unknown ones are told apart from other errors. Only exact names of
+    # branches and tags, and hexadecimal commit hashes, are accepted: no
+    # options and no revision expressions (e.g. `dev~1`)
     remote_branch = f"refs/remotes/origin/{branch}"
     try:
         if branch != "":
+            # `origin/HEAD` is a remote ref, but not a branch
+            if branch == "HEAD" or branch.startswith("-"):
+                raise GitRefNotFound
             repo.git.show_ref("--verify", "--quiet", remote_branch)
         target = ""
         if commit != "":
-            if commit.startswith("-"):
-                raise GitRefNotFound
-            target = repo.git.rev_parse("--verify", "--quiet", f"{commit}^{{commit}}")
+            target = resolve_tag_or_commit(repo, commit)
     except GitCommandError:
         raise GitRefNotFound from None
     try:
@@ -427,6 +451,34 @@ def git_clone_and_checkout(
     except GitCommandError:
         raise GitCloningError from None
     return clone_path
+
+
+def resolve_tag_or_commit(repo: Repo, name: str) -> str:
+    """Get the commit of a tag or of an abbreviated or full commit hash.
+
+    Args:
+        repo: Clone of the repository.
+        name: Name of a tag, or a commit hash with 4 to 40 hexadecimal digits.
+
+    Returns:
+        The full hash of the commit.
+
+    Raises:
+        GitRefNotFound: If `name` is neither a tag nor a commit hash of the
+            repository.
+        GitCommandError: If Git can't resolve the tag or hash to a commit.
+    """
+    tag = f"refs/tags/{name}"
+    try:
+        repo.git.show_ref("--verify", "--quiet", tag)
+    except GitCommandError:
+        if not COMMIT_HASH.fullmatch(name):
+            raise GitRefNotFound from None
+        revision = name
+    else:
+        revision = tag
+    commit: str = repo.git.rev_parse("--verify", "--quiet", f"{revision}^{{commit}}")
+    return commit
 
 
 def create_deployment_YAML(

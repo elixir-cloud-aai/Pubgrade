@@ -17,7 +17,7 @@ import mongomock
 from pymongo.errors import DuplicateKeyError
 import pytest
 import requests
-from werkzeug.exceptions import InternalServerError, Unauthorized
+from werkzeug.exceptions import BadRequest, InternalServerError, Unauthorized
 import yaml
 
 from pubgrade.errors.exceptions import (
@@ -476,7 +476,9 @@ class TestBuild:
                 MOCK_BUILD_PAYLOAD,
             )
 
-    @pytest.mark.parametrize("error", [GitRefNotFound, GitCloningError])
+    @pytest.mark.parametrize(
+        "error", [GitRefNotFound, GitCloningError, CreatePodError, RuntimeError]
+    )
     def test_register_builds_failed_build_not_recorded(
         self, error: type[Exception]
     ) -> None:
@@ -491,6 +493,7 @@ class TestBuild:
             patch.object(builds, "create_build", side_effect=error),
             self.app.app_context(),
         ):
+            assert builds.builds_enabled()
             with pytest.raises(error):
                 register_builds(
                     repository_id,
@@ -503,6 +506,34 @@ class TestBuild:
             assert builds.collection("builds").count_documents({}) == 0
         assert repository is not None
         assert repository["build_list"] == MOCK_REPOSITORY_2["build_list"]
+
+    def test_register_builds_failed_removal(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """If a build that can't start can't be removed, its error is kept.
+
+        Args:
+            caplog: Pytest's fixture of log messages.
+        """
+        self.setup()
+        builds_client = (
+            self.app.config.foca.db.dbs["pubgradeStore"].collections["builds"].client
+        )
+        builds_client.delete_one = MagicMock(side_effect=RuntimeError)
+        with (
+            patch.object(builds, "create_build", side_effect=GitRefNotFound),
+            self.app.app_context(),
+            pytest.raises(GitRefNotFound),
+        ):
+            register_builds(
+                MOCK_REPOSITORY_2["id"],
+                MOCK_REPOSITORY_2["access_token"],
+                copy.deepcopy(MOCK_BUILD_PAYLOAD),
+            )
+        assert any(
+            "could not start, failed: RuntimeError" in message
+            for message in caplog.messages
+        )
 
     def test_get_builds(self) -> None:
         """Test get builds."""
@@ -596,6 +627,47 @@ class TestBuild:
         assert Repo(clone_path).head.commit.hexsha.startswith(drs_filer.commit)
         shutil.rmtree("./build123")
 
+    def test_git_clone_and_checkout_branch_only(
+        self, drs_filer: SimpleNamespace, tmp_path: Path
+    ) -> None:
+        """Without a tag or commit, the head of the branch is checked out.
+
+        Args:
+            drs_filer: Local copy of the repository.
+            tmp_path: Temporary directory, holding the base directory.
+        """
+        clone_path = git_clone_and_checkout(
+            repo_url=self.repository_url,
+            branch="dev",
+            commit="",
+            base_dir=str(tmp_path),
+            build_id="build123",
+        )
+        clone = Repo(clone_path)
+        remote = Repo(drs_filer.root / "drs-filer")
+        assert clone.active_branch.name == "dev"
+        assert clone.head.commit == remote.heads.dev.commit
+
+    def test_git_clone_and_checkout_full_hash(
+        self, drs_filer: SimpleNamespace, tmp_path: Path
+    ) -> None:
+        """A full commit hash is checked out, also without a branch.
+
+        Args:
+            drs_filer: Local copy of the repository.
+            tmp_path: Temporary directory, holding the base directory.
+        """
+        remote = Repo(drs_filer.root / "drs-filer")
+        commit = remote.commit(drs_filer.commit).hexsha
+        clone_path = git_clone_and_checkout(
+            repo_url=self.repository_url,
+            branch="",
+            commit=commit,
+            base_dir=str(tmp_path),
+            build_id="build123",
+        )
+        assert Repo(clone_path).head.commit.hexsha == commit
+
     @pytest.mark.parametrize(
         ("branch", "commit"),
         [
@@ -605,6 +677,11 @@ class TestBuild:
             ("", "v9"),
             ("", "--detach"),
             ("--detach", ""),
+            ("HEAD", ""),
+            ("", "HEAD~1"),
+            ("", "origin/dev"),
+            ("dev", "HEAD~1"),
+            ("dev", "v1~0"),
         ],
     )
     def test_git_clone_and_checkout_unknown_ref(
@@ -655,9 +732,8 @@ class TestBuild:
 
     def test_git_ref_not_found_is_bad_request(self) -> None:
         """An unknown branch, tag or commit is the client's error (400)."""
-        problem = exceptions[GitRefNotFound]
-        assert problem["status"] == 400
-        assert "branch, tag or commit" in str(problem["detail"])
+        assert issubclass(GitRefNotFound, BadRequest)
+        assert exceptions[GitRefNotFound]["status"] == 400
 
     def test_git_clone_and_checkout_git_command_error(
         self, drs_filer: SimpleNamespace
