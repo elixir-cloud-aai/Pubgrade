@@ -26,6 +26,7 @@ from pubgrade.modules.endpoints.subscriptions import (
     delete_subscription,
     get_subscription_info,
     get_subscriptions,
+    matches,
     notify_all_subscriptions,
     notify_subscriptions,
     register_subscription,
@@ -970,3 +971,38 @@ class TestSubscriptions:
                 MOCK_BUILD_INFO["id"],
             )
         assert result["result"] == "skipped"
+
+
+@pytest.mark.parametrize(
+    "build_types,build_type,expected",
+    [
+        (None, None, True),
+        ([], "testing", True),
+        (["production"], "production", True),
+        (["production"], "testing", False),
+        (["production"], None, False),
+        # Not written by Pubgrade: no filter
+        ("production", "prod", True),
+    ],
+)
+def test_matches_build_types(
+    build_types: Any, build_type: str | None, expected: bool
+) -> None:
+    """Subscriptions with build types match only builds of these types."""
+    subscription: dict[str, Any] = {"type": "tag", "value": "*"}
+    if build_types is not None:
+        subscription["build_types"] = build_types
+    build: dict[str, Any] = {"head_commit": {"tag": "1.0"}}
+    if build_type is not None:
+        build["build_type"] = build_type
+    assert matches(subscription, build) is expected
+
+
+@pytest.mark.parametrize(
+    "subscription",
+    [{"type": "branch", "value": "*"}, {"type": "tag", "value": "2.0"}],
+)
+def test_matches_type_and_value(subscription: dict[str, Any]) -> None:
+    """The build types don't widen the match of type and value."""
+    build = {"head_commit": {"tag": "1.0"}, "build_type": "production"}
+    assert not matches({**subscription, "build_types": ["production"]}, build)

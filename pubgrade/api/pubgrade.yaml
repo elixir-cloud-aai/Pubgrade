@@ -134,9 +134,10 @@ paths:
           $ref: '#/components/responses/Error'
     put:
       summary: Modify registered repository
-      description: Change the URL of a registered repository. Only the
-        repository's access token allows it. The repository keeps its
-        identifier, access token, builds and subscriptions.
+      description: Change the URL of a registered repository, and its
+        `build_types` if the request gives them. Only the repository's access
+        token allows it. The repository keeps its identifier, access token,
+        builds and subscriptions (with their `build_types`).
       operationId: putRepositories
       tags:
         - repositories
@@ -582,7 +583,9 @@ paths:
               summary: Notification of a new image
               description: Pubgrade calls the subscription's `callback_url`
                 when the repository publishes an image whose `head_commit`
-                matches the subscription's `type` and `value`. Only the status
+                matches the subscription's `type` and `value` and, if the
+                subscription has a non-empty `build_types`, whose
+                `build_type` is one of them. Only the status
                 of the response counts, the body isn't read; a 2xx status
                 means `delivered`, any other status, a redirect or no
                 response in time means `failed` (see the build's
@@ -1143,8 +1146,8 @@ components:
             - skipped
           description: "`delivered`: the subscriber responded with a 2xx status.
            `failed`: it responded with another status, or didn't respond in
-           time. `skipped`: the subscription doesn't match the build, or no
-           longer exists."
+           time. `skipped`: the subscription doesn't match the build (its
+           `type`, `value` or `build_types`), or no longer exists."
         http_status:
           type: integer
           nullable: true
@@ -1180,6 +1183,13 @@ components:
            commit hash in it (4 to 64 hexadecimal digits); otherwise the
            request gets a 400."
           example: {"branch": "dev", "commit_sha": "4714900" }
+        build_type:
+          allOf:
+            - $ref: '#/components/schemas/BuildType'
+          description: Type of the build, one of the repository's
+            `build_types` (otherwise the request gets a 400). Subscriptions
+            with a non-empty `build_types` get only builds of these types;
+            builds without a type go only to subscriptions without them.
       required:
           - images
           - head_commit
@@ -1254,6 +1264,18 @@ components:
             description: Value to match with type of `head_commit`; `*` matches
               any value of the type.
             example: dev
+        build_types:
+            type: array
+            description: Build types of the repository that the subscription
+              gets (each must be one of the repository's `build_types`,
+              otherwise the request gets a 400). Missing or empty, it gets
+              builds of all types and without a type; otherwise only builds
+              whose `build_type` is one of them.
+            items:
+              $ref: '#/components/schemas/BuildType'
+            uniqueItems: true
+            maxItems: 50
+            example: [production]
     RepositoryListItem:
       description: Schema used to show at `GET /repositories` for repositories.
       allOf:
@@ -1273,8 +1295,25 @@ components:
           type: string
           description: URL of the git repository.
           example: https://github.com/elixir-cloud-aai/trs-filer.git
+        build_types:
+          type: array
+          description: Build types that the repository's builds may have
+            (`build_type`), and that subscriptions may filter on
+            (`build_types`). Without them, builds have no type. `PUT
+            /repositories/{id}` changes them only if it gives them.
+          items:
+            $ref: '#/components/schemas/BuildType'
+          uniqueItems: true
+          maxItems: 50
+          example: [production, testing]
       required:
         - url
+    BuildType:
+      type: string
+      description: Name of a build type.
+      pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'
+      maxLength: 64
+      example: production
     Error:
       type: object
       properties:
