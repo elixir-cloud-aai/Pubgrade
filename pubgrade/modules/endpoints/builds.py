@@ -816,7 +816,19 @@ def stop_builds(build_ids: list[str]) -> None:
             {"id": True, "_id": False},
         )
     }
-    build_dirs = {build_id: build_dir_of(build_id) for build_id in build_ids}
+    # Directories of the builds; identifiers that would lead outside
+    # `BASE_DIR` get none
+    base = os.path.join(os.path.abspath(BASE_DIR), "")
+    build_dirs: dict[str, str | None] = {}
+    for build_id in build_ids:
+        build_dir = os.path.abspath(os.path.join(base, build_id))
+        if build_dir.startswith(base):
+            build_dirs[build_id] = build_dir
+        else:
+            logger.error(
+                "Directory of build %s is outside the base directory.", build_id
+            )
+            build_dirs[build_id] = None
     stopping = [
         build_id
         for build_id, build_dir in build_dirs.items()
@@ -829,10 +841,11 @@ def stop_builds(build_ids: list[str]) -> None:
     namespace = os.getenv("NAMESPACE") or "default"
     for build_id in stopping:
         delete_pod(build_id, namespace, missing_ok=True)
-        build_dir = build_dirs[build_id]
-        if build_dir is not None:
+        stopped_dir = build_dirs[build_id]
+        # Checked again here, where the files are removed
+        if stopped_dir is not None and stopped_dir.startswith(base):
             # Errors stop the deletion, which can then be repeated
-            shutil.rmtree(build_dir, ignore_errors=False, onexc=_ignore_missing)
+            shutil.rmtree(stopped_dir, ignore_errors=False, onexc=_ignore_missing)
         logger.info("Stopped build %s.", build_id)
 
 
@@ -849,25 +862,6 @@ def _ignore_missing(function: Any, path: str, error: BaseException) -> None:
     """
     if not isinstance(error, FileNotFoundError):
         raise error
-
-
-def build_dir_of(build_id: str) -> str | None:
-    """Get the directory of a build's files.
-
-    Args:
-        build_id: Identifier of the build.
-
-    Returns:
-        The directory in `BASE_DIR`, or None if the identifier would lead
-        outside it.
-    """
-    base = os.path.abspath(BASE_DIR)
-    build_dir = os.path.abspath(os.path.join(base, build_id))
-    # `join(base, "")` ends in a separator, also for the root directory
-    if not build_dir.startswith(os.path.join(base, "")):
-        logger.error("Directory of build %s is outside the base directory.", build_id)
-        return None
-    return build_dir
 
 
 def ensure_accepting(repository_id: str, build_id: str) -> None:

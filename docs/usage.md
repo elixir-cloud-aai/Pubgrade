@@ -111,7 +111,9 @@ curl --request DELETE '<base URL>/repositories/<repository ID>' \
 ```
 
 The subscriptions disappear from their users' lists, and their deployments
-are no longer notified; they keep the images they already have. Images and
+are no longer notified; they keep the images they already have. Pubgrade
+doesn't manage deployments: to remove one, its operators undeploy it (e.g.,
+with Helm or kubectl). Images and
 subscriptions sent to the repository while it is deleted get a 404. With
 builds switched on, its builds are stopped (see
 [Builds](deployment.md#builds)).
