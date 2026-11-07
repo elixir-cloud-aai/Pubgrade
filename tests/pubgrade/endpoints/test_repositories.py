@@ -6,7 +6,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 from flask import Flask
-from foca.models.config import Config, MongoConfig
+from foca.models.config import MongoConfig
 import mongomock
 from pymongo.errors import DuplicateKeyError
 import pytest
@@ -26,31 +26,8 @@ from pubgrade.modules.endpoints.repositories import (
     modify_repository_info,
     register_repository,
 )
+from tests.helpers import foca_config, set_foca
 from tests.mock_data import ENDPOINT_CONFIG, MOCK_REPOSITORIES, MONGO_CONFIG
-
-
-def _set_foca(app: Flask, **settings: Any) -> None:
-    """Set the FOCA configuration of an app.
-
-    Args:
-        app: Flask app.
-        **settings: Settings of the configuration.
-    """
-    flask_config: Any = app.config
-    flask_config.foca = Config(**settings)
-
-
-def _foca(app: Flask) -> Any:
-    """Get the FOCA configuration of an app.
-
-    Args:
-        app: Flask app.
-
-    Returns:
-        The configuration, with the collections of the database.
-    """
-    flask_config: Any = app.config
-    return flask_config.foca
 
 
 class TestRepository:
@@ -62,12 +39,12 @@ class TestRepository:
 
     def setup(self) -> None:
         """Prepare the configuration with a user and an admin user."""
-        _set_foca(self.app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-        _foca(self.app).db.dbs["pubgradeStore"].collections[
+        set_foca(self.app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
+        foca_config(self.app).db.dbs["pubgradeStore"].collections[
             "repositories"
         ].client = mongomock.MongoClient().db.collection
         for repository in MOCK_REPOSITORIES:
-            _foca(self.app).db.dbs["pubgradeStore"].collections[
+            foca_config(self.app).db.dbs["pubgradeStore"].collections[
                 "repositories"
             ].client.insert_one(repository)
 
@@ -99,7 +76,7 @@ class TestRepository:
     def test_register_repository_closed(self) -> None:
         """Registration can be closed by configuration."""
         self.setup()
-        _foca(self.app).endpoints["repository"]["registration_enabled"] = False
+        foca_config(self.app).endpoints["repository"]["registration_enabled"] = False
         with self.app.app_context(), pytest.raises(RegistrationDisabled):
             register_repository(data={"url": self.repository_url})
 
@@ -116,16 +93,16 @@ class TestRepository:
     def test_register_repository_duplicate_key_error(self) -> None:
         """A duplicate key on insertion is an internal error."""
         app = Flask(__name__)
-        _set_foca(
+        set_foca(
             app,
             db=MongoConfig(**MONGO_CONFIG),
             endpoints=ENDPOINT_CONFIG,
         )
         mock_resp = MagicMock(side_effect=DuplicateKeyError(""))
-        _foca(app).db.dbs["pubgradeStore"].collections[
+        foca_config(app).db.dbs["pubgradeStore"].collections[
             "repositories"
         ].client = MagicMock()
-        _foca(app).db.dbs["pubgradeStore"].collections[
+        foca_config(app).db.dbs["pubgradeStore"].collections[
             "repositories"
         ].client.insert_one = mock_resp
         request_data = {"url": self.repository_url}
@@ -134,8 +111,8 @@ class TestRepository:
 
     def test_get_repositories(self) -> None:
         """All repositories are listed."""
-        _set_foca(self.app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-        _foca(self.app).db.dbs["pubgradeStore"].collections[
+        set_foca(self.app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
+        foca_config(self.app).db.dbs["pubgradeStore"].collections[
             "repositories"
         ].client = mongomock.MongoClient().db.collection
         with self.app.app_context():
@@ -217,7 +194,7 @@ class TestRepository:
 
         monkeypatch.setattr(repositories.secrets, "choice", recording_choice)
         monkeypatch.setitem(
-            _foca(self.app).endpoints["access_token"],
+            foca_config(self.app).endpoints["access_token"],
             "charset",
             "string.ascii_uppercase",
         )

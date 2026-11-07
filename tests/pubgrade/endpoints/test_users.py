@@ -2,11 +2,10 @@
 
 import logging
 import string
-from typing import Any
 from unittest.mock import MagicMock
 
 from flask import Flask
-from foca.models.config import Config, MongoConfig
+from foca.models.config import MongoConfig
 import mongomock
 from pymongo.errors import DuplicateKeyError
 import pytest
@@ -24,6 +23,7 @@ from pubgrade.modules.endpoints.users import (
     sanitise_text,
     toggle_user_status,
 )
+from tests.helpers import foca_config, set_foca
 from tests.mock_data import (
     ENDPOINT_CONFIG,
     MOCK_ADMIN_USER_1,
@@ -34,30 +34,6 @@ from tests.mock_data import (
 )
 
 
-def _set_foca(app: Flask, **settings: Any) -> None:
-    """Set the FOCA configuration of an app.
-
-    Args:
-        app: Flask app.
-        **settings: Settings of the configuration.
-    """
-    flask_config: Any = app.config
-    flask_config.foca = Config(**settings)
-
-
-def _foca(app: Flask) -> Any:
-    """Get the FOCA configuration of an app.
-
-    Args:
-        app: Flask app.
-
-    Returns:
-        The configuration, with the collections of the database.
-    """
-    flask_config: Any = app.config
-    return flask_config.foca
-
-
 class TestUsers:
     """Tests for the user controllers."""
 
@@ -65,17 +41,17 @@ class TestUsers:
 
     def setup(self) -> None:
         """Prepare the configuration with a user and an admin user."""
-        _set_foca(self.app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-        _foca(self.app).db.dbs["pubgradeStore"].collections[
+        set_foca(self.app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
+        foca_config(self.app).db.dbs["pubgradeStore"].collections[
             "users"
         ].client = mongomock.MongoClient().db.collection
-        _foca(self.app).db.dbs["pubgradeStore"].collections["users"].client.insert_one(
-            MOCK_USER_DB
-        )
-        _foca(self.app).db.dbs["pubgradeStore"].collections[
+        foca_config(self.app).db.dbs["pubgradeStore"].collections[
+            "users"
+        ].client.insert_one(MOCK_USER_DB)
+        foca_config(self.app).db.dbs["pubgradeStore"].collections[
             "admin_users"
         ].client = mongomock.MongoClient().db.collection
-        _foca(self.app).db.dbs["pubgradeStore"].collections[
+        foca_config(self.app).db.dbs["pubgradeStore"].collections[
             "admin_users"
         ].client.insert_one(MOCK_ADMIN_USER_1)
 
@@ -97,7 +73,7 @@ class TestUsers:
             monkeypatch: Fixture to change the settings.
         """
         self.setup()
-        endpoints = _foca(self.app).endpoints
+        endpoints = foca_config(self.app).endpoints
         monkeypatch.setitem(endpoints["user"], "uid_charset", "string.ascii_uppercase")
         monkeypatch.setitem(endpoints["access_token"], "charset", ["x", "y"])
         with self.app.app_context():
@@ -125,7 +101,7 @@ class TestUsers:
     def test_register_user_closed(self) -> None:
         """Registration can be closed by configuration."""
         self.setup()
-        _foca(self.app).endpoints["user"]["registration_enabled"] = False
+        foca_config(self.app).endpoints["user"]["registration_enabled"] = False
         with self.app.app_context(), pytest.raises(RegistrationDisabled):
             register_user({"name": "Name"})
 
@@ -138,14 +114,16 @@ class TestUsers:
     def test_register_user_duplicate_key_error(self) -> None:
         """A duplicate key on insertion is an internal error."""
         app = Flask(__name__)
-        _set_foca(
+        set_foca(
             app,
             db=MongoConfig(**MONGO_CONFIG),
             endpoints=ENDPOINT_CONFIG,
         )
         mock_resp = MagicMock(side_effect=DuplicateKeyError(""))
-        _foca(app).db.dbs["pubgradeStore"].collections["users"].client = MagicMock()
-        _foca(app).db.dbs["pubgradeStore"].collections[
+        foca_config(app).db.dbs["pubgradeStore"].collections[
+            "users"
+        ].client = MagicMock()
+        foca_config(app).db.dbs["pubgradeStore"].collections[
             "users"
         ].client.insert_one = mock_resp
         with app.app_context(), pytest.raises(InternalServerError):
@@ -154,10 +132,10 @@ class TestUsers:
     def test_delete_user(self) -> None:
         """A user can delete itself."""
         self.setup()
-        _foca(self.app).db.dbs["pubgradeStore"].collections[
+        foca_config(self.app).db.dbs["pubgradeStore"].collections[
             "subscriptions"
         ].client = mongomock.MongoClient().db.collection
-        _foca(self.app).db.dbs["pubgradeStore"].collections[
+        foca_config(self.app).db.dbs["pubgradeStore"].collections[
             "subscriptions"
         ].client.insert_one(MOCK_SUBSCRIPTION_INFO)
         with self.app.app_context():
@@ -170,10 +148,10 @@ class TestUsers:
     def test_delete_user_user_not_found(self) -> None:
         """Deleting an unknown user fails."""
         self.setup()
-        _foca(self.app).db.dbs["pubgradeStore"].collections[
+        foca_config(self.app).db.dbs["pubgradeStore"].collections[
             "subscriptions"
         ].client = mongomock.MongoClient().db.collection
-        _foca(self.app).db.dbs["pubgradeStore"].collections[
+        foca_config(self.app).db.dbs["pubgradeStore"].collections[
             "subscriptions"
         ].client.insert_one(MOCK_SUBSCRIPTION_INFO)
         with self.app.app_context(), pytest.raises(UserNotFound):
@@ -185,10 +163,10 @@ class TestUsers:
     def test_delete_user_unauthorized(self) -> None:
         """Deleting a user with a wrong token fails."""
         self.setup()
-        _foca(self.app).db.dbs["pubgradeStore"].collections[
+        foca_config(self.app).db.dbs["pubgradeStore"].collections[
             "subscriptions"
         ].client = mongomock.MongoClient().db.collection
-        _foca(self.app).db.dbs["pubgradeStore"].collections[
+        foca_config(self.app).db.dbs["pubgradeStore"].collections[
             "subscriptions"
         ].client.insert_one(MOCK_SUBSCRIPTION_INFO)
         with self.app.app_context(), pytest.raises(Unauthorized):
@@ -199,14 +177,14 @@ class TestUsers:
 
     def test_delete_key_error(self) -> None:
         """A user without subscriptions can be deleted."""
-        _set_foca(self.app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-        _foca(self.app).db.dbs["pubgradeStore"].collections[
+        set_foca(self.app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
+        foca_config(self.app).db.dbs["pubgradeStore"].collections[
             "users"
         ].client = mongomock.MongoClient().db.collection
-        _foca(self.app).db.dbs["pubgradeStore"].collections["users"].client.insert_one(
-            MOCK_USER
-        )
-        _foca(self.app).db.dbs["pubgradeStore"].collections[
+        foca_config(self.app).db.dbs["pubgradeStore"].collections[
+            "users"
+        ].client.insert_one(MOCK_USER)
+        foca_config(self.app).db.dbs["pubgradeStore"].collections[
             "subscriptions"
         ].client = mongomock.MongoClient().db.subscriptions
         with self.app.app_context():

@@ -7,8 +7,6 @@ import time
 from typing import Any, NoReturn
 from unittest.mock import MagicMock, patch
 
-from flask import Flask
-from foca.models.config import Config, MongoConfig
 import mongomock
 from pymongo.errors import DuplicateKeyError
 import pytest
@@ -32,6 +30,7 @@ from pubgrade.modules.endpoints.subscriptions import (
     notify_subscriptions,
     register_subscription,
 )
+from tests.helpers import FocaApp, make_config
 from tests.mock_data import (
     ENDPOINT_CONFIG,
     MOCK_BUILD_INFO,
@@ -41,28 +40,8 @@ from tests.mock_data import (
     MOCK_USER,
     MOCK_USER_DB,
     MOCK_USER_NOT_VERIFIED,
-    MONGO_CONFIG,
     SUBSCRIPTION_PAYLOAD,
 )
-
-
-class FocaApp(Flask):
-    """Flask app whose configuration holds the FOCA configuration."""
-
-    config: Any
-
-
-def make_config(endpoints: dict[str, Any]) -> Config:
-    """Create a FOCA configuration with the mock database.
-
-    Args:
-        endpoints: Configuration of the endpoints.
-
-    Returns:
-        The FOCA configuration.
-    """
-    extra: dict[str, Any] = {"endpoints": endpoints}
-    return Config(db=MongoConfig(**MONGO_CONFIG), **extra)
 
 
 def mocked_request_api(

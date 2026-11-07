@@ -4,7 +4,7 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 from flask import Flask
-from foca.models.config import Config, MongoConfig
+from foca.models.config import MongoConfig
 import mongomock
 import pytest
 
@@ -29,6 +29,7 @@ from pubgrade.modules.server import (
     updateBuild,
     verifyUser,
 )
+from tests.helpers import foca_config, set_foca, unwrap
 from tests.mock_data import (
     ENDPOINT_CONFIG,
     MOCK_ADMIN_USER_1,
@@ -42,43 +43,6 @@ from tests.mock_data import (
     MONGO_CONFIG,
     SUBSCRIPTION_PAYLOAD,
 )
-
-
-def _set_foca(app: Flask, **settings: Any) -> None:
-    """Set the FOCA configuration of an app.
-
-    Args:
-        app: Flask app.
-        **settings: Settings of the configuration.
-    """
-    flask_config: Any = app.config
-    flask_config.foca = Config(**settings)
-
-
-def _unwrap(controller: Any) -> Any:
-    """Get a controller without its decorators.
-
-    Args:
-        controller: Decorated controller.
-
-    Returns:
-        The controller as defined, without authentication and the like.
-    """
-    return controller.__wrapped__
-
-
-def _foca(app: Flask) -> Any:
-    """Get the FOCA configuration of an app.
-
-    Args:
-        app: Flask app.
-
-    Returns:
-        The configuration, with the collections of the database.
-    """
-    flask_config: Any = app.config
-    return flask_config.foca
-
 
 drs_url = "https://github.com/elixir-cloud-aai/drs-filer.git"
 user_access_token = "c42a6d44e3d0"
@@ -106,16 +70,16 @@ def mocked_request_api(
 def test_getRepositories() -> None:
     """Test for getting Repositories."""
     app = Flask(__name__)
-    _set_foca(app, db=MongoConfig(**MONGO_CONFIG))
-    _foca(app).db.dbs["pubgradeStore"].collections[
+    set_foca(app, db=MongoConfig(**MONGO_CONFIG))
+    foca_config(app).db.dbs["pubgradeStore"].collections[
         "repositories"
     ].client = mongomock.MongoClient().db.collection
     for repository in MOCK_REPOSITORIES:
-        _foca(app).db.dbs["pubgradeStore"].collections[
+        foca_config(app).db.dbs["pubgradeStore"].collections[
             "repositories"
         ].client.insert_one(repository)
     with app.test_request_context():
-        res = _unwrap(getRepositories)()
+        res = unwrap(getRepositories)()
         assert isinstance(res, list)
         for i in range(len(MOCK_REPOSITORIES)):
             assert res[i]["url"] == MOCK_REPOSITORIES[i]["url"]
@@ -125,28 +89,28 @@ def test_getRepositories() -> None:
 def test_postRepositories() -> None:
     """A repository is created with an auto-generated identifier."""
     app = Flask(__name__)
-    _set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-    _foca(app).db.dbs["pubgradeStore"].collections[
+    set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
+    foca_config(app).db.dbs["pubgradeStore"].collections[
         "repositories"
     ].client = mongomock.MongoClient().db.collection
     with app.test_request_context(json={"url": drs_url}):
-        res = _unwrap(postRepositories)()
+        res = unwrap(postRepositories)()
         assert isinstance(res, dict)
 
 
 def test_getRepository() -> None:
     """The `getRepository` controller works."""
     app = Flask(__name__)
-    _set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-    _foca(app).db.dbs["pubgradeStore"].collections[
+    set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
+    foca_config(app).db.dbs["pubgradeStore"].collections[
         "repositories"
     ].client = mongomock.MongoClient().db.collection
     for repository in MOCK_REPOSITORIES:
-        _foca(app).db.dbs["pubgradeStore"].collections[
+        foca_config(app).db.dbs["pubgradeStore"].collections[
             "repositories"
         ].client.insert_one(repository)
     with app.test_request_context():
-        res = _unwrap(getRepository)(MOCK_REPOSITORIES[1]["id"])
+        res = unwrap(getRepository)(MOCK_REPOSITORIES[1]["id"])
         assert isinstance(res, dict)
         assert res["url"] == MOCK_REPOSITORIES[1]["url"]
 
@@ -154,12 +118,12 @@ def test_getRepository() -> None:
 def test_putRepositories() -> None:
     """The `putRepositories` controller works."""
     app = Flask(__name__)
-    _set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-    _foca(app).db.dbs["pubgradeStore"].collections[
+    set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
+    foca_config(app).db.dbs["pubgradeStore"].collections[
         "repositories"
     ].client = mongomock.MongoClient().db.collection
     for repository in MOCK_REPOSITORIES:
-        _foca(app).db.dbs["pubgradeStore"].collections[
+        foca_config(app).db.dbs["pubgradeStore"].collections[
             "repositories"
         ].client.insert_one(repository)
     with app.test_request_context(
@@ -169,7 +133,7 @@ def test_putRepositories() -> None:
             "Content-Type": "application/json",
         },
     ):
-        res = _unwrap(putRepositories)(MOCK_REPOSITORIES[1]["id"])
+        res = unwrap(putRepositories)(MOCK_REPOSITORIES[1]["id"])
         assert isinstance(res, dict)
         assert res["id"] == MOCK_REPOSITORIES[1]["id"]
 
@@ -177,12 +141,12 @@ def test_putRepositories() -> None:
 def test_deleteRepository() -> None:
     """The `deleteRepository` controller works."""
     app = Flask(__name__)
-    _set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-    _foca(app).db.dbs["pubgradeStore"].collections[
+    set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
+    foca_config(app).db.dbs["pubgradeStore"].collections[
         "repositories"
     ].client = mongomock.MongoClient().db.collection
     for repository in MOCK_REPOSITORIES:
-        _foca(app).db.dbs["pubgradeStore"].collections[
+        foca_config(app).db.dbs["pubgradeStore"].collections[
             "repositories"
         ].client.insert_one(repository)
     with app.test_request_context(
@@ -191,7 +155,7 @@ def test_deleteRepository() -> None:
             "Content-Type": "application/json",
         }
     ):
-        res = _unwrap(deleteRepository)(MOCK_REPOSITORIES[1]["id"])
+        res = unwrap(deleteRepository)(MOCK_REPOSITORIES[1]["id"])
         assert isinstance(res, dict)
         assert res == {"message": "Repository deleted successfully"}
 
@@ -200,12 +164,12 @@ def test_deleteRepository_Not_Found() -> None:
     """Deleting an unknown repository fails."""
     with pytest.raises(RepositoryNotFound):
         app = Flask(__name__)
-        _set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-        _foca(app).db.dbs["pubgradeStore"].collections[
+        set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
+        foca_config(app).db.dbs["pubgradeStore"].collections[
             "repositories"
         ].client = mongomock.MongoClient().db.collection
         for repository in MOCK_REPOSITORIES:
-            _foca(app).db.dbs["pubgradeStore"].collections[
+            foca_config(app).db.dbs["pubgradeStore"].collections[
                 "repositories"
             ].client.insert_one(repository)
         with app.test_request_context(
@@ -214,7 +178,7 @@ def test_deleteRepository_Not_Found() -> None:
                 "Content-Type": "application/json",
             }
         ):
-            _unwrap(deleteRepository)("repo_abcd")
+            unwrap(deleteRepository)("repo_abcd")
 
 
 def mocked_create_build(
@@ -252,15 +216,15 @@ def mocked_create_build(
 def test_postBuild() -> None:
     """The `postBuild` controller works."""
     app = Flask(__name__)
-    _set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-    _foca(app).db.dbs["pubgradeStore"].collections[
+    set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
+    foca_config(app).db.dbs["pubgradeStore"].collections[
         "repositories"
     ].client = mongomock.MongoClient().db.collection
     for repository in MOCK_REPOSITORIES:
-        _foca(app).db.dbs["pubgradeStore"].collections[
+        foca_config(app).db.dbs["pubgradeStore"].collections[
             "repositories"
         ].client.insert_one(repository)
-    _foca(app).db.dbs["pubgradeStore"].collections[
+    foca_config(app).db.dbs["pubgradeStore"].collections[
         "builds"
     ].client = mongomock.MongoClient().db.collection
     with app.test_request_context(
@@ -270,32 +234,32 @@ def test_postBuild() -> None:
             "Content-Type": "application/json",
         },
     ):
-        res = _unwrap(postBuild)(MOCK_REPOSITORIES[1]["id"])
+        res = unwrap(postBuild)(MOCK_REPOSITORIES[1]["id"])
         assert isinstance(res, dict)
 
 
 def test_getBuilds() -> None:
     """The `getBuilds` controller works."""
     app = Flask(__name__)
-    _set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-    _foca(app).db.dbs["pubgradeStore"].collections[
+    set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
+    foca_config(app).db.dbs["pubgradeStore"].collections[
         "repositories"
     ].client = mongomock.MongoClient().db.collection
     for repository in MOCK_REPOSITORIES:
-        _foca(app).db.dbs["pubgradeStore"].collections[
+        foca_config(app).db.dbs["pubgradeStore"].collections[
             "repositories"
         ].client.insert_one(repository)
-    _foca(app).db.dbs["pubgradeStore"].collections[
+    foca_config(app).db.dbs["pubgradeStore"].collections[
         "builds"
     ].client = mongomock.MongoClient().db.collection
-    _foca(app).db.dbs["pubgradeStore"].collections["builds"].client.insert_one(
+    foca_config(app).db.dbs["pubgradeStore"].collections["builds"].client.insert_one(
         MOCK_BUILD_INFO
     )
-    _foca(app).db.dbs["pubgradeStore"].collections["builds"].client.insert_one(
+    foca_config(app).db.dbs["pubgradeStore"].collections["builds"].client.insert_one(
         MOCK_BUILD_INFO_2
     )
     with app.test_request_context():
-        res = _unwrap(getBuilds)(MOCK_REPOSITORIES[1]["id"])
+        res = unwrap(getBuilds)(MOCK_REPOSITORIES[1]["id"])
         assert isinstance(res, list)
         assert isinstance(res[0], dict)
 
@@ -303,22 +267,22 @@ def test_getBuilds() -> None:
 def test_getBuildInfo() -> None:
     """The `getBuildInfo` controller works."""
     app = Flask(__name__)
-    _set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-    _foca(app).db.dbs["pubgradeStore"].collections[
+    set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
+    foca_config(app).db.dbs["pubgradeStore"].collections[
         "repositories"
     ].client = mongomock.MongoClient().db.collection
     for repository in MOCK_REPOSITORIES:
-        _foca(app).db.dbs["pubgradeStore"].collections[
+        foca_config(app).db.dbs["pubgradeStore"].collections[
             "repositories"
         ].client.insert_one(repository)
-    _foca(app).db.dbs["pubgradeStore"].collections[
+    foca_config(app).db.dbs["pubgradeStore"].collections[
         "builds"
     ].client = mongomock.MongoClient().db.collection
-    _foca(app).db.dbs["pubgradeStore"].collections["builds"].client.insert_one(
+    foca_config(app).db.dbs["pubgradeStore"].collections["builds"].client.insert_one(
         MOCK_BUILD_INFO
     )
     with app.test_request_context():
-        res = _unwrap(getBuildInfo)(MOCK_REPOSITORIES[1]["id"], MOCK_BUILD_INFO["id"])
+        res = unwrap(getBuildInfo)(MOCK_REPOSITORIES[1]["id"], MOCK_BUILD_INFO["id"])
         assert isinstance(res, dict)
 
 
@@ -350,24 +314,24 @@ def mock_notify_subscriptions() -> str:
 def test_updateBuild() -> None:
     """The `updateBuild` controller works."""
     app = Flask(__name__)
-    _set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-    _foca(app).db.dbs["pubgradeStore"].collections[
+    set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
+    foca_config(app).db.dbs["pubgradeStore"].collections[
         "repositories"
     ].client = mongomock.MongoClient().db.collection
-    _foca(app).db.dbs["pubgradeStore"].collections[
+    foca_config(app).db.dbs["pubgradeStore"].collections[
         "subscriptions"
     ].client = mongomock.MongoClient().db.collection
-    _foca(app).db.dbs["pubgradeStore"].collections["subscriptions"].client.insert_one(
-        MOCK_SUBSCRIPTION_INFO
-    )
+    foca_config(app).db.dbs["pubgradeStore"].collections[
+        "subscriptions"
+    ].client.insert_one(MOCK_SUBSCRIPTION_INFO)
     for repository in MOCK_REPOSITORIES:
-        _foca(app).db.dbs["pubgradeStore"].collections[
+        foca_config(app).db.dbs["pubgradeStore"].collections[
             "repositories"
         ].client.insert_one(repository)
-    _foca(app).db.dbs["pubgradeStore"].collections[
+    foca_config(app).db.dbs["pubgradeStore"].collections[
         "builds"
     ].client = mongomock.MongoClient().db.collection
-    _foca(app).db.dbs["pubgradeStore"].collections["builds"].client.insert_one(
+    foca_config(app).db.dbs["pubgradeStore"].collections["builds"].client.insert_one(
         MOCK_BUILD_INFO
     )
     with app.test_request_context(
@@ -377,26 +341,28 @@ def test_updateBuild() -> None:
             "Content-Type": "application/json",
         },
     ):
-        res = _unwrap(updateBuild)(MOCK_REPOSITORIES[1]["id"], MOCK_BUILD_INFO["id"])
+        res = unwrap(updateBuild)(MOCK_REPOSITORIES[1]["id"], MOCK_BUILD_INFO["id"])
         assert isinstance(res, dict)
 
 
 def test_postSubscription() -> None:
     """The `postSubscription` controller works."""
     app = Flask(__name__)
-    _set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-    _foca(app).db.dbs["pubgradeStore"].collections[
+    set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
+    foca_config(app).db.dbs["pubgradeStore"].collections[
         "repositories"
     ].client = mongomock.MongoClient().db.collection
-    _foca(app).db.dbs["pubgradeStore"].collections[
+    foca_config(app).db.dbs["pubgradeStore"].collections[
         "users"
     ].client = mongomock.MongoClient().db.collection
-    _foca(app).db.dbs["pubgradeStore"].collections["users"].client.insert_one(MOCK_USER)
-    _foca(app).db.dbs["pubgradeStore"].collections[
+    foca_config(app).db.dbs["pubgradeStore"].collections["users"].client.insert_one(
+        MOCK_USER
+    )
+    foca_config(app).db.dbs["pubgradeStore"].collections[
         "subscriptions"
     ].client = mongomock.MongoClient().db.collection
     for repository in MOCK_REPOSITORIES:
-        _foca(app).db.dbs["pubgradeStore"].collections[
+        foca_config(app).db.dbs["pubgradeStore"].collections[
             "repositories"
         ].client.insert_one(repository)
     with app.test_request_context(
@@ -407,18 +373,18 @@ def test_postSubscription() -> None:
             "Content-Type": "application/json",
         },
     ):
-        res = _unwrap(postSubscription)()
+        res = unwrap(postSubscription)()
         assert isinstance(res, dict)
 
 
 def test_getSubscriptions() -> None:
     """The `getSubscriptions` controller works."""
     app = Flask(__name__)
-    _set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-    _foca(app).db.dbs["pubgradeStore"].collections[
+    set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
+    foca_config(app).db.dbs["pubgradeStore"].collections[
         "users"
     ].client = mongomock.MongoClient().db.collection
-    _foca(app).db.dbs["pubgradeStore"].collections["users"].client.insert_one(
+    foca_config(app).db.dbs["pubgradeStore"].collections["users"].client.insert_one(
         MOCK_USER_DB
     )
     with app.test_request_context(
@@ -428,26 +394,26 @@ def test_getSubscriptions() -> None:
             "Content-Type": "application/json",
         }
     ):
-        res = _unwrap(getSubscriptions)()
+        res = unwrap(getSubscriptions)()
         assert isinstance(res, list)
 
 
 def test_getSubscriptionInfo() -> None:
     """The `getSubscriptionInfo` controller works."""
     app = Flask(__name__)
-    _set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-    _foca(app).db.dbs["pubgradeStore"].collections[
+    set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
+    foca_config(app).db.dbs["pubgradeStore"].collections[
         "users"
     ].client = mongomock.MongoClient().db.collection
-    _foca(app).db.dbs["pubgradeStore"].collections["users"].client.insert_one(
+    foca_config(app).db.dbs["pubgradeStore"].collections["users"].client.insert_one(
         MOCK_USER_DB
     )
-    _foca(app).db.dbs["pubgradeStore"].collections[
+    foca_config(app).db.dbs["pubgradeStore"].collections[
         "subscriptions"
     ].client = mongomock.MongoClient().db.collection
-    _foca(app).db.dbs["pubgradeStore"].collections["subscriptions"].client.insert_one(
-        MOCK_SUBSCRIPTION_INFO
-    )
+    foca_config(app).db.dbs["pubgradeStore"].collections[
+        "subscriptions"
+    ].client.insert_one(MOCK_SUBSCRIPTION_INFO)
     with app.test_request_context(
         headers={
             "X-User-Access-Token": user_access_token,
@@ -455,26 +421,26 @@ def test_getSubscriptionInfo() -> None:
             "Content-Type": "application/json",
         }
     ):
-        res = _unwrap(getSubscriptionInfo)(MOCK_SUBSCRIPTION_INFO["id"])
+        res = unwrap(getSubscriptionInfo)(MOCK_SUBSCRIPTION_INFO["id"])
         assert isinstance(res, dict)
 
 
 def test_deleteSubscription() -> None:
     """The `deleteSubscription` controller works."""
     app = Flask(__name__)
-    _set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-    _foca(app).db.dbs["pubgradeStore"].collections[
+    set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
+    foca_config(app).db.dbs["pubgradeStore"].collections[
         "users"
     ].client = mongomock.MongoClient().db.collection
-    _foca(app).db.dbs["pubgradeStore"].collections["users"].client.insert_one(
+    foca_config(app).db.dbs["pubgradeStore"].collections["users"].client.insert_one(
         MOCK_USER_DB
     )
-    _foca(app).db.dbs["pubgradeStore"].collections[
+    foca_config(app).db.dbs["pubgradeStore"].collections[
         "subscriptions"
     ].client = mongomock.MongoClient().db.collection
-    _foca(app).db.dbs["pubgradeStore"].collections["subscriptions"].client.insert_one(
-        MOCK_SUBSCRIPTION_INFO
-    )
+    foca_config(app).db.dbs["pubgradeStore"].collections[
+        "subscriptions"
+    ].client.insert_one(MOCK_SUBSCRIPTION_INFO)
     with app.test_request_context(
         headers={
             "X-User-Access-Token": user_access_token,
@@ -482,7 +448,7 @@ def test_deleteSubscription() -> None:
             "Content-Type": "application/json",
         }
     ):
-        res = _unwrap(deleteSubscription)(MOCK_SUBSCRIPTION_INFO["id"])
+        res = unwrap(deleteSubscription)(MOCK_SUBSCRIPTION_INFO["id"])
         assert isinstance(res, dict)
 
 
@@ -506,14 +472,14 @@ def test_delete_nothing_deleted(
             "X-User-Id": "uid",
         }
     ):
-        assert _unwrap(controller)("id") is None
+        assert unwrap(controller)("id") is None
 
 
 def test_post_user() -> None:
     """The `postUser` controller works."""
     app = Flask(__name__)
-    _set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-    _foca(app).db.dbs["pubgradeStore"].collections[
+    set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
+    foca_config(app).db.dbs["pubgradeStore"].collections[
         "users"
     ].client = mongomock.MongoClient().db.collection
 
@@ -521,7 +487,7 @@ def test_post_user() -> None:
         json={"name": "Akash Saini"},
         headers={"Content-Type": "application/json"},
     ):
-        res = _unwrap(postUser)()
+        res = unwrap(postUser)()
         assert isinstance(res, dict)
         assert "uid" in res
         assert "user_access_token" in res
@@ -531,19 +497,19 @@ def test_post_user() -> None:
 def test_deleteUser() -> None:
     """The `deleteUser` controller works."""
     app = Flask(__name__)
-    _set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-    _foca(app).db.dbs["pubgradeStore"].collections[
+    set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
+    foca_config(app).db.dbs["pubgradeStore"].collections[
         "users"
     ].client = mongomock.MongoClient().db.collection
-    _foca(app).db.dbs["pubgradeStore"].collections["users"].client.insert_one(
+    foca_config(app).db.dbs["pubgradeStore"].collections["users"].client.insert_one(
         MOCK_USER_DB
     )
-    _foca(app).db.dbs["pubgradeStore"].collections[
+    foca_config(app).db.dbs["pubgradeStore"].collections[
         "subscriptions"
     ].client = mongomock.MongoClient().db.collection
-    _foca(app).db.dbs["pubgradeStore"].collections["subscriptions"].client.insert_one(
-        MOCK_SUBSCRIPTION_INFO
-    )
+    foca_config(app).db.dbs["pubgradeStore"].collections[
+        "subscriptions"
+    ].client.insert_one(MOCK_SUBSCRIPTION_INFO)
     with app.test_request_context(
         headers={
             "X-User-Access-Token": user_access_token,
@@ -551,28 +517,28 @@ def test_deleteUser() -> None:
             "Content-Type": "application/json",
         },
     ):
-        res = _unwrap(deleteUser)()
+        res = unwrap(deleteUser)()
         assert res == "User deleted successfully."
 
 
 def test_get_user() -> None:
     """The `getUsers` controller works."""
     app = Flask(__name__)
-    _set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
+    set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
 
-    _foca(app).db.dbs["pubgradeStore"].collections[
+    foca_config(app).db.dbs["pubgradeStore"].collections[
         "users"
     ].client = mongomock.MongoClient().db.collection
-    _foca(app).db.dbs["pubgradeStore"].collections["users"].client.insert_one(
+    foca_config(app).db.dbs["pubgradeStore"].collections["users"].client.insert_one(
         MOCK_USER_DB
     )
 
-    _foca(app).db.dbs["pubgradeStore"].collections[
+    foca_config(app).db.dbs["pubgradeStore"].collections[
         "admin_users"
     ].client = mongomock.MongoClient().db.collection
-    _foca(app).db.dbs["pubgradeStore"].collections["admin_users"].client.insert_one(
-        MOCK_ADMIN_USER_1
-    )
+    foca_config(app).db.dbs["pubgradeStore"].collections[
+        "admin_users"
+    ].client.insert_one(MOCK_ADMIN_USER_1)
 
     with app.test_request_context(
         json={},
@@ -582,7 +548,7 @@ def test_get_user() -> None:
             "Content-Type": "application/json",
         },
     ):
-        res = _unwrap(getUsers)()
+        res = unwrap(getUsers)()
         assert res[0]["name"] == "Akash Saini"
         assert isinstance(res, list)
 
@@ -590,19 +556,19 @@ def test_get_user() -> None:
 def test_verify_user() -> None:
     """The `verifyUser` controller works."""
     app = Flask(__name__)
-    _set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-    _foca(app).db.dbs["pubgradeStore"].collections[
+    set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
+    foca_config(app).db.dbs["pubgradeStore"].collections[
         "users"
     ].client = mongomock.MongoClient().db.collection
-    _foca(app).db.dbs["pubgradeStore"].collections["users"].client.insert_one(
+    foca_config(app).db.dbs["pubgradeStore"].collections["users"].client.insert_one(
         MOCK_USER_DB
     )
-    _foca(app).db.dbs["pubgradeStore"].collections[
+    foca_config(app).db.dbs["pubgradeStore"].collections[
         "admin_users"
     ].client = mongomock.MongoClient().db.collection
-    _foca(app).db.dbs["pubgradeStore"].collections["admin_users"].client.insert_one(
-        MOCK_ADMIN_USER_1
-    )
+    foca_config(app).db.dbs["pubgradeStore"].collections[
+        "admin_users"
+    ].client.insert_one(MOCK_ADMIN_USER_1)
 
     with app.test_request_context(
         json={},
@@ -612,26 +578,26 @@ def test_verify_user() -> None:
             "Content-Type": "application/json",
         },
     ):
-        response = _unwrap(verifyUser)(MOCK_USER_DB["uid"])
+        response = unwrap(verifyUser)(MOCK_USER_DB["uid"])
         assert response == "User verified successfully."
 
 
 def test_unverify_user() -> None:
     """The `unverifyUser` controller works."""
     app = Flask(__name__)
-    _set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
-    _foca(app).db.dbs["pubgradeStore"].collections[
+    set_foca(app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
+    foca_config(app).db.dbs["pubgradeStore"].collections[
         "users"
     ].client = mongomock.MongoClient().db.collection
-    _foca(app).db.dbs["pubgradeStore"].collections["users"].client.insert_one(
+    foca_config(app).db.dbs["pubgradeStore"].collections["users"].client.insert_one(
         MOCK_USER_DB
     )
-    _foca(app).db.dbs["pubgradeStore"].collections[
+    foca_config(app).db.dbs["pubgradeStore"].collections[
         "admin_users"
     ].client = mongomock.MongoClient().db.collection
-    _foca(app).db.dbs["pubgradeStore"].collections["admin_users"].client.insert_one(
-        MOCK_ADMIN_USER_1
-    )
+    foca_config(app).db.dbs["pubgradeStore"].collections[
+        "admin_users"
+    ].client.insert_one(MOCK_ADMIN_USER_1)
 
     with app.test_request_context(
         json={},
@@ -641,5 +607,5 @@ def test_unverify_user() -> None:
             "Content-Type": "application/json",
         },
     ):
-        response = _unwrap(unverifyUser)(MOCK_USER_DB["uid"])
+        response = unwrap(unverifyUser)(MOCK_USER_DB["uid"])
         assert response == "User unverified successfully."

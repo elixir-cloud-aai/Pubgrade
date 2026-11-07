@@ -30,9 +30,9 @@ The app is built on [FOCA](https://foca.readthedocs.io/) 0.21: its
 configuration is `pubgrade/config.yaml`, and `pubgrade/app.py` creates the app
 (`create_app()`). The image serves it with Gunicorn, with FOCA's settings
 and more threads and shutdown time (`pubgrade/gunicorn_config.py`);
-`python -m pubgrade.app` runs Flask's development server instead. FOCA is bumped by hand: the tag and digest of the base image in
-the `Dockerfile` and `foca` in `pyproject.toml` and `uv.lock` together,
-following FOCA's
+`python -m pubgrade.app` runs Flask's development server instead. FOCA is
+bumped by hand: the tag and digest of the base image in the `Dockerfile`
+and `foca` in `pyproject.toml` and `uv.lock` together, following FOCA's
 migration guides; `tests/test_image.py` fails if they don't match.
 
 `tests/smoke.sh <base URL>` checks the API of a running Pubgrade with an empty
@@ -144,18 +144,19 @@ The project follows [semantic versioning](https://semver.org/). It is in
 beta, so the API may change without notice. The app, its two images and its
 chart are released together, with one version: the tag `vX.Y.Z` (or
 `vX.Y.ZaN`, `vX.Y.ZbN` and `vX.Y.ZrcN` for pre-releases), `version` in
-`[project]` of `pyproject.toml`, the chart's `appVersion` and `version` (the SemVer
-form, e.g., `1.2.3-rc1` for `1.2.3rc1`), and the version in `CITATION.cff`.
+`[project]` of `pyproject.toml`, the chart's `appVersion` and `version`
+(the SemVer form, e.g., `1.2.3-rc1` for `1.2.3rc1`), and the version in
+`CITATION.cff`.
 Until 1.0.0, all releases are GitHub pre-releases.
 
 For the first release, the chart's `version` (0.2.0, from before the release
 workflow) and the app's version (0.1.0) differ; the release-prep pull request
 sets both, e.g., to 0.2.0.
 
-1. Release-prep pull request to `dev`: set the version in
-   `pyproject.toml` (then run `uv lock`), `helm/Chart.yaml` (`version` and `appVersion`) and
-   `CITATION.cff` (`python scripts/citation.py set <version>`, which also sets
-   the release date).
+1. Release-prep pull request to `dev`: set the version in `pyproject.toml`
+   (then run `uv lock`), `helm/Chart.yaml` (`version` and `appVersion`)
+   and `CITATION.cff` (`python scripts/citation.py set <version>`, which
+   also sets the release date).
 2. Once CI has passed for its commit on `dev`, bring that commit to `main`.
 3. Tag it on `main` with a signed, annotated tag and push the tag:
    `git tag -s v<version> -m v<version>`, then

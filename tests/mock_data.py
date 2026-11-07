@@ -87,7 +87,7 @@ MOCK_BUILD_INFO: dict[str, Any] = {
         "branch": "main",
         "commit_sha": "8cd58eb160014c91e4f181562352c693d3442c52",
     },
-    "dockerhub_token": "dXNlcjpwYXNzd2Q=",
+    "dockerhub_token": "dXNlcjpwYXNzd2Q=",  # user:passwd  gitleaks:allow
     "id": "eiic.gngdgrs",
     "finished_at": None,
     "started_at": "2021-08-04T17:40:58.344809",

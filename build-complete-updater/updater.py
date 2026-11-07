@@ -18,27 +18,16 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-NAMESPACE = "broker"
-BROKER_PORT = "8080"
+NAMESPACE = os.getenv("NAMESPACE") or "broker"
 SLEEP_INTERVAL = 5
 BUILD_ID_LENGTH = 6
-BROKER_URL = ""
+BROKER_URL = (
+    os.getenv("BROKER_URL", "") + "/repositories/{}/builds/{}"
+    if os.getenv("BROKER_URL")
+    else ""
+)
 # Seconds to connect to Pubgrade and for its response
 REQUEST_TIMEOUT = 30
-
-if os.getenv("NAMESPACE"):
-    NAMESPACE = os.getenv("NAMESPACE", NAMESPACE)
-
-if os.getenv("KUBERNETES_SERVICE_HOST"):
-    config.load_incluster_config()
-else:
-    config.load_kube_config()
-
-if os.getenv("BROKER_URL"):
-    BROKER_URL = os.getenv("BROKER_URL", "") + "/repositories/{}/builds/{}"
-
-if os.getenv("BROKER_PORT"):
-    BROKER_PORT = os.getenv("BROKER_PORT", BROKER_PORT)
 
 
 def get_env(env: Iterable[Any], name: str) -> str | None:
@@ -57,33 +46,59 @@ def get_env(env: Iterable[Any], name: str) -> str | None:
     return None
 
 
-while True:
+def report_build(pod: Any) -> None:
+    """Report a build pod to Pubgrade if it succeeded.
+
+    Pods without a spec or status, that haven't succeeded, or whose first
+    container lacks `BUILDNAME` or `ACCESSTOKEN`, are skipped. Failed
+    requests are logged, so that the next pods are still reported.
+
+    Args:
+        pod: The pod (`V1Pod`).
+    """
+    if pod.spec is None or pod.status is None:
+        return
+    env = pod.spec.containers[0].env
+    if env is None or pod.status.phase != "Succeeded":
+        return
+    build_name = get_env(env, "BUILDNAME")
+    access_token = get_env(env, "ACCESSTOKEN")
+    if build_name is None or access_token is None:
+        return
+    repo_id = build_name[:BUILD_ID_LENGTH]
+    url = BROKER_URL.format(repo_id, build_name)
+    payload = json.dumps({"id": build_name})
+    headers = {
+        "X-Project-Access-Token": access_token,
+        "Content-Type": "application/json",
+    }
+    try:
+        requests.request(
+            "PUT", url, headers=headers, data=payload, timeout=REQUEST_TIMEOUT
+        )
+    except requests.exceptions.RequestException as error:
+        # Only the type: messages of requests can quote the headers
+        logger.error("Reporting build %s failed: %s", build_name, type(error).__name__)
+
+
+def report_builds() -> None:
+    """Report the succeeded build pods of the namespace to Pubgrade."""
     v1 = client.CoreV1Api()
     pods = v1.list_namespaced_pod(namespace=NAMESPACE, watch=False)
     for pod in pods.items:
-        if pod.spec is None or pod.status is None:
-            continue
-        env = pod.spec.containers[0].env
-        if env is None or pod.status.phase != "Succeeded":
-            continue
-        build_name = get_env(env, "BUILDNAME")
-        access_token = get_env(env, "ACCESSTOKEN")
-        if build_name is None or access_token is None:
-            continue
-        repo_id = build_name[:BUILD_ID_LENGTH]
-        url = BROKER_URL.format(repo_id, build_name)
-        payload = json.dumps({"id": build_name})
-        headers = {
-            "X-Project-Access-Token": access_token,
-            "Content-Type": "application/json",
-        }
-        try:
-            requests.request(
-                "PUT", url, headers=headers, data=payload, timeout=REQUEST_TIMEOUT
-            )
-        except requests.exceptions.RequestException as error:
-            # Only the type: messages of requests can quote the headers
-            logger.error(
-                "Reporting build %s failed: %s", build_name, type(error).__name__
-            )
-    time.sleep(SLEEP_INTERVAL)
+        report_build(pod)
+
+
+def main() -> None:
+    """Load the cluster configuration and report builds until stopped."""
+    if os.getenv("KUBERNETES_SERVICE_HOST"):
+        config.load_incluster_config()
+    else:
+        config.load_kube_config()
+    while True:
+        report_builds()
+        time.sleep(SLEEP_INTERVAL)
+
+
+if __name__ == "__main__":  # pragma: no cover
+    main()

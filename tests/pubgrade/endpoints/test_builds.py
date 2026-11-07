@@ -10,8 +10,6 @@ import traceback
 from typing import Any, ClassVar, NoReturn
 from unittest.mock import MagicMock, patch
 
-from flask import Flask
-from foca.models.config import Config, MongoConfig
 from kubernetes.client import ApiException
 import mongomock
 from pymongo.errors import DuplicateKeyError
@@ -43,6 +41,7 @@ from pubgrade.modules.endpoints.builds import (
     register_builds,
     remove_files,
 )
+from tests.helpers import FocaApp, make_config
 from tests.mock_data import (
     ENDPOINT_CONFIG,
     MOCK_BUILD_INFO,
@@ -51,27 +50,7 @@ from tests.mock_data import (
     MOCK_REPOSITORIES,
     MOCK_REPOSITORY_2,
     MOCK_SUBSCRIPTION_INFO,
-    MONGO_CONFIG,
 )
-
-
-class FocaApp(Flask):
-    """Flask app whose configuration holds the FOCA configuration."""
-
-    config: Any
-
-
-def make_config(endpoints: dict[str, Any]) -> Config:
-    """Create a FOCA configuration with the mock database.
-
-    Args:
-        endpoints: Configuration of the endpoints.
-
-    Returns:
-        The FOCA configuration.
-    """
-    extra: dict[str, Any] = {"endpoints": endpoints}
-    return Config(db=MongoConfig(**MONGO_CONFIG), **extra)
 
 
 def mocked_create_build(
@@ -988,7 +967,7 @@ class TestBuild:
         self.setup()
         with self.app.app_context(), pytest.raises(InternalServerError) as raised:
             builds.trigger_signing_image(
-                dockerhub_token="dXNlcjpwYXNzd2Q=",
+                dockerhub_token="dXNlcjpwYXNzd2Q=",  # user:passwd  gitleaks:allow
                 image_path="image",
                 pull_tag="registry/image:1",
                 push_tag="image:1",

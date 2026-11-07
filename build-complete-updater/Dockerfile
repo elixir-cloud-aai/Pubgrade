@@ -3,7 +3,7 @@
 ## version of the app's image. Dependabot updates the tag and digest together
 FROM python:3.13.18@sha256:51db6babcbd039687e5362a676db5444b5926739abb03b10c8c6a8144872611f
 
-##### METADATA ##### 
+##### METADATA #####
 LABEL software="Pubgrade"
 LABEL software.description="Pubgrade is a decoupled, publish-subscribe-based continuous integration (CI) and continuous delivery (CD) microservice that allows developers to notify deployments of available updates."
 LABEL software.website="https://github.com/elixir-cloud-aai/Pubgrade"
@@ -22,7 +22,7 @@ COPY --chown=1000:1000 ./ /app
 
 ##### INSTALL DEPENDENCIES #####
 RUN pip install --upgrade pip \
-  && pip install -r /app/build-complete-updater/requirements.txt 
+  && pip install -r /app/build-complete-updater/requirements.txt
 
 ##### SWITCH TO NON-ROOT USER #####
 USER 1000
