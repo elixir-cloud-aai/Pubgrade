@@ -9,6 +9,7 @@ from connexion.exceptions import (
 from git import GitCommandError
 from werkzeug.exceptions import (
     BadRequest,
+    Conflict,
     InternalServerError,
     NotFound,
 )
@@ -28,6 +29,12 @@ class TooManySubscriptions(Forbidden):
 
 class BuildNotFound(NotFound):
     """Raised when object with given build identifier was not found."""
+
+    pass
+
+
+class BuildCanceled(Conflict):
+    """Raised when a build has been canceled."""
 
     pass
 
@@ -167,6 +174,11 @@ exceptions = {
         "title": "Not Found",
         "status": 404,
         "detail": "The requested `Build` is not found.",
+    },
+    BuildCanceled: {
+        "title": "Conflict",
+        "status": 409,
+        "detail": "The `Build` has been canceled.",
     },
     UserNotFound: {
         "title": "Not Found",

@@ -8,7 +8,7 @@ from typing import Any
 from flask.testing import FlaskClient
 import pytest
 
-from pubgrade.errors.exceptions import GitRefNotFound, exceptions
+from pubgrade.errors.exceptions import BuildCanceled, GitRefNotFound, exceptions
 from pubgrade.modules.endpoints import builds
 from pubgrade.settings import collection, endpoints
 from tests.integration.conftest import ADMIN, Subscriber
@@ -501,3 +501,131 @@ def test_delete_repository_stops_running_build(
         ),
         404,
     )
+
+
+def test_cancel_build(api: FlaskClient, subscriber: Subscriber) -> None:
+    """Withdrawing a build marks it as canceled and keeps it listed.
+
+    Only the repository's own access token allows it. A repeated request
+    gets a 409, an unknown build a 404; deployments are not notified again.
+    """
+    user = register_user(api)
+    repository = register_repository(api)
+    other = register_repository(api)
+    subscribe(api, user, repository["id"], subscriber.url, value="*")
+    publish(api, repository, "1")
+    path = f"/repositories/{repository['id']}/builds"
+    headers = {"X-Project-Access-Token": repository["access_token"]}
+    [build] = check(api.get(path))
+    assert build["status"] == "SUCCEEDED"
+    check(
+        api.delete(f"{path}/{build['id']}", headers={"X-Project-Access-Token": "x"}),
+        401,
+    )
+    check(
+        api.delete(
+            f"{path}/{build['id']}",
+            headers={"X-Project-Access-Token": other["access_token"]},
+        ),
+        401,
+    )
+    assert check(api.delete(f"{path}/{build['id']}", headers=headers)) == {
+        "id": build["id"]
+    }
+    listed = check(api.get(path))
+    assert listed == [{**build, "status": "CANCELED"}]
+    canceled = check(api.get(f"{path}/{build['id']}"))
+    assert canceled["status"] == "CANCELED"
+    error = check(api.delete(f"{path}/{build['id']}", headers=headers), 409)
+    assert error == {
+        "title": "Conflict",
+        "status": 409,
+        "detail": exceptions[BuildCanceled]["detail"],
+    }
+    check(api.delete(f"{path}/unknown", headers=headers), 404)
+    check(
+        api.delete(f"/repositories/unknown/builds/{build['id']}", headers=headers),
+        404,
+    )
+    assert len(subscriber.received) == 1
+
+
+def test_cancel_running_build(
+    api: FlaskClient,
+    drs_filer: SimpleNamespace,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With builds switched on, withdrawing a running build stops it.
+
+    The build's pod is deleted and its files are removed; the report of the
+    finished pod then gets a 409, and the build stays canceled. Kubernetes
+    is replaced by mocks; Git clones from a local copy (fixture
+    `drs_filer`).
+
+    Args:
+        api: Client of the API.
+        drs_filer: Local copy of the repository `drs-filer`.
+        tmp_path: Temporary directory for the builds' files.
+        monkeypatch: Pytest's monkeypatch fixture.
+    """
+    builds_dir = tmp_path / "builds"
+    builds_dir.mkdir()
+    monkeypatch.setattr(builds, "BASE_DIR", str(builds_dir))
+    monkeypatch.setattr(
+        builds,
+        "template_file",
+        str(Path(builds.__file__).parent / "kaniko" / "template.yaml"),
+    )
+    pods: list[str] = []
+    monkeypatch.setattr(builds, "load_cluster_config", lambda: None)
+    monkeypatch.setattr(
+        builds, "build_push_image_using_kaniko", lambda deployment_file_location: None
+    )
+    monkeypatch.setattr(
+        builds,
+        "delete_pod",
+        lambda name, namespace, missing_ok=False: pods.append(name),
+    )
+    signed: list[str] = []
+    monkeypatch.setattr(
+        builds, "trigger_signing_image", lambda **kwargs: signed.append("signed")
+    )
+    with api.application.app_context():
+        settings = endpoints()["builds"]
+    monkeypatch.setitem(settings, "enabled", True)
+    monkeypatch.setitem(
+        settings, "intermediate_registery_format", "registry.example.org/{}"
+    )
+    repository = check(
+        api.post(
+            "/repositories",
+            json={"url": "https://github.com/elixir-cloud-aai/drs-filer"},
+        )
+    )
+    headers = {"X-Project-Access-Token": repository["access_token"]}
+    path = f"/repositories/{repository['id']}/builds"
+    build = check(
+        api.post(
+            path,
+            headers=headers,
+            json={
+                "images": [{"name": "org/image:1", "location": "Dockerfile"}],
+                "head_commit": {"tag": drs_filer.tag},
+                "dockerhub_token": "dXNlcjpwYXNzd2Q=",  # user:passwd  gitleaks:allow
+            },
+        )
+    )
+    assert [path.name for path in builds_dir.iterdir()] == [build["id"]]
+    check(api.delete(f"{path}/{build['id']}", headers=headers))
+    assert pods == [build["id"]]
+    assert list(builds_dir.iterdir()) == []
+    check(
+        api.put(f"{path}/{build['id']}", headers=headers, json={"id": build["id"]}),
+        409,
+    )
+    assert signed == []
+    stored = check(api.get(f"{path}/{build['id']}"))
+    assert stored["status"] == "CANCELED"
+    assert stored["finished_at"] is not None
+    assert [item["id"] for item in check(api.get(path))] == [build["id"]]

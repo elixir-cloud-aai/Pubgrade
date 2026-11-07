@@ -7,6 +7,7 @@ from foca.utils.logging import log_traffic
 
 from pubgrade.modules.endpoints.builds import (
     build_completed,
+    cancel_build,
     get_build_info,
     get_builds,
     register_builds,
@@ -141,7 +142,7 @@ def getBuildInfo(id: str, build_id: str) -> dict[str, Any]:
 
 @log_traffic
 def updateBuild(id: str, build_id: str) -> dict[str, str]:
-    """Update build complete status.
+    """Record the completion of a build (internal callback of build pods).
 
     Args:
         id: Identifier of Repository
@@ -151,6 +152,20 @@ def updateBuild(id: str, build_id: str) -> dict[str, str]:
         build_id: Identifier of Build updated.
     """
     return build_completed(id, build_id, request.headers["X-Project-Access-Token"])
+
+
+@log_traffic
+def deleteBuild(id: str, build_id: str) -> dict[str, str]:
+    """Withdraw a build, keeping its record (status `CANCELED`).
+
+    Args:
+        id: Identifier of Repository.
+        build_id: Identifier of Build to be withdrawn.
+
+    Returns:
+        build_id: Identifier of Build withdrawn.
+    """
+    return cancel_build(id, build_id, request.headers["X-Project-Access-Token"])
 
 
 @log_traffic

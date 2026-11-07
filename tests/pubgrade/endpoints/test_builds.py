@@ -21,6 +21,7 @@ from werkzeug.exceptions import BadRequest, InternalServerError, Unauthorized
 import yaml
 
 from pubgrade.errors.exceptions import (
+    BuildCanceled,
     BuildNotFound,
     BuildsDisabled,
     CreatePodError,
@@ -36,16 +37,19 @@ from pubgrade.modules.endpoints.builds import (
     IMAGE_WITH_TAG,
     build_completed,
     build_push_image_using_kaniko,
+    cancel_build,
     create_build,
     create_deployment_YAML,
     create_dockerhub_config_file,
     get_build_info,
     get_builds,
     git_clone_and_checkout,
+    publish_prebuilt_image,
     register_builds,
     remove_build_dir,
     remove_files,
     start_build,
+    stop_builds,
 )
 from tests.helpers import FocaApp, make_config
 from tests.mock_data import (
@@ -1673,3 +1677,278 @@ class TestPublish:
                 "build",
                 self.repository["access_token"],
             )
+
+
+class TestCancelBuild:
+    """Tests for withdrawing builds (`cancel_build`)."""
+
+    app = FocaApp(__name__)
+    repository = MOCK_REPOSITORY_2
+    build_id = MOCK_BUILD_INFO["id"]
+
+    @pytest.fixture(autouse=True)
+    def setup_app(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """Set up the app with a repository and its builds; builds are on.
+
+        Calls to Kubernetes are replaced by mocks, and the builds' files are
+        in a temporary directory.
+
+        Args:
+            monkeypatch: Fixture to replace the calls to Kubernetes.
+            tmp_path: Temporary directory for the builds' files.
+        """
+        self.app.config.foca = make_config(copy.deepcopy(ENDPOINT_CONFIG))
+        for name in ("repositories", "builds", "subscriptions"):
+            self.collection(name).client = mongomock.MongoClient().db[name]
+        self.collection("repositories").client.insert_one(
+            copy.deepcopy(self.repository)
+        )
+        for build in (MOCK_BUILD_INFO, MOCK_BUILD_INFO_2):
+            self.collection("builds").client.insert_one(copy.deepcopy(build))
+        self.base_dir = tmp_path
+        monkeypatch.setattr(builds, "BASE_DIR", str(tmp_path))
+        self.load = MagicMock()
+        monkeypatch.setattr(builds, "load_cluster_config", self.load)
+        self.delete_pod = MagicMock()
+        monkeypatch.setattr(builds, "delete_pod", self.delete_pod)
+        monkeypatch.delenv("NAMESPACE", raising=False)
+
+    def collection(self, name: str) -> Any:
+        """Get the configuration of a collection.
+
+        Args:
+            name: Name of the collection.
+
+        Returns:
+            The collection's configuration, with its client.
+        """
+        return self.app.config.foca.db.dbs["pubgradeStore"].collections[name]
+
+    def stored(self, build_id: str | None = None) -> dict[str, Any]:
+        """Get a stored build.
+
+        Args:
+            build_id: Identifier of the build; by default, `build_id`.
+
+        Returns:
+            The build, as stored.
+        """
+        build: dict[str, Any] = self.collection("builds").client.find_one(
+            {"id": build_id or self.build_id}, {"_id": False}
+        )
+        return build
+
+    def cancel(
+        self, build_id: str | None = None, access_token: str | None = None
+    ) -> Any:
+        """Withdraw a build of the repository.
+
+        Args:
+            build_id: Identifier of the build; by default, `build_id`.
+            access_token: Access token; by default, the repository's.
+
+        Returns:
+            The response.
+        """
+        with self.app.app_context():
+            return cancel_build(
+                self.repository["id"],
+                build_id or self.build_id,
+                access_token or self.repository["access_token"],
+            )
+
+    def test_cancel_running_build(self) -> None:
+        """A running build is stopped and marked; its record stays listed."""
+        (self.base_dir / self.build_id).mkdir()
+        assert self.cancel() == {"id": self.build_id}
+        build = self.stored()
+        assert build["status"] == "CANCELED"
+        assert build["finished_at"] is not None
+        self.delete_pod.assert_called_once_with(
+            self.build_id, "default", missing_ok=True
+        )
+        assert list(self.base_dir.iterdir()) == []
+        with self.app.app_context():
+            listed = get_builds(self.repository["id"])
+        assert [item["id"] for item in listed] == self.repository["build_list"]
+        assert listed[0]["status"] == "CANCELED"
+
+    def test_cancel_finished_build(self) -> None:
+        """A finished build is only marked, and keeps its end."""
+        finished_at = "2021-08-04T18:00:00+00:00"
+        self.collection("builds").client.update_one(
+            {"id": self.build_id},
+            {"$set": {"status": "SUCCEEDED", "finished_at": finished_at}},
+        )
+        self.cancel()
+        build = self.stored()
+        assert build["status"] == "CANCELED"
+        assert build["finished_at"] == finished_at
+        self.load.assert_not_called()
+        self.delete_pod.assert_not_called()
+
+    def test_cancel_with_builds_off(self) -> None:
+        """With builds switched off, no pods are touched."""
+        self.app.config.foca.endpoints["builds"]["enabled"] = False
+        self.cancel()
+        assert self.stored()["status"] == "CANCELED"
+        self.load.assert_not_called()
+        self.delete_pod.assert_not_called()
+
+    def test_cancel_other_builds_unchanged(self) -> None:
+        """Other builds of the repository stay as they are."""
+        self.cancel()
+        assert self.stored(MOCK_BUILD_INFO_2["id"])["status"] == "QUEUED"
+
+    def test_cancel_twice(self) -> None:
+        """A build that is canceled already gets a 409."""
+        self.cancel()
+        self.delete_pod.reset_mock()
+        with pytest.raises(BuildCanceled):
+            self.cancel()
+        self.delete_pod.assert_not_called()
+
+    def test_build_canceled_is_conflict(self) -> None:
+        """A canceled build gets a 409."""
+        assert BuildCanceled.code == 409
+        assert exceptions[BuildCanceled]["status"] == 409
+
+    @pytest.mark.parametrize("build_id", ["unknown", "repo12abcdef"])
+    def test_cancel_unknown_build(self, build_id: str) -> None:
+        """Unknown builds, and builds of other repositories, get a 404.
+
+        Args:
+            build_id: Identifier of the build.
+        """
+        self.collection("builds").client.insert_one(
+            {**MOCK_BUILD_INFO, "id": "repo12abcdef"}
+        )
+        with pytest.raises(BuildNotFound):
+            self.cancel(build_id)
+        assert self.stored("repo12abcdef")["status"] == "QUEUED"
+
+    def test_cancel_listed_build_is_gone(self) -> None:
+        """A build listed at the repository, but no longer stored, gets a 404."""
+        self.collection("builds").client.delete_one({"id": self.build_id})
+        with pytest.raises(BuildNotFound):
+            self.cancel()
+
+    def test_cancel_unknown_repository(self) -> None:
+        """A build of an unknown repository gets a 404."""
+        with self.app.app_context(), pytest.raises(RepositoryNotFound):
+            cancel_build("unknown", self.build_id, self.repository["access_token"])
+
+    def test_cancel_unauthorized(self) -> None:
+        """Only the repository's access token withdraws its builds."""
+        with pytest.raises(Unauthorized):
+            self.cancel(access_token="wrong")
+        assert self.stored()["status"] == "QUEUED"
+
+    def test_cancel_stop_fails(self) -> None:
+        """If the build can't be stopped, it stays as it was, for a retry."""
+        self.delete_pod.side_effect = DeletePodError
+        with pytest.raises(DeletePodError):
+            self.cancel()
+        build = self.stored()
+        assert build["status"] == "QUEUED"
+        assert build["finished_at"] is None
+        self.delete_pod.side_effect = None
+        self.cancel()
+        assert self.stored()["status"] == "CANCELED"
+
+    @patch("pubgrade.modules.endpoints.builds.notify_all_subscriptions")
+    @patch("pubgrade.modules.endpoints.builds.trigger_signing_image")
+    def test_completion_of_canceled_build(
+        self, trigger: MagicMock, notify: MagicMock
+    ) -> None:
+        """The completion of a canceled build gets a 409, and notifies no one.
+
+        Args:
+            trigger: Mock of the signing of the image.
+            notify: Mock of the notification of the subscriptions.
+        """
+        self.cancel()
+        with self.app.app_context(), pytest.raises(BuildCanceled):
+            build_completed(
+                self.repository["id"],
+                self.build_id,
+                self.repository["access_token"],
+            )
+        assert self.stored()["status"] == "CANCELED"
+        trigger.assert_not_called()
+        notify.assert_not_called()
+
+    @patch("pubgrade.modules.endpoints.builds.remove_files")
+    @patch("pubgrade.modules.endpoints.builds.notify_all_subscriptions")
+    def test_completion_canceled_meanwhile(
+        self, notify: MagicMock, remove_files: MagicMock
+    ) -> None:
+        """A build canceled while its completion is processed stays canceled.
+
+        Args:
+            notify: Mock of the notification of the subscriptions.
+            remove_files: Mock of the removal of the build's pod and files.
+        """
+
+        def cancel_meanwhile(**kwargs: Any) -> None:
+            """Cancel the build while its image is signed.
+
+            Args:
+                **kwargs: Arguments of the signing.
+            """
+            self.cancel()
+
+        with (
+            patch(
+                "pubgrade.modules.endpoints.builds.trigger_signing_image",
+                side_effect=cancel_meanwhile,
+            ),
+            self.app.app_context(),
+            pytest.raises(BuildCanceled),
+        ):
+            build_completed(
+                self.repository["id"],
+                self.build_id,
+                self.repository["access_token"],
+            )
+        assert self.stored()["status"] == "CANCELED"
+        notify.assert_not_called()
+
+    @patch("pubgrade.modules.endpoints.builds.notify_all_subscriptions")
+    def test_publish_canceled_meanwhile(self, notify: MagicMock) -> None:
+        """A prebuilt image canceled while subscribers are notified stays so.
+
+        Args:
+            notify: Mock of the notification of the subscriptions.
+        """
+
+        def cancel_meanwhile(*args: Any) -> list[dict[str, Any]]:
+            """Cancel the build while its subscribers are notified.
+
+            Args:
+                *args: Arguments of the notification.
+
+            Returns:
+                No results.
+            """
+            self.cancel()
+            return []
+
+        notify.side_effect = cancel_meanwhile
+        self.app.config.foca.endpoints["builds"]["enabled"] = False
+        with self.app.app_context():
+            publish_prebuilt_image(self.build_id, "org/image:1", [])
+        assert self.stored()["status"] == "CANCELED"
+
+    def test_stop_builds_skips_canceled(self) -> None:
+        """Canceled builds without files need no calls to Kubernetes.
+
+        They were stopped when they were canceled, e.g., before their
+        repository is deleted.
+        """
+        self.collection("builds").client.update_many(
+            {}, {"$set": {"status": "CANCELED"}}
+        )
+        with self.app.app_context():
+            stop_builds(self.repository["build_list"])
+        self.load.assert_not_called()
