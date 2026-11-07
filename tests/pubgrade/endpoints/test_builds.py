@@ -7,9 +7,11 @@ import os
 from pathlib import Path
 import shutil
 import traceback
+from types import SimpleNamespace
 from typing import Any, ClassVar, NoReturn
 from unittest.mock import MagicMock, patch
 
+from git import Repo
 from kubernetes.client import ApiException
 import mongomock
 from pymongo.errors import DuplicateKeyError
@@ -528,32 +530,50 @@ class TestBuild:
         with self.app.app_context(), pytest.raises(BuildNotFound):
             get_build_info("abcd")
 
-    def test_git_clone_and_checkout(self) -> None:
-        """Test git clone and checkout."""
+    def test_git_clone_and_checkout(self, drs_filer: SimpleNamespace) -> None:
+        """Test git clone and checkout.
+
+        Args:
+            drs_filer: Local copy of the repository.
+        """
         clone_path = git_clone_and_checkout(
             repo_url=self.repository_url,
             branch="dev",
-            commit="122c34d",
+            commit=drs_filer.commit,
             base_dir=".",
             build_id="build123",
         )
         assert clone_path == "./build123/drs-filer"
+        assert Repo(clone_path).head.commit.hexsha.startswith(drs_filer.commit)
         shutil.rmtree("./build123")
 
-    def test_git_clone_and_checkout_without_branch(self) -> None:
-        """Test git clone and checkout without branch."""
+    def test_git_clone_and_checkout_without_branch(
+        self, drs_filer: SimpleNamespace
+    ) -> None:
+        """Test git clone and checkout of a tag, without branch.
+
+        Args:
+            drs_filer: Local copy of the repository.
+        """
         clone_path = git_clone_and_checkout(
             repo_url=self.repository_url,
             branch="",
-            commit="122c34d",
+            commit=drs_filer.tag,
             base_dir=".",
             build_id="build123",
         )
         assert clone_path == "./build123/drs-filer"
+        assert Repo(clone_path).head.commit.hexsha.startswith(drs_filer.commit)
         shutil.rmtree("./build123")
 
-    def test_git_clone_and_checkout_type_error(self) -> None:
-        """Test git clone and checkout type error."""
+    def test_git_clone_and_checkout_type_error(
+        self, drs_filer: SimpleNamespace
+    ) -> None:
+        """Test git clone and checkout type error.
+
+        Args:
+            drs_filer: Local copy of the repository.
+        """
         with pytest.raises(GitCloningError):
             git_clone_and_checkout(
                 repo_url=self.repository_url,
@@ -564,20 +584,26 @@ class TestBuild:
             )
         shutil.rmtree("./build123")
 
-    def test_git_clone_and_checkout_git_command_error(self) -> None:
-        """Test git clone and checkout git command error."""
+    def test_git_clone_and_checkout_git_command_error(
+        self, drs_filer: SimpleNamespace
+    ) -> None:
+        """Test git clone and checkout git command error.
+
+        Args:
+            drs_filer: Local copy of the repository.
+        """
         with pytest.raises(GitCloningError):
             git_clone_and_checkout(
                 repo_url=self.repository_url,
                 branch="dev",
-                commit="122c34d",
+                commit=drs_filer.commit,
                 base_dir=".",
                 build_id="build123",
             )
             git_clone_and_checkout(
                 repo_url=self.repository_url,
                 branch="dev",
-                commit="122c34d",
+                commit=drs_filer.commit,
                 base_dir=".",
                 build_id="build123",
             )
@@ -721,11 +747,14 @@ class TestBuild:
         push_image.assert_called_once()
 
     @patch("pubgrade.modules.endpoints.builds.build_push_image_using_kaniko")
-    def test_create_build(self, push_image: MagicMock) -> None:
+    def test_create_build(
+        self, push_image: MagicMock, drs_filer: SimpleNamespace
+    ) -> None:
         """Test create build.
 
         Args:
             push_image: Mock of the function that pushes the image.
+            drs_filer: Local copy of the repository.
         """
         builds.template_file = "pubgrade/modules/endpoints/kaniko/template.yaml"
         os.mkdir("basedir")
@@ -737,7 +766,7 @@ class TestBuild:
             create_build(
                 repo_url=self.repository_url,
                 branch="dev",
-                commit="122c34d",
+                commit=drs_filer.commit,
                 base_dir="basedir",
                 build_id="build123",
                 dockerfile_location="basedir/drs-filer/Dockerfile",
