@@ -73,13 +73,24 @@ def test_app_version() -> None:
     """`__version__` of the package, with either quotes."""
     assert check_versions.app_version(INIT.format(version="1.2.3")) == "1.2.3"
     assert check_versions.app_version("__version__ = '1.2.3'\n") == "1.2.3"
+    assert check_versions.app_version('__version__: str = "1.2.3"\n') == "1.2.3"
 
 
 @pytest.mark.parametrize(
-    "text", ['version = "1.0.0"\n', '    __version__ = "1.0.0"\n', ""]
+    "text",
+    [
+        'version = "1.0.0"\n',
+        'if True:\n    __version__ = "1.0.0"\n',
+        "",
+        "__version__ = (\n",
+        '__version__ = "1.0.0" + "a"\n',
+        '__version__ = "1.0.0"\n__version__ = "2.0.0"\n',
+        '__version__ = "1.0.0"\n__version__ += "a"\n',
+        "__version__: str\n",
+    ],
 )
 def test_app_version_missing(text: str) -> None:
-    """Only a top-level `__version__` counts."""
+    """Only a single top-level assignment of a string literal counts."""
     assert check_versions.app_version(text) is None
 
 

@@ -18,18 +18,13 @@ Only the stdlib is used, so the workflow runs it without installing the app.
 from __future__ import annotations
 
 import argparse
+import ast
 from collections.abc import Sequence
 from pathlib import Path
 import re
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-
-# `__version__ = "..."` (or with single quotes) at the start of a line
-APP_VERSION = re.compile(
-    r"^__version__[ \t]*=[ \t]*(?P<quote>[\"'])(?P<value>[^\"'\n]*)(?P=quote)",
-    re.M,
-)
 
 
 def _chart_key(name: str) -> re.Pattern[str]:
@@ -56,10 +51,30 @@ def app_version(text: str) -> str | None:
         text: Content of `pubgrade/__init__.py`.
 
     Returns:
-        The version, or `None` if there is none.
+        The version, or `None` unless the module assigns `__version__` at the
+        top level exactly once, and to a string literal.
     """
-    version = APP_VERSION.search(text)
-    return version["value"] if version else None
+    try:
+        module = ast.parse(text)
+    except SyntaxError:
+        return None
+    values = [
+        node.value
+        for node in module.body
+        if isinstance(node, (ast.Assign, ast.AnnAssign, ast.AugAssign))
+        and any(
+            isinstance(target, ast.Name) and target.id == "__version__"
+            for target in (
+                node.targets if isinstance(node, ast.Assign) else [node.target]
+            )
+        )
+    ]
+    if len(values) != 1:
+        return None
+    value = values[0]
+    if isinstance(value, ast.Constant) and isinstance(value.value, str):
+        return value.value
+    return None
 
 
 def chart_value(text: str, name: str) -> str | None:
