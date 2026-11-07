@@ -21,7 +21,7 @@ test: ## Installs the locked dependencies (uv), runs the unit tests with coverag
 	uv run --locked pytest --cov --cov-report=term-missing --cov-report=xml
 
 lint: ## Runs the linters, type checks and security checks of pre-commit on all files.
-	uv sync --locked
+	uv sync --locked --all-groups
 	uv run --locked pre-commit run --all-files
 
 install-pubgrade: # build ## Install pubgrade on cluster using helm (values in HELM_ARGS, see the README).

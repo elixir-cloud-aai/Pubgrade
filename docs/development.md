@@ -66,7 +66,7 @@ Code style, type hints and the absence of secrets are checked with
 commit, install them once:
 
 ```bash
-uv sync
+uv sync --all-groups  # mypy also checks the hook of the docs build
 uv run pre-commit install
 uv run pre-commit run --all-files  # without make
 ```

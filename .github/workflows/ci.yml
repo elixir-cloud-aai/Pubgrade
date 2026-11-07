@@ -83,10 +83,11 @@ jobs:
       # names the failure)
       - name: Check lock file
         run: uv lock --check
-      # mypy checks imports, so the runtime dependencies are needed too
+      # mypy checks imports, so the runtime dependencies are needed too, and
+      # those of the docs for `docs/hooks.py`
       - name: Install dependencies
         run: |
-          uv sync --locked --python 3.13
+          uv sync --locked --all-groups --python 3.13
           echo "${PWD}/.venv/bin" >> "$GITHUB_PATH"
       - name: Cache pre-commit hook environments
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

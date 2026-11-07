@@ -39,8 +39,8 @@ repos:
       - id: actionlint
   - repo: local
     hooks:
-      # Uses the installed dev dependencies (`uv sync`); mypy needs them to
-      # check imported packages
+      # Uses the installed dependencies (`uv sync --all-groups`); mypy needs
+      # them to check imported packages
       - id: mypy
         name: mypy
         entry: mypy
