@@ -33,6 +33,7 @@ from pubgrade.errors.exceptions import (
 from pubgrade.modules.endpoints.repositories import (
     ACCEPTING,
     accepts_additions,
+    check_build_types,
     generate_id,
 )
 from pubgrade.modules.endpoints.subscriptions import notify_all_subscriptions
@@ -161,6 +162,8 @@ def register_builds(
         exactly one.
         GitRefNotFound: Raised when the branch, tag or commit to build isn't
         in the repository.
+        UndeclaredBuildType: Raised when the repository doesn't declare the
+        build's `build_type`.
     """
     db_collection_builds = collection("builds")
     db_collection_repositories = collection("repositories")
@@ -182,6 +185,8 @@ def register_builds(
         IMAGE_WITH_TAG.fullmatch(image.get("name", "")) for image in images
     ):
         raise InvalidImage
+    if "build_type" in build_data:
+        check_build_types(data_from_db, [build_data["build_type"]])
     build_path = builds_enabled()
     if not build_path:
         validate_prebuilt_image(build_data)

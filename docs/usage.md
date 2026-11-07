@@ -16,6 +16,15 @@ curl --request POST '<base URL>/repositories' \
 The response holds the repository's `id` and its `access_token`: the
 repository's CI needs both to publish images. Keep the token secret.
 
+A repository may declare build types, e.g., to tell releases from test
+builds, with `"build_types": ["production", "testing"]` next to `url`. Each
+build type is a name of letters, digits, `.`, `_` and `-` (up to 64
+characters, starting with a letter or digit); a repository declares at most
+50. Its builds may then name one of them (see
+[Publish an image](#publish-an-image)), and subscriptions may ask for some
+of them only (see [Subscribe to a repository](#subscribe-to-a-repository)).
+Without build types, builds have no type, as before.
+
 ## Register a user
 
 Subscriptions belong to users, who must be verified by an admin. Admin users
@@ -61,6 +70,12 @@ e.g. every new tag. A repository takes at most 100 subscriptions by default
 (the deployment can change this with
 `endpoints.subscriptions.max_per_repository`); further ones get a 403.
 
+A subscription may also list `build_types`, e.g., `"build_types":
+["production"]`, to get only builds of these types. Each must be declared by
+the repository; otherwise the request gets a 400. Without `build_types`, or
+with an empty list, the subscription gets all builds that match `type` and
+`value`, as before. With `build_types`, builds without a type don't match.
+
 ## Publish an image
 
 The repository's CI builds and pushes the image, then publishes it:
@@ -74,6 +89,11 @@ curl --request POST '<base URL>/repositories/<repository ID>/builds' \
     "head_commit": {"tag": "<tag name>"}
   }'
 ```
+
+If the repository declares build types, the build may name one of them with
+`"build_type": "<build type>"`; a type that the repository doesn't declare
+gets a 400. A build without a type reaches only subscriptions without
+`build_types`.
 
 ## Notifications
 
@@ -89,7 +109,8 @@ Results per subscription, once all calls are done, are in the field
   the state at `GET /deployment/<deployment name>` (see its
   [API](sidecar/api.md)).
 - `failed`: another response, or none in time.
-- `skipped`: the subscription doesn't match the build.
+- `skipped`: the subscription doesn't match the build (its `type`, `value`
+  or `build_types`).
 
 ### Receiving notifications without the sidecar
 
@@ -142,8 +163,11 @@ internal callback for finished build pods, not a way to change a build.
 
 ## Change or delete a repository
 
-The repository's access token also allows changing its URL; the repository
-keeps its identifier, access token, builds and subscriptions:
+The repository's access token also allows changing its URL, and its build
+types if the request gives `build_types` (otherwise they stay as they are);
+the repository keeps its identifier, access token, builds and subscriptions.
+Subscriptions keep their `build_types`, also types that the repository no
+longer declares; builds of those types can't be published any more:
 
 ```bash
 curl --request PUT '<base URL>/repositories/<repository ID>' \

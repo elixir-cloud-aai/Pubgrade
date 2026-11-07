@@ -21,7 +21,11 @@ from pubgrade.errors.exceptions import (
     UserNotFound,
     UserNotVerified,
 )
-from pubgrade.modules.endpoints.repositories import ACCEPTING, generate_id
+from pubgrade.modules.endpoints.repositories import (
+    ACCEPTING,
+    check_build_types,
+    generate_id,
+)
 from pubgrade.settings import collection, endpoints
 from pubgrade.timestamps import now, repaired_subscription
 
@@ -62,6 +66,8 @@ def register_subscription(
         setting `endpoints.subscriptions.registration_enabled`.
         TooManySubscriptions: Raised when the repository has reached the limit
         `endpoints.subscriptions.max_per_repository`.
+        UndeclaredBuildType: Raised when the repository doesn't declare one of
+        the subscription's `build_types`.
     """
     if not endpoints()["subscriptions"].get("registration_enabled", True):
         raise RegistrationDisabled
@@ -83,6 +89,7 @@ def register_subscription(
         raise Unauthorized
     if data_from_db_repository is None or "deleting" in data_from_db_repository:
         raise RepositoryNotFound
+    check_build_types(data_from_db_repository, data.get("build_types", []))
     if (
         db_collection_subscriptions.count_documents(
             {"repository_id": data["repository_id"]}
@@ -250,7 +257,9 @@ def notify_subscriptions(
 
     Sends a request to the callback URL of the subscription, if its type and
     value match the build's `head_commit`; the value `*` matches any value of
-    the type. The result doesn't contain the
+    the type. A subscription with `build_types` (not empty) matches only
+    builds whose `build_type` is one of them, not builds without a type. The
+    result doesn't contain the
     callback URL or the subscription's token, as builds are public.
 
     Args:
@@ -279,9 +288,11 @@ def notify_subscriptions(
     head_commit = build_object["head_commit"]
     subscription_type = subscription_object["type"]
     value = subscription_object["value"]
-    if subscription_type not in head_commit or value not in (
-        "*",
-        head_commit[subscription_type],
+    build_types = subscription_object.get("build_types")
+    if (
+        subscription_type not in head_commit
+        or value not in ("*", head_commit[subscription_type])
+        or (build_types and build_object.get("build_type") not in build_types)
     ):
         logger.info("Subscription %s doesn't match the build.", subscription_id)
         return _notification_result(subscription_id, "skipped")

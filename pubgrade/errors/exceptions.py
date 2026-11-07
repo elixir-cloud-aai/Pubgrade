@@ -87,6 +87,12 @@ class InvalidImage(BadRequest):
     pass
 
 
+class UndeclaredBuildType(BadRequest):
+    """Raised when a build type isn't one that the repository declares."""
+
+    pass
+
+
 class MongoError(InternalServerError):
     """Raised when Mongo operations raise an Unexpected error."""
 
@@ -259,6 +265,14 @@ exceptions = {
         "title": "Bad Request",
         "status": 400,
         "detail": "The request must name exactly one image, with a tag.",
+    },
+    UndeclaredBuildType: {
+        "title": "Bad Request",
+        "status": 400,
+        "detail": (
+            "A build type (`build_type` or `build_types`) isn't declared by the"
+            " repository."
+        ),
     },
     TooManySubscriptions: {
         "title": "Forbidden",

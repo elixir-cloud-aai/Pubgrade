@@ -15,6 +15,7 @@ from pubgrade.errors.exceptions import (
     InternalServerError,
     RegistrationDisabled,
     RepositoryNotFound,
+    UndeclaredBuildType,
     URLNotFound,
 )
 from pubgrade.settings import collection, endpoints
@@ -32,7 +33,9 @@ def register_repository(data: dict[str, Any]) -> dict[str, Any]:
     """Register a new repository object.
 
     Args:
-         data (dict): Request object containing URL of git repository.
+         data (dict): Request object containing URL of git repository and,
+         optionally, the build types that its builds may have
+         (`build_types`).
 
     Returns:
         repository_object (dict): Dictionary of repository contents (
@@ -53,6 +56,8 @@ def register_repository(data: dict[str, Any]) -> dict[str, Any]:
         # Needs to verify validity of repository url.
     except KeyError:
         raise URLNotFound from None
+    if "build_types" in data:
+        repository_object["build_types"] = data["build_types"]
 
     db_collection = collection("repositories")
     retries = endpoints()["repository"]["retries"]
@@ -87,6 +92,7 @@ def register_repository(data: dict[str, Any]) -> dict[str, Any]:
 
     repository_object.pop("_id", None)
     del repository_object["url"]
+    repository_object.pop("build_types", None)
     logger.info("Added repository %s.", repository_object["id"])
     return repository_object
 
@@ -176,13 +182,16 @@ def modify_repository_info(
 ) -> dict[str, Any]:
     """Modify registered repository.
 
-    Only the URL changes: the repository keeps its identifier, access token,
-    builds and subscriptions.
+    Only the URL changes, and the build types if the request gives them
+    (`build_types`): the repository keeps its identifier, access token,
+    builds and subscriptions, also those with build types that it no longer
+    declares.
 
     Args:
         repo_id (str): Unique identifier for the repository.
         access_token (str): Secret used to verify source is authorized.
-        data (dict): Request data containing modified url of the repository.
+        data (dict): Request data containing modified url of the repository
+        and, optionally, its build types.
 
     Returns:
         repository_object (dict): Identifier and access token of the
@@ -206,13 +215,30 @@ def modify_repository_info(
         url = data["url"]
     except KeyError:
         raise URLNotFound from None
-    result = db_collection_repository.update_one(
-        {"id": repo_id}, {"$set": {"url": url}}
-    )
+    changes: dict[str, Any] = {"url": url}
+    if "build_types" in data:
+        changes["build_types"] = data["build_types"]
+    result = db_collection_repository.update_one({"id": repo_id}, {"$set": changes})
     if result.matched_count == 0:
         raise RepositoryNotFound
     logger.info("Modified repository %s.", repo_id)
     return {"id": repo_id, "access_token": data_from_db["access_token"]}
+
+
+def check_build_types(repository: dict[str, Any], build_types: list[str]) -> None:
+    """Check that a repository declares build types.
+
+    Args:
+        repository: The repository, as stored.
+        build_types: Build types of a build or a subscription.
+
+    Raises:
+        UndeclaredBuildType: Raised when the repository doesn't declare one of
+        them.
+    """
+    declared = repository.get("build_types", [])
+    if any(build_type not in declared for build_type in build_types):
+        raise UndeclaredBuildType
 
 
 def accepts_additions(repo_id: str) -> bool:

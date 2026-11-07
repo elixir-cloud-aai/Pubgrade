@@ -188,14 +188,21 @@ From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA
   up to 28 seconds, within Kubernetes' default grace period of 30 seconds;
   with a `notification_timeout` above 10, a publish may be cut off then. Request bodies larger
   than 1 MiB are rejected.
-- **Repositories:** `PUT /repositories/{id}` changes only the URL; before,
-  the repository lost its builds and subscriptions. `DELETE
+- **Repositories:** `PUT /repositories/{id}` changes only the URL (and the
+  build types, if given); before, the repository lost its builds and
+  subscriptions. `DELETE
   /repositories/{id}` also deletes the repository's builds and subscriptions
   and stops its builds (see [Builds](#builds)); before, they were left
   behind. Unknown repositories get a 404 for both. A configuration of your
   own should add the index on `repository_id` of the collection
   `subscriptions` (see `pubgrade/config.yaml`), which speeds up deletions
   and the limit of subscriptions per repository.
+- **Build types** (new, optional): repositories may declare
+  `build_types`, builds may name a `build_type`, and subscriptions may ask
+  for some `build_types` only (see
+  [Usage](usage.md#subscribe-to-a-repository)). Nothing needs to change:
+  stored repositories, builds and subscriptions have none, so subscriptions
+  get all builds, as before.
 - **Builds:** `DELETE /repositories/{id}/builds/{build_id}` cancels a build
   (see [Usage](usage.md#cancel-a-build)), and the status of builds has the
   new value `CANCELED`: clients that check `status` against a fixed list
