@@ -132,8 +132,7 @@ checked out:
 
 ```bash
 git submodule update --init
-uv sync --only-group docs
-uv run mkdocs build --strict  # or `mkdocs serve` to preview
+uv run --only-group docs mkdocs build --strict  # or `mkdocs serve` to preview
 ```
 
 The build fails on warnings, e.g. of broken links.
