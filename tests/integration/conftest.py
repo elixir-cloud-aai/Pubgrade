@@ -24,8 +24,19 @@ import yaml
 
 import pubgrade.app
 from pubgrade.app import CONFIG_FILE, DB, create_app
+from pubgrade.settings import collection
 
 MONGODB_TEST_URI = os.environ.get("MONGODB_TEST_URI", "")
+
+# FOCA's settings of the database from the environment
+MONGO_ENV = (
+    "MONGO_URI",
+    "MONGO_HOST",
+    "MONGO_PORT",
+    "MONGO_DBNAME",
+    "MONGO_USERNAME",
+    "MONGO_PASSWORD",
+)
 
 # Admin user of the configuration, who verifies users
 ADMIN = {"name": "Admin", "uid": "admin", "user_access_token": "admin-token"}
@@ -60,20 +71,24 @@ def api(
     mongodb: MongoClient[dict[str, Any]] | None,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-) -> FlaskClient:
+) -> Iterator[FlaskClient]:
     """Create the app with an empty database, and get a client of its API.
 
     The configuration is the app's own, with an admin user (`ADMIN`) and a
-    shorter notification timeout.
+    shorter notification timeout. FOCA's settings of the database from the
+    environment (`MONGO_*`) are cleared, so that only the test database is
+    used.
 
     Args:
         mongodb: Client of the MongoDB to use, or `None` for mongomock.
         tmp_path: Temporary directory for the configuration.
         monkeypatch: Pytest's monkeypatch fixture.
 
-    Returns:
+    Yields:
         Test client of the app.
     """
+    for name in MONGO_ENV:
+        monkeypatch.delenv(name, raising=False)
     config = yaml.safe_load(CONFIG_FILE.read_text())
     spec = config["api"]["specs"]["pubgrade"]
     spec["path"] = str(CONFIG_FILE.parent / spec["path"])
@@ -92,7 +107,10 @@ def api(
     else:
         monkeypatch.setenv("MONGO_URI", MONGODB_TEST_URI)
         mongodb.drop_database(DB)
-    return create_app().app.test_client()
+    app = create_app().app
+    yield app.test_client()
+    with app.app_context():
+        collection("repositories").database.client.close()
 
 
 class Subscriber:

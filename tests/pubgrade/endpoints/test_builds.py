@@ -569,7 +569,7 @@ class TestBuild:
     def test_git_clone_and_checkout_type_error(
         self, drs_filer: SimpleNamespace
     ) -> None:
-        """Test git clone and checkout type error.
+        """Cloning a branch that doesn't exist fails.
 
         Args:
             drs_filer: Local copy of the repository.
@@ -577,8 +577,8 @@ class TestBuild:
         with pytest.raises(GitCloningError):
             git_clone_and_checkout(
                 repo_url=self.repository_url,
-                branch="master",
-                commit="8cd58b",
+                branch="missing",
+                commit=drs_filer.commit,
                 base_dir=".",
                 build_id="build123",
             )

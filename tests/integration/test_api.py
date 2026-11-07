@@ -1,5 +1,6 @@
 """Integration tests of the API: register, publish and notify."""
 
+import socket
 from typing import Any
 
 from flask.testing import FlaskClient
@@ -12,21 +13,33 @@ ADMIN_HEADERS = {
 }
 
 
-def register_user(api: FlaskClient) -> dict[str, str]:
-    """Register a user and have the admin verify them.
+def check(response: Any, status: int = 200) -> Any:
+    """Check the status of a response and get its JSON body.
+
+    Args:
+        response: Response of the test client.
+        status: Expected status code.
+
+    Returns:
+        The JSON body.
+    """
+    assert response.status_code == status, response.json
+    return response.json
+
+
+def register_user(api: FlaskClient, verify: bool = True) -> dict[str, str]:
+    """Register a user, verified by the admin unless `verify` is false.
 
     Args:
         api: Client of the API.
+        verify: Whether the admin verifies the user.
 
     Returns:
         Headers that authenticate the user.
     """
-    response = api.post("/users/register", json={"name": "Deployer"})
-    assert response.status_code == 200, response.json
-    user = response.json
-    assert user is not None
-    response = api.put(f"/users/{user['uid']}/verify", headers=ADMIN_HEADERS)
-    assert response.status_code == 200, response.json
+    user = check(api.post("/users/register", json={"name": "Deployer"}))
+    if verify:
+        check(api.put(f"/users/{user['uid']}/verify", headers=ADMIN_HEADERS))
     return {
         "X-User-Id": user["uid"],
         "X-User-Access-Token": user["user_access_token"],
@@ -42,11 +55,12 @@ def register_repository(api: FlaskClient) -> dict[str, str]:
     Returns:
         Its identifier (`id`) and access token (`access_token`).
     """
-    response = api.post(
-        "/repositories", json={"url": "https://github.com/elixir-cloud-aai/app.git"}
+    repository: dict[str, str] = check(
+        api.post(
+            "/repositories",
+            json={"url": "https://github.com/elixir-cloud-aai/app.git"},
+        )
     )
-    assert response.status_code == 200, response.json
-    repository: dict[str, str] = response.json or {}
     return repository
 
 
@@ -56,7 +70,8 @@ def subscribe(
     repository_id: str,
     callback_url: str,
     value: str = "1",
-) -> str:
+    status: int = 200,
+) -> Any:
     """Subscribe to the tags of a repository.
 
     Args:
@@ -65,48 +80,76 @@ def subscribe(
         repository_id: Identifier of the repository.
         callback_url: URL to notify.
         value: Tag to subscribe to (`*` for all).
+        status: Expected status code.
 
     Returns:
-        Identifier of the subscription.
+        Identifier of the subscription, or the error for other statuses than
+        200.
     """
-    response = api.post(
-        "/subscriptions",
-        headers=user,
-        json={
-            "repository_id": repository_id,
-            "callback_url": callback_url,
-            "access_token": "subscriber-token",
-            "type": "tag",
-            "value": value,
-        },
+    body = check(
+        api.post(
+            "/subscriptions",
+            headers=user,
+            json={
+                "repository_id": repository_id,
+                "callback_url": callback_url,
+                "access_token": "subscriber-token",
+                "type": "tag",
+                "value": value,
+            },
+        ),
+        status,
     )
-    assert response.status_code == 200, response.json
-    subscription_id: str = (response.json or {})["subscription_id"]
-    return subscription_id
+    return body["subscription_id"] if status == 200 else body
 
 
-def publish(api: FlaskClient, repository: dict[str, str], tag: str) -> dict[str, Any]:
+def publish(
+    api: FlaskClient,
+    repository: dict[str, str],
+    tag: str,
+    status: int = 200,
+) -> Any:
     """Publish a prebuilt image and get the build.
 
     Args:
         api: Client of the API.
         repository: Identifier and access token of the repository.
         tag: Tag of the image and of the commit.
+        status: Expected status code.
 
     Returns:
-        The build, as the API returns it.
+        The build, as the API returns it, or the error for other statuses
+        than 200.
     """
-    response = api.post(
-        f"/repositories/{repository['id']}/builds",
-        headers={"X-Project-Access-Token": repository["access_token"]},
-        json={"images": [{"name": f"org/image:{tag}"}], "head_commit": {"tag": tag}},
+    body = check(
+        api.post(
+            f"/repositories/{repository['id']}/builds",
+            headers={"X-Project-Access-Token": repository["access_token"]},
+            json={
+                "images": [{"name": f"org/image:{tag}"}],
+                "head_commit": {"tag": tag},
+            },
+        ),
+        status,
     )
-    assert response.status_code == 200, response.json
-    build_id = (response.json or {})["id"]
-    response = api.get(f"/repositories/{repository['id']}/builds/{build_id}")
-    assert response.status_code == 200, response.json
-    build: dict[str, Any] = response.json or {}
-    return build
+    if status != 200:
+        return body
+    return check(api.get(f"/repositories/{repository['id']}/builds/{body['id']}"))
+
+
+def results(build: dict[str, Any]) -> dict[str, tuple[str, int | None]]:
+    """Get the results of a build's notifications.
+
+    Args:
+        build: The build, as the API returns it.
+
+    Returns:
+        Result and HTTP status, by subscription.
+    """
+    return {
+        result["subscription_id"]: (result["result"], result["http_status"])
+        for result in build["notifications"]
+    }
 
 
 def test_publish_notifies_subscribers(api: FlaskClient, subscriber: Subscriber) -> None:
@@ -126,24 +169,16 @@ def test_publish_notifies_subscribers(api: FlaskClient, subscriber: Subscriber) 
         }
     ]
     assert build["status"] == "SUCCEEDED"
-    results = {
-        result["subscription_id"]: (result["result"], result["http_status"])
-        for result in build["notifications"]
-    }
-    assert results == {matching: ("delivered", 200), other: ("skipped", None)}
-    response = api.get(f"/subscriptions/{matching}", headers=user)
-    assert response.status_code == 200, response.json
-    assert (response.json or {})["state"] == "Active"
-    response = api.get("/subscriptions", headers=user)
-    assert response.status_code == 200, response.json
-    assert sorted(item["subscription_id"] for item in response.json or []) == sorted(
+    assert results(build) == {matching: ("delivered", 200), other: ("skipped", None)}
+    subscription = check(api.get(f"/subscriptions/{matching}", headers=user))
+    assert subscription["state"] == "Active"
+    listed = check(api.get("/subscriptions", headers=user))
+    assert sorted(item["subscription_id"] for item in listed) == sorted(
         [matching, other]
     )
 
 
-def test_publish_with_failed_notification(
-    api: FlaskClient, subscriber: Subscriber
-) -> None:
+def test_publish_with_error_response(api: FlaskClient, subscriber: Subscriber) -> None:
     """A subscriber that answers with an error fails the build."""
     subscriber.status = 500
     user = register_user(api)
@@ -154,59 +189,66 @@ def test_publish_with_failed_notification(
 
     assert len(subscriber.received) == 1
     assert build["status"] == "FAILED"
-    assert [
-        (result["subscription_id"], result["result"], result["http_status"])
-        for result in build["notifications"]
-    ] == [(subscription, "failed", 500)]
-    response = api.get(f"/subscriptions/{subscription}", headers=user)
-    assert (response.json or {})["state"] == "Inactive"
+    assert results(build) == {subscription: ("failed", 500)}
+    state = check(api.get(f"/subscriptions/{subscription}", headers=user))["state"]
+    assert state == "Inactive"
+
+
+def test_publish_with_unreachable_subscriber(
+    api: FlaskClient, subscriber: Subscriber
+) -> None:
+    """A subscriber that can't be reached fails the build, without a status."""
+    # A port that nothing listens on: bound, then released
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    user = register_user(api)
+    repository = register_repository(api)
+    subscription = subscribe(
+        api, user, repository["id"], f"http://127.0.0.1:{port}/update"
+    )
+
+    build = publish(api, repository, "1")
+
+    assert build["status"] == "FAILED"
+    assert results(build) == {subscription: ("failed", None)}
+
+
+def test_publish_without_subscriptions(api: FlaskClient) -> None:
+    """Publishing to a repository without subscriptions succeeds."""
+    build = publish(api, register_repository(api), "1")
+    assert build["status"] == "SUCCEEDED"
+    assert build["notifications"] == []
 
 
 def test_unverified_user_cannot_subscribe(
     api: FlaskClient, subscriber: Subscriber
 ) -> None:
     """Users need to be verified by an admin before they can subscribe."""
-    response = api.post("/users/register", json={"name": "Deployer"})
-    user = response.json or {}
+    user = register_user(api, verify=False)
     repository = register_repository(api)
-    response = api.post(
-        "/subscriptions",
-        headers={
-            "X-User-Id": user["uid"],
-            "X-User-Access-Token": user["user_access_token"],
-        },
-        json={
-            "repository_id": repository["id"],
-            "callback_url": subscriber.url,
-            "access_token": "subscriber-token",
-            "type": "tag",
-            "value": "1",
-        },
-    )
-    assert response.status_code == 403, response.json
+    subscribe(api, user, repository["id"], subscriber.url, status=403)
+
+
+def test_subscribe_to_unknown_repository(
+    api: FlaskClient, subscriber: Subscriber
+) -> None:
+    """Subscriptions need a registered repository."""
+    subscribe(api, register_user(api), "unknown", subscriber.url, status=404)
 
 
 def test_publish_needs_repository_token(api: FlaskClient) -> None:
     """Only the repository's access token allows publishing."""
     repository = register_repository(api)
-    response = api.post(
-        f"/repositories/{repository['id']}/builds",
-        headers={"X-Project-Access-Token": "wrong"},
-        json={"images": [{"name": "org/image:1"}], "head_commit": {"tag": "1"}},
-    )
-    assert response.status_code == 401, response.json
-    response = api.get(f"/repositories/{repository['id']}/builds")
-    assert response.status_code == 404, response.json
+    publish(api, {**repository, "access_token": "wrong"}, "1", status=401)
+    check(api.get(f"/repositories/{repository['id']}/builds"), 404)
 
 
 def test_repositories_hide_tokens(api: FlaskClient) -> None:
     """Listed and retrieved repositories don't show their access tokens."""
     repository = register_repository(api)
-    response = api.get("/repositories")
-    assert response.status_code == 200, response.json
-    listed: list[dict[str, Any]] = response.json or []
+    listed: list[dict[str, Any]] = check(api.get("/repositories"))
     assert [item["id"] for item in listed] == [repository["id"]]
-    response = api.get(f"/repositories/{repository['id']}")
-    assert response.status_code == 200, response.json
-    for item in [*listed, response.json or {}]:
+    retrieved = check(api.get(f"/repositories/{repository['id']}"))
+    for item in [*listed, retrieved]:
         assert "access_token" not in item

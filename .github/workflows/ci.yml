@@ -104,8 +104,8 @@ jobs:
       - name: Validate citation metadata
         run: pipx run --spec cffconvert==2.0.0 cffconvert --validate -i CITATION.cff
 
-  # With the locked dependencies (`uv.lock`), as in the image
-  # The same tests with mongomock, which reports coverage, and against
+  # With the locked dependencies (`uv.lock`), as in the image. All tests with
+  # mongomock, which reports coverage; the integration tests also against
   # MongoDB (`MONGODB_TEST_URI`, see `tests/integration/conftest.py`), the
   # chart's default version (`helm/values.yaml`)
   test:
@@ -154,18 +154,18 @@ jobs:
           echo "${PWD}/.venv/bin" >> "$GITHUB_PATH"
       # Fails below 100% coverage (`fail_under` in `pyproject.toml`)
       - name: Run tests with coverage
-        if: ${{ matrix.uri == '' }}
+        if: ${{ matrix.database == 'mongomock' }}
         run: pytest --cov --cov-report=term-missing --cov-report=xml
       # Fails instead of falling back to mongomock if the URI is missing
-      - name: Run tests against MongoDB
-        if: ${{ matrix.uri != '' }}
+      - name: Run integration tests against MongoDB
+        if: ${{ matrix.database != 'mongomock' }}
         run: |
           test -n "${MONGODB_TEST_URI}"
-          pytest
+          pytest tests/integration
       # Upload errors fail the workflow only on pushes, because pull requests
       # from forks and Dependabot get no access to the Codecov token
       - name: Submit report to Codecov
-        if: ${{ matrix.uri == '' }}
+        if: ${{ matrix.database == 'mongomock' }}
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}

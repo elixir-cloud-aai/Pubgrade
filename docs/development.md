@@ -32,12 +32,12 @@ the app as deployed, with response validation, and test registering,
 publishing and notifying through its API, with a local subscriber. They
 use mongomock too, unless `MONGODB_TEST_URI` is set: then they use the
 MongoDB at that URI, which must not have a database `pubgradeStore` (the
-tests drop it before each test). CI runs all tests with mongomock and
-against MongoDB 7.0; to do the latter locally:
+tests drop it before each test). CI runs all tests with mongomock, and the
+integration tests also against MongoDB 7.0; to do the latter locally:
 
 ```bash
 docker run -d --rm --name pubgrade-test-mongo -p 127.0.0.1:27017:27017 mongo:7.0
-MONGODB_TEST_URI=mongodb://localhost:27017 uv run pytest
+MONGODB_TEST_URI=mongodb://localhost:27017 uv run pytest tests/integration
 docker stop pubgrade-test-mongo
 ```
 
@@ -99,11 +99,11 @@ runs on pull requests and pushes to `dev`: the pull request title (Conventional
 Commits, at most 50 characters, as it becomes the commit message of the squash
 merge), lint (the pre-commit hooks, see [Lint](#lint), and the citation
 metadata in `CITATION.cff`), the tests (with mongomock, with coverage to
-Codecov, and against MongoDB 7.0), the chart, the smoke and upgrade tests, the
-documentation, and a scan of the images. The scan fails on critical and high
-vulnerabilities that have a fix in the app's image; the updater's image, which
-isn't built on FOCA, is only reported for now. The job `CI passed` sums up all
-other jobs and is the only required check.
+Codecov; the integration tests also against MongoDB 7.0), the chart, the smoke
+and upgrade tests, the documentation, and a scan of the images. The scan fails
+on critical and high vulnerabilities that have a fix in the app's image; the
+updater's image, which isn't built on FOCA, is only reported for now. The job
+`CI passed` sums up all other jobs and is the only required check.
 
 Pushes to `dev` publish `elixircloud/pubgrade` and
 `elixircloud/pubgrade-updater`, signed with Sigstore and tagged `dev` and
