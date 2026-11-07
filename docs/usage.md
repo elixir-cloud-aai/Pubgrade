@@ -108,7 +108,8 @@ and no one is notified of it. Finished builds are only marked. Deployments
 that have been notified keep what they pulled: Pubgrade doesn't notify them
 again, undeploy anything or delete images from a registry. To roll
 deployments back or forward, publish the image they should run as a new
-build. A build that is canceled already gets a 409, an unknown one a 404.
+build. A build that is canceled already gets a 409; an unknown one, or one of
+another repository, gets a 404.
 
 Builds can't be changed: to publish a corrected image, publish it as a new
 build. `PUT /repositories/<repository ID>/builds/<build ID>` is Pubgrade's

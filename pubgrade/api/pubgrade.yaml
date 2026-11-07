@@ -473,12 +473,13 @@ paths:
         `CANCELED`; `finished_at` is set if it hadn't finished. With builds
         switched on, a build that is still running is stopped, its pod and
         files removed; if they can't be removed, the request fails, the build
-        keeps its previous status, and the request can be repeated. Its
+        stays canceled, and the request can be repeated to stop it again. Its
         completion then gets a 409, so it doesn't succeed and notifies no
         one. Finished builds are only marked. Deployments that have been
         notified keep what they pulled; nothing is undeployed, notified
         again or deleted from a registry. A build that has been canceled
-        already gets a 409. There is no way to change a build; register a
+        (and stopped) already gets a 409; an unknown build, or one of another
+        repository, gets a 404. There is no way to change a build; register a
         new one instead.
       operationId: deleteBuild
       tags:

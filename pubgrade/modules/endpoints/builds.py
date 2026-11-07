@@ -56,6 +56,9 @@ FINISHED = ["SUCCEEDED", "FAILED"]
 CANCELED = "CANCELED"
 # Matches builds that haven't been withdrawn
 NOT_CANCELED: dict[str, Any] = {"status": {"$ne": CANCELED}}
+# Field that marks canceled builds whose pod and files may be left, as
+# stopping them failed; responses leave it out
+STOPPING = "stopping"
 
 # An abbreviated or full commit hash (SHA-1 or SHA-256)
 COMMIT_HASH = re.compile(r"[0-9a-fA-F]{4,64}")
@@ -231,14 +234,19 @@ def register_builds(
         # missing would break the listing of the repository's builds. A build
         # canceled meanwhile (e.g., while its repository was cloned, which
         # then failed) is kept, as its cancellation promised.
-        if is_canceled(build_data["id"]):
-            stop_canceled_build(build_data["id"])
-            raise
         try:
             db_collection_repositories.update_one(
                 {"id": repository_id}, {"$pull": {"build_list": build_data["id"]}}
             )
-            db_collection_builds.delete_one({"id": build_data["id"]})
+            deleted = db_collection_builds.delete_one(
+                {"id": build_data["id"], **NOT_CANCELED}
+            ).deleted_count
+            if deleted == 0:
+                # Canceled: listed again
+                db_collection_repositories.update_one(
+                    {"id": repository_id},
+                    {"$addToSet": {"build_list": build_data["id"]}},
+                )
         except Exception as error:
             logger.error(
                 "Removing build %s, which could not start, failed: %s",
@@ -246,7 +254,12 @@ def register_builds(
                 type(error).__name__,
             )
         else:
-            logger.info("Removed build %s, which could not start.", build_data["id"])
+            if deleted:
+                logger.info(
+                    "Removed build %s, which could not start.", build_data["id"]
+                )
+            else:
+                stop_canceled_build(build_data["id"])
         raise
     ensure_accepting(repository_id, build_data["id"])
     stop_canceled_build(build_data["id"])
@@ -357,6 +370,7 @@ def get_build_info(build_id: str) -> dict[str, Any]:
         )
         del build_object["id"]
         build_object.pop("dockerhub_token", None)
+        build_object.pop(STOPPING, None)
         return repaired_build(build_object)
     except StopIteration:
         raise BuildNotFound from None
@@ -807,8 +821,10 @@ def cancel_build(
     finished gets its `finished_at`. With builds switched on, its pod and
     files are removed (see `stop_builds()`), and its completion is no longer
     recorded: it doesn't succeed, and no one is notified. If the pod or the
-    files can't be removed, the build gets its previous state back, so that
-    the request can be repeated. Deployments that have been notified keep
+    files can't be removed, the build stays canceled and keeps the mark
+    `STOPPING`, so that the request can be repeated: a repeated request for
+    a marked build stops it again, instead of getting a 409. Deployments
+    that have been notified keep
     what they pulled: nothing is undeployed, notified again or deleted from
     a registry.
 
@@ -837,45 +853,32 @@ def cancel_build(
     if build_id not in repository.get("build_list", []):
         raise BuildNotFound
     db_collection_builds = collection("builds")
-    projection = {"_id": False, "status": True, "finished_at": True}
-    # Unfinished builds also get their end, in the same update; finished
-    # ones are only marked. A build can finish between the two updates, not
-    # go back, so one of them finds a build that isn't canceled.
-    finished_at = now()
-    previous = db_collection_builds.find_one_and_update(
+    # Unfinished builds also get their end and the mark, in the same update;
+    # finished ones are only marked as canceled. A build can finish between
+    # the two updates, not go back, so one of them finds a build that isn't
+    # canceled.
+    canceled = db_collection_builds.update_one(
         {"id": build_id, "status": {"$nin": [*FINISHED, CANCELED]}},
-        {"$set": {"status": CANCELED, "finished_at": finished_at}},
-        projection=projection,
-        return_document=ReturnDocument.BEFORE,
+        {"$set": {"status": CANCELED, "finished_at": now(), STOPPING: True}},
     )
-    if previous is None:
-        finished = db_collection_builds.find_one_and_update(
+    if canceled.matched_count == 0:
+        finished = db_collection_builds.update_one(
             {"id": build_id, "status": {"$in": FINISHED}},
             {"$set": {"status": CANCELED}},
-            projection=projection,
         )
-        if finished is not None:
+        if finished.matched_count:
             logger.info("Canceled build %s, which had finished.", build_id)
             return {"id": build_id}
-        if db_collection_builds.find_one({"id": build_id}, {"_id": True}) is None:
+        build = db_collection_builds.find_one({"id": build_id}, {"_id": False})
+        if build is None:
             raise BuildNotFound
-        raise BuildCanceled
-    try:
-        stop_builds([build_id], force=True)
-    except Exception:
-        # The build is as before, so that the request can be repeated. Until
-        # then, other cancellations and its completion got a 409; the
-        # updater reports the completion again while the pod exists
-        db_collection_builds.update_one(
-            {"id": build_id, "status": CANCELED, "finished_at": finished_at},
-            {
-                "$set": {
-                    "status": previous.get("status"),
-                    "finished_at": previous.get("finished_at"),
-                }
-            },
-        )
-        raise
+        # Canceled, but stopping it failed: stopped again
+        if not build.get(STOPPING):
+            raise BuildCanceled
+    # Errors leave the mark, so that the request can be repeated; the build
+    # stays canceled meanwhile, and its completion stops it too
+    stop_builds([build_id], force=True)
+    db_collection_builds.update_one({"id": build_id}, {"$unset": {STOPPING: ""}})
     logger.info("Canceled build %s.", build_id)
     return {"id": build_id}
 

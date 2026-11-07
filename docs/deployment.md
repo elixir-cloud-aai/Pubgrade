@@ -128,17 +128,18 @@ repeated.
 Canceling a running build (`DELETE /repositories/{id}/builds/{build_id}`, see
 [Usage](usage.md#cancel-a-build)) stops it the same way: its pod is deleted
 and its files are removed, and the build is kept with the status `CANCELED`.
-If the pod or the files can't be removed, the request gets a 500 and the
-build its previous status back, so the request can be repeated (meanwhile,
-other requests to cancel it get a 409). A build canceled while it starts is
-stopped once its pod has been created. When the updater reports a canceled
-build as finished, it gets a 409: the build doesn't succeed, its image isn't
-signed, no one is notified, and a pod that is left is deleted. Pubgrade
-records a build as `SUCCEEDED` before it triggers the signing of its image
-(back to its previous status if that fails); a build canceled from then on
-counts as finished: its image is signed and published, but no one is
-notified. Finished builds are only marked; their files, if their cleanup
-failed, are removed when their repository is deleted.
+If the pod or the files can't be removed, the request gets a 500, and the
+build stays canceled; repeat the request to stop it again (it gets a 409
+only once the build is stopped). A build canceled while it starts is stopped
+once its pod has been created. When the updater reports a canceled build as
+finished, it gets a 409: the build doesn't succeed, its image isn't signed,
+no one is notified, and a pod that is left is deleted. Pubgrade records a
+build as `SUCCEEDED` before it triggers the signing of its image (back to its
+previous status if that fails); a build canceled from then on counts as
+finished: the signing goes ahead, and subscriptions aren't notified unless
+the notifications have started already. Finished builds are only marked;
+their files, if their cleanup failed, are removed when their repository is
+deleted.
 
 ## Upgrading to FOCA 0.21 (API 2.0.0)
 

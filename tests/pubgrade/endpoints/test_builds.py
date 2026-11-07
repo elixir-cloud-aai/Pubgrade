@@ -1841,16 +1841,29 @@ class TestCancelBuild:
         assert self.stored()["status"] == "QUEUED"
 
     def test_cancel_stop_fails(self) -> None:
-        """If the build can't be stopped, it stays as it was, for a retry."""
+        """If the build can't be stopped, it stays canceled, marked for a retry.
+
+        A repeated request stops it again instead of getting a 409, and the
+        mark isn't part of responses.
+        """
         self.delete_pod.side_effect = DeletePodError
         with pytest.raises(DeletePodError):
             self.cancel()
         build = self.stored()
-        assert build["status"] == "QUEUED"
-        assert build["finished_at"] is None
+        assert build["status"] == "CANCELED"
+        assert build["finished_at"] is not None
+        assert build["stopping"] is True
+        with self.app.app_context():
+            assert "stopping" not in get_build_info(self.build_id)
         self.delete_pod.side_effect = None
-        self.cancel()
-        assert self.stored()["status"] == "CANCELED"
+        self.delete_pod.reset_mock()
+        assert self.cancel() == {"id": self.build_id}
+        self.delete_pod.assert_called_once_with(
+            self.build_id, "default", missing_ok=True
+        )
+        assert "stopping" not in self.stored()
+        with pytest.raises(BuildCanceled):
+            self.cancel()
 
     @patch("pubgrade.modules.endpoints.builds.notify_all_subscriptions")
     @patch("pubgrade.modules.endpoints.builds.trigger_signing_image")
@@ -2036,12 +2049,13 @@ class TestCancelBuild:
         assert "could not be stopped: DeletePodError" in caplog.text
 
     def test_cancel_files_fail(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """If the build's files can't be removed, it stays as it was.
+        """If the build's files can't be removed, it stays marked for a retry.
 
         Args:
             monkeypatch: Fixture to make the removal fail.
         """
         (self.base_dir / self.build_id).mkdir()
+        rmtree = shutil.rmtree
 
         def fail(path: str, **kwargs: Any) -> NoReturn:
             """Fail to remove a directory.
@@ -2058,9 +2072,11 @@ class TestCancelBuild:
         monkeypatch.setattr(builds.shutil, "rmtree", fail)
         with pytest.raises(PermissionError):
             self.cancel()
-        build = self.stored()
-        assert build["status"] == "QUEUED"
-        assert build["finished_at"] is None
+        assert self.stored()["stopping"] is True
+        monkeypatch.setattr(builds.shutil, "rmtree", rmtree)
+        assert self.cancel() == {"id": self.build_id}
+        assert list(self.base_dir.iterdir()) == []
+        assert "stopping" not in self.stored()
 
     @patch("pubgrade.modules.endpoints.builds.notify_all_subscriptions")
     def test_publish_canceled_meanwhile(self, notify: MagicMock) -> None:
