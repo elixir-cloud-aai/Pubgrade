@@ -587,19 +587,19 @@ class TestBuild:
     def test_git_clone_and_checkout_git_command_error(
         self, drs_filer: SimpleNamespace
     ) -> None:
-        """Test git clone and checkout git command error.
+        """Cloning into a directory that already has the clone fails.
 
         Args:
             drs_filer: Local copy of the repository.
         """
+        git_clone_and_checkout(
+            repo_url=self.repository_url,
+            branch="dev",
+            commit=drs_filer.commit,
+            base_dir=".",
+            build_id="build123",
+        )
         with pytest.raises(GitCloningError):
-            git_clone_and_checkout(
-                repo_url=self.repository_url,
-                branch="dev",
-                commit=drs_filer.commit,
-                base_dir=".",
-                build_id="build123",
-            )
             git_clone_and_checkout(
                 repo_url=self.repository_url,
                 branch="dev",

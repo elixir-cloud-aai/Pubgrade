@@ -6,6 +6,7 @@ from typing import Any
 from flask.testing import FlaskClient
 import pytest
 
+from pubgrade.settings import collection
 from tests.integration.conftest import ADMIN, Subscriber
 
 ADMIN_HEADERS = {
@@ -138,6 +139,19 @@ def publish(
     return check(api.get(f"/repositories/{repository['id']}/builds/{body['id']}"))
 
 
+def subscriptions(api: FlaskClient) -> int:
+    """Count the stored subscriptions.
+
+    Args:
+        api: Client of the API.
+
+    Returns:
+        Number of subscriptions in the database.
+    """
+    with api.application.app_context():
+        return collection("subscriptions").count_documents({})
+
+
 def results(build: dict[str, Any]) -> dict[str, tuple[str, int | None]]:
     """Get the results of a build's notifications.
 
@@ -229,6 +243,7 @@ def test_unverified_user_cannot_subscribe(
     user = register_user(api, verify=False)
     repository = register_repository(api)
     subscribe(api, user, repository["id"], subscriber.url, status=403)
+    assert subscriptions(api) == 0
 
 
 def test_subscribe_to_unknown_repository(
@@ -236,6 +251,7 @@ def test_subscribe_to_unknown_repository(
 ) -> None:
     """Subscriptions need a registered repository."""
     subscribe(api, register_user(api), "unknown", subscriber.url, status=404)
+    assert subscriptions(api) == 0
 
 
 def test_publish_needs_repository_token(api: FlaskClient) -> None:
