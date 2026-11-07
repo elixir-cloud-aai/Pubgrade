@@ -4,11 +4,10 @@ from pathlib import Path
 import string
 from typing import Any
 
-import pytest
-import yaml
-
 from flask import Flask
 from foca.models.config import Config
+import pytest
+import yaml
 
 from pubgrade.charsets import (
     CharsetError,

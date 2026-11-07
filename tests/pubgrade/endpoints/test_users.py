@@ -1,13 +1,14 @@
-"""Tests for /users endpoint """
+"""Tests for /users endpoint"""
+
 import logging
 import string
 from unittest.mock import MagicMock
 
-import mongomock
-import pytest
 from flask import Flask
-from foca.models.config import MongoConfig, Config
+from foca.models.config import Config, MongoConfig
+import mongomock
 from pymongo.errors import DuplicateKeyError
+import pytest
 from werkzeug.exceptions import InternalServerError, Unauthorized
 
 from pubgrade.errors.exceptions import (
@@ -16,19 +17,19 @@ from pubgrade.errors.exceptions import (
     UserNotFound,
 )
 from pubgrade.modules.endpoints.users import (
-    register_user,
-    get_users,
-    toggle_user_status,
     delete_user,
-    sanitise_text
+    get_users,
+    register_user,
+    sanitise_text,
+    toggle_user_status,
 )
 from tests.mock_data import (
-    MONGO_CONFIG,
     ENDPOINT_CONFIG,
-    MOCK_USER_DB,
     MOCK_ADMIN_USER_1,
     MOCK_SUBSCRIPTION_INFO,
     MOCK_USER,
+    MOCK_USER_DB,
+    MONGO_CONFIG,
 )
 
 
@@ -87,9 +88,7 @@ class TestUsers:
     def test_register_user_closed(self):
         """Registration can be closed by configuration."""
         self.setup()
-        self.app.config.foca.endpoints["user"][
-            "registration_enabled"
-        ] = False
+        self.app.config.foca.endpoints["user"]["registration_enabled"] = False
         with self.app.app_context():
             with pytest.raises(RegistrationDisabled):
                 register_user({"name": "Name"})
@@ -250,6 +249,4 @@ class TestUsers:
             admin_uid = MOCK_ADMIN_USER_1["uid"]
             user_access_token = MOCK_ADMIN_USER_1["user_access_token"]
             with pytest.raises(UserNotFound):
-                toggle_user_status(
-                    admin_uid, user_access_token, "wrong_uid", False
-                )
+                toggle_user_status(admin_uid, user_access_token, "wrong_uid", False)

@@ -5,12 +5,11 @@ from types import SimpleNamespace
 from typing import Any, Dict
 
 from flask import Flask
+from foca import Foca
 from foca.models.config import Config, MongoConfig
 import mongomock
 import pytest
 import yaml
-
-from foca import Foca
 
 from pubgrade.app import CONFIG_FILE, create_admin_user
 from tests.mock_data import ENDPOINT_CONFIG, MONGO_CONFIG

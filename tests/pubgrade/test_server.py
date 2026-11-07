@@ -1,10 +1,7 @@
+from flask import Flask
+from foca.models.config import Config, MongoConfig
 import mongomock
 import pytest
-
-from flask import Flask
-
-from foca.models.config import Config
-from foca.models.config import MongoConfig
 
 try:
     from unittest.mock import MagicMock, patch  # Python 3 @UnresolvedImport
@@ -13,38 +10,37 @@ except Exception:
 
 from pubgrade.errors.exceptions import RepositoryNotFound
 from pubgrade.modules.server import (
-    getRepositories,
-    postRepositories,
-    getRepository,
-    putRepositories,
     deleteRepository,
-    postBuild,
-    getBuilds,
-    getBuildInfo,
-    updateBuild,
-    postSubscription,
-    getSubscriptions,
-    getSubscriptionInfo,
     deleteSubscription,
-    postUser,
-    getUsers,
-    verifyUser,
-    unverifyUser,
     deleteUser,
+    getBuildInfo,
+    getBuilds,
+    getRepositories,
+    getRepository,
+    getSubscriptionInfo,
+    getSubscriptions,
+    getUsers,
+    postBuild,
+    postRepositories,
+    postSubscription,
+    postUser,
+    putRepositories,
+    unverifyUser,
+    updateBuild,
+    verifyUser,
 )
-
 from tests.mock_data import (
-    MONGO_CONFIG,
     ENDPOINT_CONFIG,
-    MOCK_REPOSITORIES,
-    MOCK_BUILD_PAYLOAD,
+    MOCK_ADMIN_USER_1,
     MOCK_BUILD_INFO,
+    MOCK_BUILD_INFO_2,
+    MOCK_BUILD_PAYLOAD,
+    MOCK_REPOSITORIES,
     MOCK_SUBSCRIPTION_INFO,
     MOCK_USER,
     MOCK_USER_DB,
-    MOCK_BUILD_INFO_2,
+    MONGO_CONFIG,
     SUBSCRIPTION_PAYLOAD,
-    MOCK_ADMIN_USER_1,
 )
 
 drs_url = "https://github.com/elixir-cloud-aai/drs-filer.git"
@@ -79,9 +75,7 @@ def test_postRepositories():
     """Test for creating a new repository with an auto-generated
     identifier."""
     app = Flask(__name__)
-    app.config.foca = Config(
-        db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG
-    )
+    app.config.foca = Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
     app.config.foca.db.dbs["pubgradeStore"].collections[
         "repositories"
     ].client = mongomock.MongoClient().db.collection
@@ -92,9 +86,7 @@ def test_postRepositories():
 
 def test_getRepository():
     app = Flask(__name__)
-    app.config.foca = Config(
-        db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG
-    )
+    app.config.foca = Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
     app.config.foca.db.dbs["pubgradeStore"].collections[
         "repositories"
     ].client = mongomock.MongoClient().db.collection
@@ -110,9 +102,7 @@ def test_getRepository():
 
 def test_putRepositories():
     app = Flask(__name__)
-    app.config.foca = Config(
-        db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG
-    )
+    app.config.foca = Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
     app.config.foca.db.dbs["pubgradeStore"].collections[
         "repositories"
     ].client = mongomock.MongoClient().db.collection
@@ -134,9 +124,7 @@ def test_putRepositories():
 
 def test_deleteRepository():
     app = Flask(__name__)
-    app.config.foca = Config(
-        db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG
-    )
+    app.config.foca = Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
     app.config.foca.db.dbs["pubgradeStore"].collections[
         "repositories"
     ].client = mongomock.MongoClient().db.collection
@@ -195,9 +183,7 @@ def mocked_create_build(
 @patch("pubgrade.modules.endpoints.builds.create_build", mocked_create_build)
 def test_postBuild():
     app = Flask(__name__)
-    app.config.foca = Config(
-        db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG
-    )
+    app.config.foca = Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
     app.config.foca.db.dbs["pubgradeStore"].collections[
         "repositories"
     ].client = mongomock.MongoClient().db.collection
@@ -221,9 +207,7 @@ def test_postBuild():
 
 def test_getBuilds():
     app = Flask(__name__)
-    app.config.foca = Config(
-        db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG
-    )
+    app.config.foca = Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
     app.config.foca.db.dbs["pubgradeStore"].collections[
         "repositories"
     ].client = mongomock.MongoClient().db.collection
@@ -234,12 +218,12 @@ def test_getBuilds():
     app.config.foca.db.dbs["pubgradeStore"].collections[
         "builds"
     ].client = mongomock.MongoClient().db.collection
-    app.config.foca.db.dbs["pubgradeStore"].collections[
-        "builds"
-    ].client.insert_one(MOCK_BUILD_INFO)
-    app.config.foca.db.dbs["pubgradeStore"].collections[
-        "builds"
-    ].client.insert_one(MOCK_BUILD_INFO_2)
+    app.config.foca.db.dbs["pubgradeStore"].collections["builds"].client.insert_one(
+        MOCK_BUILD_INFO
+    )
+    app.config.foca.db.dbs["pubgradeStore"].collections["builds"].client.insert_one(
+        MOCK_BUILD_INFO_2
+    )
     with app.test_request_context():
         res = getBuilds.__wrapped__(MOCK_REPOSITORIES[1]["id"])
         assert isinstance(res, list)
@@ -248,9 +232,7 @@ def test_getBuilds():
 
 def test_getBuildInfo():
     app = Flask(__name__)
-    app.config.foca = Config(
-        db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG
-    )
+    app.config.foca = Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
     app.config.foca.db.dbs["pubgradeStore"].collections[
         "repositories"
     ].client = mongomock.MongoClient().db.collection
@@ -261,9 +243,9 @@ def test_getBuildInfo():
     app.config.foca.db.dbs["pubgradeStore"].collections[
         "builds"
     ].client = mongomock.MongoClient().db.collection
-    app.config.foca.db.dbs["pubgradeStore"].collections[
-        "builds"
-    ].client.insert_one(MOCK_BUILD_INFO)
+    app.config.foca.db.dbs["pubgradeStore"].collections["builds"].client.insert_one(
+        MOCK_BUILD_INFO
+    )
     with app.test_request_context():
         res = getBuildInfo.__wrapped__(
             MOCK_REPOSITORIES[1]["id"], MOCK_BUILD_INFO["id"]
@@ -283,9 +265,7 @@ def mock_notify_subscriptions():
 @patch("requests.request", mocked_request_api)
 def test_updateBuild():
     app = Flask(__name__)
-    app.config.foca = Config(
-        db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG
-    )
+    app.config.foca = Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
     app.config.foca.db.dbs["pubgradeStore"].collections[
         "repositories"
     ].client = mongomock.MongoClient().db.collection
@@ -302,9 +282,9 @@ def test_updateBuild():
     app.config.foca.db.dbs["pubgradeStore"].collections[
         "builds"
     ].client = mongomock.MongoClient().db.collection
-    app.config.foca.db.dbs["pubgradeStore"].collections[
-        "builds"
-    ].client.insert_one(MOCK_BUILD_INFO)
+    app.config.foca.db.dbs["pubgradeStore"].collections["builds"].client.insert_one(
+        MOCK_BUILD_INFO
+    )
     with app.test_request_context(
         json=MOCK_BUILD_PAYLOAD,
         headers={
@@ -312,26 +292,22 @@ def test_updateBuild():
             "Content-Type": "application/json",
         },
     ):
-        res = updateBuild.__wrapped__(
-            MOCK_REPOSITORIES[1]["id"], MOCK_BUILD_INFO["id"]
-        )
+        res = updateBuild.__wrapped__(MOCK_REPOSITORIES[1]["id"], MOCK_BUILD_INFO["id"])
         assert isinstance(res, dict)
 
 
 def test_postSubscription():
     app = Flask(__name__)
-    app.config.foca = Config(
-        db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG
-    )
+    app.config.foca = Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
     app.config.foca.db.dbs["pubgradeStore"].collections[
         "repositories"
     ].client = mongomock.MongoClient().db.collection
     app.config.foca.db.dbs["pubgradeStore"].collections[
         "users"
     ].client = mongomock.MongoClient().db.collection
-    app.config.foca.db.dbs["pubgradeStore"].collections[
-        "users"
-    ].client.insert_one(MOCK_USER)
+    app.config.foca.db.dbs["pubgradeStore"].collections["users"].client.insert_one(
+        MOCK_USER
+    )
     app.config.foca.db.dbs["pubgradeStore"].collections[
         "subscriptions"
     ].client = mongomock.MongoClient().db.collection
@@ -353,15 +329,13 @@ def test_postSubscription():
 
 def test_getSubscriptions():
     app = Flask(__name__)
-    app.config.foca = Config(
-        db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG
-    )
+    app.config.foca = Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
     app.config.foca.db.dbs["pubgradeStore"].collections[
         "users"
     ].client = mongomock.MongoClient().db.collection
-    app.config.foca.db.dbs["pubgradeStore"].collections[
-        "users"
-    ].client.insert_one(MOCK_USER_DB)
+    app.config.foca.db.dbs["pubgradeStore"].collections["users"].client.insert_one(
+        MOCK_USER_DB
+    )
     with app.test_request_context(
         headers={
             "X-User-Access-Token": user_access_token,
@@ -375,15 +349,13 @@ def test_getSubscriptions():
 
 def test_getSubscriptionInfo():
     app = Flask(__name__)
-    app.config.foca = Config(
-        db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG
-    )
+    app.config.foca = Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
     app.config.foca.db.dbs["pubgradeStore"].collections[
         "users"
     ].client = mongomock.MongoClient().db.collection
-    app.config.foca.db.dbs["pubgradeStore"].collections[
-        "users"
-    ].client.insert_one(MOCK_USER_DB)
+    app.config.foca.db.dbs["pubgradeStore"].collections["users"].client.insert_one(
+        MOCK_USER_DB
+    )
     app.config.foca.db.dbs["pubgradeStore"].collections[
         "subscriptions"
     ].client = mongomock.MongoClient().db.collection
@@ -403,15 +375,13 @@ def test_getSubscriptionInfo():
 
 def test_deleteSubscription():
     app = Flask(__name__)
-    app.config.foca = Config(
-        db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG
-    )
+    app.config.foca = Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
     app.config.foca.db.dbs["pubgradeStore"].collections[
         "users"
     ].client = mongomock.MongoClient().db.collection
-    app.config.foca.db.dbs["pubgradeStore"].collections[
-        "users"
-    ].client.insert_one(MOCK_USER_DB)
+    app.config.foca.db.dbs["pubgradeStore"].collections["users"].client.insert_one(
+        MOCK_USER_DB
+    )
     app.config.foca.db.dbs["pubgradeStore"].collections[
         "subscriptions"
     ].client = mongomock.MongoClient().db.collection
@@ -431,9 +401,7 @@ def test_deleteSubscription():
 
 def test_post_user():
     app = Flask(__name__)
-    app.config.foca = Config(
-        db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG
-    )
+    app.config.foca = Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
     app.config.foca.db.dbs["pubgradeStore"].collections[
         "users"
     ].client = mongomock.MongoClient().db.collection
@@ -451,15 +419,13 @@ def test_post_user():
 
 def test_deleteUser():
     app = Flask(__name__)
-    app.config.foca = Config(
-        db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG
-    )
+    app.config.foca = Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
     app.config.foca.db.dbs["pubgradeStore"].collections[
         "users"
     ].client = mongomock.MongoClient().db.collection
-    app.config.foca.db.dbs["pubgradeStore"].collections[
-        "users"
-    ].client.insert_one(MOCK_USER_DB)
+    app.config.foca.db.dbs["pubgradeStore"].collections["users"].client.insert_one(
+        MOCK_USER_DB
+    )
     app.config.foca.db.dbs["pubgradeStore"].collections[
         "subscriptions"
     ].client = mongomock.MongoClient().db.collection
@@ -479,16 +445,14 @@ def test_deleteUser():
 
 def test_get_user():
     app = Flask(__name__)
-    app.config.foca = Config(
-        db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG
-    )
+    app.config.foca = Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
 
     app.config.foca.db.dbs["pubgradeStore"].collections[
         "users"
     ].client = mongomock.MongoClient().db.collection
-    app.config.foca.db.dbs["pubgradeStore"].collections[
-        "users"
-    ].client.insert_one(MOCK_USER_DB)
+    app.config.foca.db.dbs["pubgradeStore"].collections["users"].client.insert_one(
+        MOCK_USER_DB
+    )
 
     app.config.foca.db.dbs["pubgradeStore"].collections[
         "admin_users"
@@ -501,9 +465,7 @@ def test_get_user():
         json={},
         headers={
             "X-Super-User-Id": MOCK_ADMIN_USER_1["uid"],
-            "X-Super-User-Access-Token": MOCK_ADMIN_USER_1[
-                "user_access_token"
-            ],
+            "X-Super-User-Access-Token": MOCK_ADMIN_USER_1["user_access_token"],
             "Content-Type": "application/json",
         },
     ):
@@ -514,15 +476,13 @@ def test_get_user():
 
 def test_verify_user():
     app = Flask(__name__)
-    app.config.foca = Config(
-        db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG
-    )
+    app.config.foca = Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
     app.config.foca.db.dbs["pubgradeStore"].collections[
         "users"
     ].client = mongomock.MongoClient().db.collection
-    app.config.foca.db.dbs["pubgradeStore"].collections[
-        "users"
-    ].client.insert_one(MOCK_USER_DB)
+    app.config.foca.db.dbs["pubgradeStore"].collections["users"].client.insert_one(
+        MOCK_USER_DB
+    )
     app.config.foca.db.dbs["pubgradeStore"].collections[
         "admin_users"
     ].client = mongomock.MongoClient().db.collection
@@ -534,9 +494,7 @@ def test_verify_user():
         json={},
         headers={
             "X-Super-User-Id": MOCK_ADMIN_USER_1["uid"],
-            "X-Super-User-Access-Token": MOCK_ADMIN_USER_1[
-                "user_access_token"
-            ],
+            "X-Super-User-Access-Token": MOCK_ADMIN_USER_1["user_access_token"],
             "Content-Type": "application/json",
         },
     ):
@@ -546,15 +504,13 @@ def test_verify_user():
 
 def test_unverify_user():
     app = Flask(__name__)
-    app.config.foca = Config(
-        db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG
-    )
+    app.config.foca = Config(db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
     app.config.foca.db.dbs["pubgradeStore"].collections[
         "users"
     ].client = mongomock.MongoClient().db.collection
-    app.config.foca.db.dbs["pubgradeStore"].collections[
-        "users"
-    ].client.insert_one(MOCK_USER_DB)
+    app.config.foca.db.dbs["pubgradeStore"].collections["users"].client.insert_one(
+        MOCK_USER_DB
+    )
     app.config.foca.db.dbs["pubgradeStore"].collections[
         "admin_users"
     ].client = mongomock.MongoClient().db.collection
@@ -566,9 +522,7 @@ def test_unverify_user():
         json={},
         headers={
             "X-Super-User-Id": MOCK_ADMIN_USER_1["uid"],
-            "X-Super-User-Access-Token": MOCK_ADMIN_USER_1[
-                "user_access_token"
-            ],
+            "X-Super-User-Access-Token": MOCK_ADMIN_USER_1["user_access_token"],
             "Content-Type": "application/json",
         },
     ):

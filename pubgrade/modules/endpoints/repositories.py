@@ -8,10 +8,10 @@ from werkzeug.exceptions import Unauthorized
 
 from pubgrade.charsets import EXCLUDED, NOT_AT_ENDS, get_charset, usable
 from pubgrade.errors.exceptions import (
+    InternalServerError,
     RegistrationDisabled,
     RepositoryNotFound,
     URLNotFound,
-    InternalServerError,
 )
 
 logger = logging.getLogger(__name__)
@@ -34,9 +34,7 @@ def register_repository(data: dict):
         RegistrationDisabled: Raised when registration is closed by the
         setting `endpoints.repository.registration_enabled`.
     """
-    if not get_config().endpoints["repository"].get(
-        "registration_enabled", True
-    ):
+    if not get_config().endpoints["repository"].get("registration_enabled", True):
         raise RegistrationDisabled
     repository_object = {}
     try:
@@ -46,19 +44,12 @@ def register_repository(data: dict):
         raise URLNotFound
 
     db_collection = (
-        get_config()
-        .db.dbs["pubgradeStore"]
-        .collections["repositories"]
-        .client
+        get_config().db.dbs["pubgradeStore"].collections["repositories"].client
     )
     retries = get_config().endpoints["repository"]["retries"]
-    id_length: int = get_config().endpoints["repository"][
-        "id_length"
-    ]
+    id_length: int = get_config().endpoints["repository"]["id_length"]
     id_charset = get_charset("repository", "id_charset")
-    access_token_length: int = get_config().endpoints[
-        "access_token"
-    ]["length"]
+    access_token_length: int = get_config().endpoints["access_token"]["length"]
     access_token_charset = get_charset("access_token", "charset")
 
     for i in range(retries):
@@ -68,9 +59,7 @@ def register_repository(data: dict):
             length=id_length,
         )
         repository_object["access_token"] = str(
-            generate_id(
-                charset=access_token_charset, length=access_token_length
-            )
+            generate_id(charset=access_token_charset, length=access_token_length)
         )
         try:
             db_collection.insert_one(repository_object)
@@ -84,8 +73,7 @@ def register_repository(data: dict):
             continue
     else:
         logger.error(
-            f"Could not generate unique identifier."
-            f" Tried {retries + 1} times."
+            f"Could not generate unique identifier. Tried {retries + 1} times."
         )
         raise InternalServerError
 
@@ -107,10 +95,7 @@ def get_repositories():
         the pubgrade.
     """
     db_collection = (
-        get_config()
-        .db.dbs["pubgradeStore"]
-        .collections["repositories"]
-        .client
+        get_config().db.dbs["pubgradeStore"].collections["repositories"].client
     )
 
     cursor = db_collection.find({}, {"access_token": False, "_id": False})
@@ -143,9 +128,7 @@ def generate_id(
             values.
     """
     if not usable(charset):
-        raise ValueError(
-            f"No character for the start and end of values in {charset!r}"
-        )
+        raise ValueError(f"No character for the start and end of values in {charset!r}")
     generated_string = ""
     while len(generated_string) < length:
         random_char = secrets.choice(charset)
@@ -173,16 +156,11 @@ def get_repository(repo_id: str):
         identifier.
     """
     db_collection = (
-        get_config()
-        .db.dbs["pubgradeStore"]
-        .collections["repositories"]
-        .client
+        get_config().db.dbs["pubgradeStore"].collections["repositories"].client
     )
     try:
         repository_object = (
-            db_collection.find(
-                {"id": repo_id}, {"access_token": False, "_id": False}
-            )
+            db_collection.find({"id": repo_id}, {"access_token": False, "_id": False})
             .limit(1)
             .next()
         )
@@ -190,9 +168,7 @@ def get_repository(repo_id: str):
             del repository_object["subscription_list"]
         return repository_object
     except StopIteration:
-        logger.error(
-            f"Could not find repository with given identifier:" f" {repo_id}"
-        )
+        logger.error(f"Could not find repository with given identifier: {repo_id}")
         raise RepositoryNotFound
 
 
@@ -217,24 +193,17 @@ def modify_repository_info(repo_id: str, access_token: str, data: dict):
         identifier.
     """
     db_collection_repository = (
-        get_config()
-        .db.dbs["pubgradeStore"]
-        .collections["repositories"]
-        .client
+        get_config().db.dbs["pubgradeStore"].collections["repositories"].client
     )
     data_from_db = db_collection_repository.find_one({"id": repo_id})
     if data_from_db is None:
-        logger.error(
-            f"Could not find repository with given identifier: {repo_id}"
-        )
+        logger.error(f"Could not find repository with given identifier: {repo_id}")
         raise RepositoryNotFound
     if data_from_db["access_token"] != access_token:
         raise Unauthorized
     data["id"] = repo_id
     data["access_token"] = str(access_token)
-    db_collection_repository.replace_one(
-        filter={"id": repo_id}, replacement=data
-    )
+    db_collection_repository.replace_one(filter={"id": repo_id}, replacement=data)
     del data["url"]
     return data
 
@@ -259,10 +228,7 @@ def delete_repository(repo_id: str, access_token: str):
         identifier.
     """
     db_collection = (
-        get_config()
-        .db.dbs["pubgradeStore"]
-        .collections["repositories"]
-        .client
+        get_config().db.dbs["pubgradeStore"].collections["repositories"].client
     )
     data = db_collection.find_one({"id": repo_id})
     if data is None:

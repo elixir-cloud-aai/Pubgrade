@@ -9,8 +9,8 @@ import mongomock
 import pytest
 
 import pubgrade.app
-from pubgrade.charsets import CharsetError
 from pubgrade.app import CONFIG_FILE, DB, create_app, main
+from pubgrade.charsets import CharsetError
 from tests.mock_data import ENDPOINT_CONFIG, MONGO_CONFIG
 
 
@@ -53,9 +53,7 @@ def fixture_collections(monkeypatch: pytest.MonkeyPatch) -> Dict[str, Any]:
         endpoints={
             **ENDPOINT_CONFIG,
             "subscriptions": {
-                "admin_users": [
-                    {"name": "A", "uid": "a", "user_access_token": "token"}
-                ]
+                "admin_users": [{"name": "A", "uid": "a", "user_access_token": "token"}]
             },
         },
     )

@@ -13,7 +13,6 @@ from werkzeug.exceptions import (
 )
 
 from pubgrade.app import CONFIG_FILE
-
 from pubgrade.errors import exceptions as module
 from pubgrade.errors.exceptions import exceptions
 
@@ -47,9 +46,7 @@ def test_problem_details_complete() -> None:
         assert problem["detail"].endswith("."), cls
 
 
-@pytest.mark.parametrize(
-    "cls", OWN_HTTP_EXCEPTIONS, ids=lambda cls: cls.__name__
-)
+@pytest.mark.parametrize("cls", OWN_HTTP_EXCEPTIONS, ids=lambda cls: cls.__name__)
 def test_status_matches_exception(cls: Type[HTTPException]) -> None:
     """Responses have the status of the exception that was raised."""
     assert _problem(cls)["status"] == cls.code

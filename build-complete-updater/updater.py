@@ -1,8 +1,9 @@
-from kubernetes import client, config
+import json
 import os
 import time
+
+from kubernetes import client, config
 import requests
-import json
 
 NAMESPACE = "broker"
 BROKER_PORT = "8080"
@@ -40,13 +41,9 @@ while True:
             if pod.status.phase == "Succeeded":
                 build_name = get_env(pod.spec.containers[0].env, "BUILDNAME")
                 access_token = get_env(pod.spec.containers[0].env, "ACCESSTOKEN")
-                if (
-                        build_name is not None and access_token is not None
-                ):
+                if build_name is not None and access_token is not None:
                     repo_id = build_name[:BUILD_ID_LENGTH]
-                    url = BROKER_URL.format(
-                        repo_id, build_name
-                    )
+                    url = BROKER_URL.format(repo_id, build_name)
                     payload = json.dumps({"id": build_name})
                     headers = {
                         "X-Project-Access-Token": access_token,

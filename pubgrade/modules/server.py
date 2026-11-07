@@ -22,12 +22,11 @@ from pubgrade.modules.endpoints.subscriptions import (
     get_subscriptions,
     register_subscription,
 )
-
 from pubgrade.modules.endpoints.users import (
-    register_user,
-    get_users,
-    toggle_user_status,
     delete_user,
+    get_users,
+    register_user,
+    toggle_user_status,
 )
 
 
@@ -108,9 +107,7 @@ def postBuild(id: str):
     Returns:
         build_id: Identifier of Build created.
     """
-    return register_builds(
-        id, request.headers["X-Project-Access-Token"], request.json
-    )
+    return register_builds(id, request.headers["X-Project-Access-Token"], request.json)
 
 
 @log_traffic
@@ -151,9 +148,7 @@ def updateBuild(id: str, build_id: str):
     Returns:
         build_id: Identifier of Build updated.
     """
-    return build_completed(
-        id, build_id, request.headers["X-Project-Access-Token"]
-    )
+    return build_completed(id, build_id, request.headers["X-Project-Access-Token"])
 
 
 @log_traffic

@@ -1,16 +1,17 @@
 import logging
 
-from pubgrade.charsets import get_charset
-from pubgrade.errors.exceptions import (
-    RegistrationDisabled,
-    UserNotFound,
-    InternalServerError,
-    NameNotFound,
-)
-from pubgrade.modules.endpoints.repositories import generate_id
 from foca import get_config
 from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized
+
+from pubgrade.charsets import get_charset
+from pubgrade.errors.exceptions import (
+    InternalServerError,
+    NameNotFound,
+    RegistrationDisabled,
+    UserNotFound,
+)
+from pubgrade.modules.endpoints.repositories import generate_id
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +33,7 @@ def register_user(data: dict):
         RegistrationDisabled: Raised when registration is closed by the
         setting `endpoints.user.registration_enabled`.
     """
-    if not get_config().endpoints["user"].get(
-        "registration_enabled", True
-    ):
+    if not get_config().endpoints["user"].get("registration_enabled", True):
         raise RegistrationDisabled
     user_object = {}
 
@@ -43,18 +42,11 @@ def register_user(data: dict):
     except KeyError:
         raise NameNotFound
 
-    db_collection = (
-        get_config()
-        .db.dbs["pubgradeStore"]
-        .collections["users"]
-        .client
-    )
+    db_collection = get_config().db.dbs["pubgradeStore"].collections["users"].client
     retries = get_config().endpoints["user"]["retries"]
     id_length: int = get_config().endpoints["user"]["uid_length"]
     id_charset = get_charset("user", "uid_charset")
-    access_token_length: int = get_config().endpoints[
-        "access_token"
-    ]["length"]
+    access_token_length: int = get_config().endpoints["access_token"]["length"]
     access_token_charset = get_charset("access_token", "charset")
 
     for i in range(retries):
@@ -64,9 +56,7 @@ def register_user(data: dict):
             length=id_length,
         )
         user_object["user_access_token"] = str(
-            generate_id(
-                charset=access_token_charset, length=access_token_length
-            )
+            generate_id(charset=access_token_charset, length=access_token_length)
         )
         user_object["isVerified"] = False
         try:
@@ -81,8 +71,7 @@ def register_user(data: dict):
             continue
     else:
         logger.error(
-            f"Could not generate unique identifier."
-            f" Tried {retries + 1} times."
+            f"Could not generate unique identifier. Tried {retries + 1} times."
         )
         raise InternalServerError
 
@@ -111,16 +100,10 @@ def delete_user(uid: str, user_access_token: str):
         UserNotFound: Raised when there is no user with specified uid.
     """
     db_collection_subscriptions = (
-        get_config()
-        .db.dbs["pubgradeStore"]
-        .collections["subscriptions"]
-        .client
+        get_config().db.dbs["pubgradeStore"].collections["subscriptions"].client
     )
     db_collection_user = (
-        get_config()
-        .db.dbs["pubgradeStore"]
-        .collections["users"]
-        .client
+        get_config().db.dbs["pubgradeStore"].collections["users"].client
     )
     data_from_db_user = db_collection_user.find_one({"uid": uid})
     if data_from_db_user is None:
@@ -153,10 +136,7 @@ def get_users(admin_user_id: str, admin_user_access_token: str):
         in request.
     """
     db_collection_admin_users = (
-        get_config()
-        .db.dbs["pubgradeStore"]
-        .collections["admin_users"]
-        .client
+        get_config().db.dbs["pubgradeStore"].collections["admin_users"].client
     )
     data_from_db = db_collection_admin_users.find_one({"uid": admin_user_id})
     if data_from_db is None:
@@ -164,12 +144,7 @@ def get_users(admin_user_id: str, admin_user_access_token: str):
     if data_from_db["user_access_token"] != admin_user_access_token:
         raise Unauthorized
 
-    db_collection = (
-        get_config()
-        .db.dbs["pubgradeStore"]
-        .collections["users"]
-        .client
-    )
+    db_collection = get_config().db.dbs["pubgradeStore"].collections["users"].client
     # Get all user objects from database with `user_access_token`, `_id` and `subscription_list` omitted.
     users = db_collection.find(
         {},
@@ -198,10 +173,7 @@ def toggle_user_status(
         in request.
     """
     db_collection_admin_users = (
-        get_config()
-        .db.dbs["pubgradeStore"]
-        .collections["admin_users"]
-        .client
+        get_config().db.dbs["pubgradeStore"].collections["admin_users"].client
     )
     data_from_db = db_collection_admin_users.find_one({"uid": admin_user_id})
     if data_from_db is None:
@@ -210,19 +182,14 @@ def toggle_user_status(
         raise Unauthorized
 
     db_collection_user = (
-        get_config()
-        .db.dbs["pubgradeStore"]
-        .collections["users"]
-        .client
+        get_config().db.dbs["pubgradeStore"].collections["users"].client
     )
     data_from_db = db_collection_user.find_one({"uid": uid})
     if data_from_db is None:
         logger.error(f"Could not find repository with given identifier: {uid}")
         raise UserNotFound
     data_from_db["isVerified"] = is_verify
-    db_collection_user.replace_one(
-        filter={"uid": uid}, replacement=data_from_db
-    )
+    db_collection_user.replace_one(filter={"uid": uid}, replacement=data_from_db)
     if is_verify:
         return "User verified successfully."
     else:
@@ -239,4 +206,4 @@ def sanitise_text(text: str):
         Sanitised text
 
     """
-    return ''.join(e for e in text if e.isalnum() or e.isspace())
+    return "".join(e for e in text if e.isalnum() or e.isspace())
