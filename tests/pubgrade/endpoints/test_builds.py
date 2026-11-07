@@ -1202,6 +1202,7 @@ class TestBuild:
         build_id = MOCK_REPOSITORY_2["build_list"][0]
         with self.app.app_context():
             stored = builds.collection("builds").find_one({"id": build_id})
+            assert stored is not None
             with patch.object(builds, "create_build") as create:
                 start_build(
                     {**stored, "id": build_id}, self.repository_url, "access_token"
