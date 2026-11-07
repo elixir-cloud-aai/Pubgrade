@@ -241,7 +241,10 @@ From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA
   the same name no longer replace each other's image before it is signed;
   before, a registry host broke the build. The
   credentials of a Docker Hub intermediate registry are stored under
-  Docker's key for Docker Hub, so that build pods can push there.
+  Docker's key for Docker Hub, so that build pods can push there. Let
+  running builds finish before the upgrade, and before changing the
+  intermediate registry: Pubgrade works out the image to sign again when a
+  build completes.
 - **Image:** it runs as user 1000 (group 0), and its app files are read-only;
   any user ID works, e.g., on OpenShift.
 - **MongoDB:** FOCA 0.21 needs MongoDB 4.4 or later; the chart's MongoDB is
