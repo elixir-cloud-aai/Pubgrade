@@ -102,13 +102,18 @@ def validate_prebuilt_image(build_data: dict[str, Any]) -> None:
 def publish_prebuilt_image(build_id: str, image: str, subscriptions: list[str]) -> None:
     """Notify subscriptions of a prebuilt image and finish its build.
 
-    A build withdrawn meanwhile stays `CANCELED`.
+    A build withdrawn before the notifications start notifies no one; one
+    withdrawn meanwhile stays `CANCELED`, and notifications already started
+    go ahead.
 
     Args:
         build_id: Identifier of the build.
         image: Name and tag of the image.
         subscriptions: Identifiers of the repository's subscriptions.
     """
+    if is_canceled(build_id):
+        logger.info("Build %s was canceled; no one is notified.", build_id)
+        return
     results = notify_all_subscriptions(subscriptions, image, build_id)
     failed = any(result["result"] == "failed" for result in results)
     collection("builds").update_one(
@@ -953,7 +958,14 @@ def stop_builds(build_ids: list[str], force: bool = False) -> None:
         else {
             build["id"]
             for build in collection("builds").find(
-                {"id": {"$in": build_ids}, "status": {"$nin": [*FINISHED, CANCELED]}},
+                {
+                    "id": {"$in": build_ids},
+                    # Canceled builds whose stop failed may have pods left
+                    "$or": [
+                        {"status": {"$nin": [*FINISHED, CANCELED]}},
+                        {STOPPING: True},
+                    ],
+                },
                 {"id": True, "_id": False},
             )
         }

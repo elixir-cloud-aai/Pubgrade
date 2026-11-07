@@ -378,6 +378,13 @@ def test_deleteBuild(monkeypatch: pytest.MonkeyPatch) -> None:
     ):
         res = unwrap(deleteBuild)(MOCK_REPOSITORIES[1]["id"], MOCK_BUILD_INFO["id"])
     assert res == {"id": MOCK_BUILD_INFO["id"]}
+    stored = (
+        foca_config(app)
+        .db.dbs["pubgradeStore"]
+        .collections["builds"]
+        .client.find_one({"id": MOCK_BUILD_INFO["id"]})
+    )
+    assert stored["status"] == "CANCELED"
 
 
 def test_postSubscription() -> None:

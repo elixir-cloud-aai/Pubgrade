@@ -130,7 +130,7 @@ Canceling a running build (`DELETE /repositories/{id}/builds/{build_id}`, see
 and its files are removed, and the build is kept with the status `CANCELED`.
 If the pod or the files can't be removed, the request gets a 500, and the
 build stays canceled; repeat the request to stop it again (it gets a 409
-only once the build is stopped). A build canceled while it starts is stopped
+only once the build is stopped). Deleting the repository stops it too. A build canceled while it starts is stopped
 once its pod has been created. When the updater reports a canceled build as
 finished, it gets a 409: the build doesn't succeed, its image isn't signed,
 no one is notified, and a pod that is left is deleted. Pubgrade records a

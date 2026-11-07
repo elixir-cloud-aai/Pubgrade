@@ -2104,6 +2104,35 @@ class TestCancelBuild:
             publish_prebuilt_image(self.build_id, "org/image:1", [])
         assert self.stored()["status"] == "CANCELED"
 
+    def test_stop_builds_canceled_stopping(self) -> None:
+        """Canceled builds whose stop failed are stopped, e.g., on deletion."""
+        self.collection("builds").client.update_one(
+            {"id": self.build_id}, {"$set": {"status": "CANCELED", "stopping": True}}
+        )
+        self.collection("builds").client.update_one(
+            {"id": MOCK_BUILD_INFO_2["id"]}, {"$set": {"status": "CANCELED"}}
+        )
+        with self.app.app_context():
+            stop_builds(self.repository["build_list"])
+        self.delete_pod.assert_called_once_with(
+            self.build_id, "default", missing_ok=True
+        )
+
+    @patch("pubgrade.modules.endpoints.builds.notify_all_subscriptions")
+    def test_publish_canceled_before(self, notify: MagicMock) -> None:
+        """A prebuilt image canceled before the notifications notifies no one.
+
+        Args:
+            notify: Mock of the notification of the subscriptions.
+        """
+        self.collection("builds").client.update_one(
+            {"id": self.build_id}, {"$set": {"status": "CANCELED"}}
+        )
+        with self.app.app_context():
+            publish_prebuilt_image(self.build_id, "org/image:1", ["subscription"])
+        notify.assert_not_called()
+        assert self.stored()["status"] == "CANCELED"
+
     def test_stop_builds_skips_canceled(self) -> None:
         """Canceled builds without files need no calls to Kubernetes.
 
