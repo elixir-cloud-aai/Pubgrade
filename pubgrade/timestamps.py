@@ -163,5 +163,5 @@ def repair_timestamps(
         )
         changed += result.modified_count
     if changed:
-        logger.info(f"Timestamps of {changed} stored objects brought into format.")
+        logger.info("Timestamps of %s stored objects brought into format.", changed)
     return changed

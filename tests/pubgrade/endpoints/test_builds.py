@@ -1,12 +1,13 @@
-"""Tests for /builds endpoint"""
+"""Tests for /builds endpoint."""
 
 import copy
 import json
 import logging
 import os
+from pathlib import Path
 import shutil
 import traceback
-from typing import Any
+from typing import Any, ClassVar, NoReturn
 from unittest.mock import MagicMock, patch
 
 from flask import Flask
@@ -54,70 +55,223 @@ from tests.mock_data import (
 )
 
 
+class FocaApp(Flask):
+    """Flask app whose configuration holds the FOCA configuration."""
+
+    config: Any
+
+
+def make_config(endpoints: dict[str, Any]) -> Config:
+    """Create a FOCA configuration with the mock database.
+
+    Args:
+        endpoints: Configuration of the endpoints.
+
+    Returns:
+        The FOCA configuration.
+    """
+    extra: dict[str, Any] = {"endpoints": endpoints}
+    return Config(db=MongoConfig(**MONGO_CONFIG), **extra)
+
+
 def mocked_create_build(
-    repo_url,
-    branch,
-    commit,
-    base_dir,
-    build_id,
-    dockerfile_location,
-    intermediate_registry_path,
-    dockerhub_token,
-    project_access_token,
-):
+    repo_url: str,
+    branch: str,
+    commit: str,
+    base_dir: str,
+    build_id: str,
+    dockerfile_location: str,
+    intermediate_registry_path: str,
+    dockerhub_token: str,
+    project_access_token: str,
+) -> str:
+    """Mock `create_build`.
+
+    Args:
+        repo_url: URL of the repository.
+        branch: Branch name.
+        commit: Commit hash.
+        base_dir: Base directory.
+        build_id: Identifier of the build.
+        dockerfile_location: Location of the Dockerfile.
+        intermediate_registry_path: Intermediate registry path.
+        dockerhub_token: Token for DockerHub.
+        project_access_token: Access token of the project.
+
+    Returns:
+        A fixed string.
+    """
     return "working fine"
 
 
-def mocked_remove_files(dir_location: str, pod_name: str, namespace: str):
+def mocked_remove_files(dir_location: str, pod_name: str, namespace: str) -> str:
+    """Mock `remove_files`.
+
+    Args:
+        dir_location: Location of the directory.
+        pod_name: Name of the pod.
+        namespace: Kubernetes namespace.
+
+    Returns:
+        A fixed string.
+    """
     return "removed"
 
 
-def mocked_notify_subscriptions(subscription_id: str, image: str, build_id: str):
+def mocked_notify_subscriptions(subscription_id: str, image: str, build_id: str) -> str:
+    """Mock `notify_subscriptions`.
+
+    Args:
+        subscription_id: Identifier of the subscription.
+        image: Image name with tag.
+        build_id: Identifier of the build.
+
+    Returns:
+        A fixed string.
+    """
     return "Notified"
 
 
-def mocked_delete_pod(name, namespace):
+def mocked_delete_pod(name: str, namespace: str) -> str:
+    """Mock `delete_pod`.
+
+    Args:
+        name: Name to use.
+        namespace: Kubernetes namespace.
+
+    Returns:
+        A fixed string.
+    """
     return "Pod deleted."
 
 
-def mocked_delete_namespaced_pod(self, name: str, namespace: str, **kwargs: Any):
+def mocked_delete_namespaced_pod(
+    self: Any, name: str, namespace: str, **kwargs: Any
+) -> str:
+    """Mock `CoreV1Api.delete_namespaced_pod`.
+
+    Args:
+        self: Ignored.
+        name: Name to use.
+        namespace: Kubernetes namespace.
+        **kwargs: Ignored.
+
+    Returns:
+        A fixed string.
+    """
     return "Pod deleted."
 
 
-def mocked_delete_namespaced_pod_error(self, name: str, namespace: str, **kwargs: Any):
+def mocked_delete_namespaced_pod_error(
+    self: Any, name: str, namespace: str, **kwargs: Any
+) -> NoReturn:
+    """Mock `CoreV1Api.delete_namespaced_pod` raising an API error.
+
+    Args:
+        self: Ignored.
+        name: Name to use.
+        namespace: Kubernetes namespace.
+        **kwargs: Ignored.
+
+    Raises:
+        ApiException: Always.
+    """
     raise ApiException
 
 
-def mocked_request_api(method, url, data, headers, **kwargs):
+def mocked_request_api(
+    method: str, url: str, data: Any, headers: Any, **kwargs: Any
+) -> MagicMock:
+    """Mock `requests.request` with a successful response.
+
+    Args:
+        method: HTTP method of the request.
+        url: URL of the request.
+        data: Request body.
+        headers: Request headers.
+        **kwargs: Ignored.
+
+    Returns:
+        A response with status code 200.
+    """
     return MagicMock(status_code=200)
 
 
 def mocked_load_cluster_config(
-    config_file=None,
-    context=None,
-    client_configuration=None,
-    persist_config=True,
-):
+    config_file: str | None = None,
+    context: str | None = None,
+    client_configuration: Any = None,
+    persist_config: bool = True,
+) -> str:
+    """Mock `load_kube_config`.
+
+    Args:
+        config_file: Ignored.
+        context: Ignored.
+        client_configuration: Ignored.
+        persist_config: Ignored.
+
+    Returns:
+        A fixed string.
+    """
     return "Loaded successfully"
 
 
-def mocked_load_incluster_config():
+def mocked_load_incluster_config() -> str:
+    """Mock `load_incluster_config`.
+
+    Returns:
+        A fixed string.
+    """
     return "Loaded successfully"
 
 
-def mocked_core_v1_api():
+def mocked_core_v1_api() -> str:
+    """Mock `CoreV1Api`.
+
+    Returns:
+        A fixed string.
+    """
     return "v1 API"
 
 
-def mocked_create_namespaced_pod(self, namespace: str, body: Any, **kwargs: Any):
+def mocked_create_namespaced_pod(
+    self: Any, namespace: str, body: Any, **kwargs: Any
+) -> dict[str, Any]:
+    """Mock `CoreV1Api.create_namespaced_pod`.
+
+    Args:
+        self: Ignored.
+        namespace: Kubernetes namespace.
+        body: Body of the request.
+        **kwargs: Ignored.
+
+    Returns:
+        A pod description.
+    """
     return {"metadata": {"name": "kaniko"}}
 
 
-def mocked_create_namespaced_pod_error(self, namespace: str, body: Any, **kwargs: Any):
+def mocked_create_namespaced_pod_error(
+    self: Any, namespace: str, body: Any, **kwargs: Any
+) -> NoReturn:
+    """Mock `CoreV1Api.create_namespaced_pod` raising an API error.
+
+    Args:
+        self: Ignored.
+        namespace: Kubernetes namespace.
+        body: Body of the request.
+        **kwargs: Ignored.
+
+    Raises:
+        ApiException: Always.
+    """
     raise ApiException
 
 
-def mocked_create_namespaced_pod_echo(self, namespace: str, body: Any, **kwargs: Any):
+def mocked_create_namespaced_pod_echo(
+    self: Any, namespace: str, body: Any, **kwargs: Any
+) -> Any:
     """Return the created pod, as the Kubernetes API does."""
     return body
 
@@ -130,49 +284,82 @@ def _api_exception_with_body() -> ApiException:
 
 
 def mocked_create_namespaced_pod_error_body(
-    self, namespace: str, body: Any, **kwargs: Any
-):
+    self: Any, namespace: str, body: Any, **kwargs: Any
+) -> NoReturn:
     """Fail with a response body that has a secret."""
     raise _api_exception_with_body()
 
 
 def mocked_delete_namespaced_pod_error_body(
-    self, name: str, namespace: str, **kwargs: Any
-):
+    self: Any, name: str, namespace: str, **kwargs: Any
+) -> NoReturn:
     """Fail with a response body that has a secret."""
     raise _api_exception_with_body()
 
 
 def mocked_load_kube_config(
-    config_file=None,
-    context=None,
-    client_configuration=None,
-    persist_config=True,
-):
+    config_file: str | None = None,
+    context: str | None = None,
+    client_configuration: Any = None,
+    persist_config: bool = True,
+) -> str:
+    """Mock the kube config loading function.
+
+    Args:
+        config_file: Ignored.
+        context: Ignored.
+        client_configuration: Ignored.
+        persist_config: Ignored.
+
+    Returns:
+        A fixed string.
+    """
     return "success"
 
 
 def mocked_get_kube_config_loader(
-    filename=None, config_dict=None, persist_config=False, **kwargs
-):
+    filename: str | None = None,
+    config_dict: Any = None,
+    persist_config: bool = False,
+    **kwargs: Any,
+) -> "type[MockKubeConfigLoader]":
+    """Mock `_get_kube_config_loader`.
+
+    Args:
+        filename: Ignored.
+        config_dict: Ignored.
+        persist_config: Ignored.
+        **kwargs: Ignored.
+
+    Returns:
+        The mock loader class.
+    """
     return MockKubeConfigLoader
 
 
 class MockKubeConfigLoader:
-    def load_and_set(self):
+    """Mock KubeConfigLoader."""
+
+    def load_and_set(self) -> str:
+        """Mock loading and setting the configuration.
+
+        Returns:
+            A fixed string.
+        """
         return "success"
 
 
 class TestBuild:
-    app = Flask(__name__)
+    """Tests for TestBuild."""
+
+    app = FocaApp(__name__)
 
     repository_url = "https://github.com/elixir-cloud-aai/drs-filer"
     id_length = 0
 
-    def setup(self):
-        self.app.config.foca = Config(
-            db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG
-        )
+    def setup(self) -> None:
+        """Set up the app with mock data."""
+        self.app.config.foca = make_config(ENDPOINT_CONFIG)
         self.app.config.foca.db.dbs["pubgradeStore"].collections[
             "repositories"
         ].client = mongomock.MongoClient().db.collection
@@ -185,7 +372,8 @@ class TestBuild:
             "builds"
         ].client = mongomock.MongoClient().db.collection
 
-    def setup_with_build(self):
+    def setup_with_build(self) -> None:
+        """Set up the app with mock repositories and builds."""
         self.setup()
         self.app.config.foca.db.dbs["pubgradeStore"].collections[
             "builds"
@@ -195,7 +383,8 @@ class TestBuild:
         ].client.insert_one(MOCK_BUILD_INFO_2)
 
     @patch("pubgrade.modules.endpoints.builds.create_build", mocked_create_build)
-    def test_register_builds(self):
+    def test_register_builds(self) -> None:
+        """Test register builds."""
         self.setup()
         with self.app.app_context():
             res = register_builds(
@@ -204,14 +393,17 @@ class TestBuild:
                 MOCK_BUILD_PAYLOAD,
             )
             assert isinstance(res, dict)
-            # assert if build_id's 0 to `id_length` characters are same as repository id. (build = repo_id + random characters)
+            # The build ID starts with the repository ID, followed by random
+            # characters.
             assert (
                 "id" in res
                 and res["id"][: self.id_length] == MOCK_REPOSITORIES[1]["id"]
             )
 
     @patch("pubgrade.modules.endpoints.builds.create_build", mocked_create_build)
-    def test_register_builds_logs_no_token(self, caplog):
+    def test_register_builds_logs_no_token(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
         """Log messages don't contain the token for DockerHub."""
         self.setup()
         caplog.set_level(logging.DEBUG)
@@ -225,7 +417,8 @@ class TestBuild:
         assert "dockerhub-secret" not in caplog.text
 
     @patch("pubgrade.modules.endpoints.builds.create_build", mocked_create_build)
-    def test_register_builds_branch_only(self):
+    def test_register_builds_branch_only(self) -> None:
+        """Test register builds branch only."""
         self.setup()
         del MOCK_BUILD_PAYLOAD["head_commit"]
         MOCK_BUILD_PAYLOAD["head_commit"] = {"branch": "sample_branch"}
@@ -236,14 +429,16 @@ class TestBuild:
                 MOCK_BUILD_PAYLOAD,
             )
             assert isinstance(res, dict)
-            # assert if build_id's 0 to `id_length` characters are same as repository id. (build = repo_id + random characters)
+            # The build ID starts with the repository ID, followed by random
+            # characters.
             assert (
                 "id" in res
                 and res["id"][: self.id_length] == MOCK_REPOSITORIES[1]["id"]
             )
 
     @patch("pubgrade.modules.endpoints.builds.create_build", mocked_create_build)
-    def test_register_builds_tag(self):
+    def test_register_builds_tag(self) -> None:
+        """Test register builds tag."""
         self.setup()
         del MOCK_BUILD_PAYLOAD["head_commit"]
         MOCK_BUILD_PAYLOAD["head_commit"] = {"tag": "12345"}
@@ -254,14 +449,16 @@ class TestBuild:
                 MOCK_BUILD_PAYLOAD,
             )
             assert isinstance(res, dict)
-            # assert if build_id's 0 to `id_length` characters are same as repository id. (build = repo_id + random characters)
+            # The build ID starts with the repository ID, followed by random
+            # characters.
             assert (
                 "id" in res
                 and res["id"][: self.id_length] == MOCK_REPOSITORIES[1]["id"]
             )
 
     @patch("pubgrade.modules.endpoints.builds.create_build", mocked_create_build)
-    def test_register_builds_duplicate_key_error(self):
+    def test_register_builds_duplicate_key_error(self) -> None:
+        """Test register builds duplicate key error."""
         self.setup()
         mock_resp = MagicMock(side_effect=DuplicateKeyError(""))
         self.app.config.foca.db.dbs["pubgradeStore"].collections[
@@ -275,7 +472,8 @@ class TestBuild:
             )
 
     @patch("pubgrade.modules.endpoints.builds.create_build", mocked_create_build)
-    def test_register_builds_unauthorized(self):
+    def test_register_builds_unauthorized(self) -> None:
+        """Test register builds unauthorized."""
         self.setup()
         with self.app.app_context(), pytest.raises(Unauthorized):
             register_builds(
@@ -285,7 +483,8 @@ class TestBuild:
             )
 
     @patch("pubgrade.modules.endpoints.builds.create_build", mocked_create_build)
-    def test_register_builds_repository_not_found(self):
+    def test_register_builds_repository_not_found(self) -> None:
+        """Test register builds repository not found."""
         self.setup()
         with self.app.app_context(), pytest.raises(RepositoryNotFound):
             register_builds(
@@ -294,24 +493,28 @@ class TestBuild:
                 MOCK_BUILD_PAYLOAD,
             )
 
-    def test_get_builds(self):
+    def test_get_builds(self) -> None:
+        """Test get builds."""
         self.setup_with_build()
         with self.app.app_context():
             res = get_builds(MOCK_REPOSITORIES[1]["id"])
             assert isinstance(res, list)
             assert len(res) == 2
 
-    def test_get_builds_build_not_found(self):
+    def test_get_builds_build_not_found(self) -> None:
+        """Test get builds build not found."""
         self.setup()
         with self.app.app_context(), pytest.raises(BuildNotFound):
             get_builds(MOCK_REPOSITORIES[1]["id"])
 
-    def test_get_builds_repository_not_found(self):
+    def test_get_builds_repository_not_found(self) -> None:
+        """Test get builds repository not found."""
         self.setup()
         with self.app.app_context(), pytest.raises(RepositoryNotFound):
             get_builds("abcd")
 
-    def test_get_build_info(self):
+    def test_get_build_info(self) -> None:
+        """Test get build info."""
         self.setup_with_build()
         with self.app.app_context():
             res = get_build_info(MOCK_BUILD_INFO["id"])
@@ -321,7 +524,7 @@ class TestBuild:
             assert "started_at" in res
             assert "branch" in res["head_commit"]
 
-    def test_get_build_info_old_format(self):
+    def test_get_build_info_old_format(self) -> None:
         """Builds written by the previous version get timestamps with zone."""
         self.setup()
         self.app.config.foca.db.dbs["pubgradeStore"].collections[
@@ -340,12 +543,14 @@ class TestBuild:
         assert res["finished_at"] is None
         assert res["notifications"] == [{"finished_at": "2026-01-02T03:04:06+00:00"}]
 
-    def test_get_build_info_build_not_found(self):
+    def test_get_build_info_build_not_found(self) -> None:
+        """Test get build info build not found."""
         self.setup_with_build()
         with self.app.app_context(), pytest.raises(BuildNotFound):
             get_build_info("abcd")
 
-    def test_git_clone_and_checkout(self):
+    def test_git_clone_and_checkout(self) -> None:
+        """Test git clone and checkout."""
         clone_path = git_clone_and_checkout(
             repo_url=self.repository_url,
             branch="dev",
@@ -356,7 +561,8 @@ class TestBuild:
         assert clone_path == "./build123/drs-filer"
         shutil.rmtree("./build123")
 
-    def test_git_clone_and_checkout_without_branch(self):
+    def test_git_clone_and_checkout_without_branch(self) -> None:
+        """Test git clone and checkout without branch."""
         clone_path = git_clone_and_checkout(
             repo_url=self.repository_url,
             branch="",
@@ -367,7 +573,8 @@ class TestBuild:
         assert clone_path == "./build123/drs-filer"
         shutil.rmtree("./build123")
 
-    def test_git_clone_and_checkout_type_error(self):
+    def test_git_clone_and_checkout_type_error(self) -> None:
+        """Test git clone and checkout type error."""
         with pytest.raises(GitCloningError):
             git_clone_and_checkout(
                 repo_url=self.repository_url,
@@ -378,7 +585,8 @@ class TestBuild:
             )
         shutil.rmtree("./build123")
 
-    def test_git_clone_and_checkout_git_command_error(self):
+    def test_git_clone_and_checkout_git_command_error(self) -> None:
+        """Test git clone and checkout git command error."""
         with pytest.raises(GitCloningError):
             git_clone_and_checkout(
                 repo_url=self.repository_url,
@@ -396,7 +604,8 @@ class TestBuild:
             )
         shutil.rmtree("./build123")
 
-    def test_create_deployment_yaml(self):
+    def test_create_deployment_yaml(self) -> None:
+        """Test create deployment yaml."""
         builds.template_file = "pubgrade/modules/endpoints/kaniko/template.yaml"
         os.mkdir("build123")
         os.mkdir("build123/drs-filer")
@@ -412,7 +621,8 @@ class TestBuild:
         assert os.path.isfile(deployment_file_location)
         shutil.rmtree("./build123")
 
-    def test_create_deployment_yaml_if_env_present(self):
+    def test_create_deployment_yaml_if_env_present(self) -> None:
+        """Test create deployment yaml if env present."""
         os.environ["NAMESPACE"] = "pubgrade"
         builds.template_file = "pubgrade/modules/endpoints/kaniko/template.yaml"
         os.mkdir("build123")
@@ -430,7 +640,8 @@ class TestBuild:
         shutil.rmtree("./build123")
         del os.environ["NAMESPACE"]
 
-    def test_create_deployment_yaml_os_error(self):
+    def test_create_deployment_yaml_os_error(self) -> None:
+        """Test create deployment yaml os error."""
         with pytest.raises(OSError):
             builds.template_file = "pubgrade/modules/endpoints/kaniko/template.yaml"
             deployment_file_location = create_deployment_YAML(
@@ -445,7 +656,8 @@ class TestBuild:
             assert os.path.isfile(deployment_file_location)
             shutil.rmtree("./build123")
 
-    def test_create_dockerhub_config_file(self):
+    def test_create_dockerhub_config_file(self) -> None:
+        """Test create dockerhub config file."""
         self.setup()
         with self.app.app_context():
             create_dockerhub_config_file("token", "config.json")
@@ -453,13 +665,17 @@ class TestBuild:
         os.remove("config.json")
 
     @patch("pubgrade.modules.endpoints.builds.build_push_image_using_kaniko")
-    def test_create_build(self, push_image):
+    def test_create_build(self, push_image: MagicMock) -> None:
+        """Test create build.
+
+        Args:
+            push_image: Mock of the function that pushes the image.
+        """
         builds.template_file = "pubgrade/modules/endpoints/kaniko/template.yaml"
         os.mkdir("basedir")
         os.mkdir("basedir/drs-filer")
-        f = open("basedir/drs-filer/Dockerfile", "w")
-        f.write("test dockerfile")
-        f.close()
+        with open("basedir/drs-filer/Dockerfile", "w") as f:
+            f.write("test dockerfile")
         self.setup()
         with self.app.app_context():
             create_build(
@@ -482,7 +698,8 @@ class TestBuild:
 
     @patch("pubgrade.modules.endpoints.builds.remove_files", mocked_remove_files)
     @patch("requests.request", mocked_request_api)
-    def test_build_completed(self):
+    def test_build_completed(self) -> None:
+        """Test build completed."""
         self.setup_with_build()
         self.app.config.foca.db.dbs["pubgradeStore"].collections[
             "subscriptions"
@@ -506,7 +723,9 @@ class TestBuild:
 
     @patch("pubgrade.modules.endpoints.builds.remove_files")
     @patch("requests.request", mocked_request_api)
-    def test_build_completed_removes_pod_in_own_namespace(self, remove_files):
+    def test_build_completed_removes_pod_in_own_namespace(
+        self, remove_files: MagicMock
+    ) -> None:
         """The build pod is removed from Pubgrade's namespace."""
         self.setup_with_build()
         self.app.config.foca.db.dbs["pubgradeStore"].collections[
@@ -524,7 +743,7 @@ class TestBuild:
             del os.environ["NAMESPACE"]
         assert remove_files.call_args[0][2] == "any"
 
-    def test_build_completed_build_of_other_repository(self):
+    def test_build_completed_build_of_other_repository(self) -> None:
         """A repository's token only completes that repository's builds."""
         self.setup_with_build()
         builds_collection = (
@@ -539,7 +758,7 @@ class TestBuild:
             )
         assert builds_collection.find_one({"id": "other"})["status"] == "QUEUED"
 
-    def test_build_completed_listed_build_is_gone(self):
+    def test_build_completed_listed_build_is_gone(self) -> None:
         """A build listed at the repository, but no longer stored, isn't found."""
         self.setup()
         with self.app.app_context(), pytest.raises(BuildNotFound):
@@ -549,7 +768,8 @@ class TestBuild:
                 MOCK_REPOSITORY_2["access_token"],
             )
 
-    def test_build_completed_build_not_found(self):
+    def test_build_completed_build_not_found(self) -> None:
+        """Test build completed build not found."""
         self.setup_with_build()
         with self.app.app_context(), pytest.raises(BuildNotFound):
             build_completed(
@@ -558,7 +778,8 @@ class TestBuild:
                 MOCK_REPOSITORY_2["access_token"],
             )
 
-    def test_build_completed_unauthorized(self):
+    def test_build_completed_unauthorized(self) -> None:
+        """Test build completed unauthorized."""
         self.setup_with_build()
         with self.app.app_context(), pytest.raises(Unauthorized):
             build_completed(
@@ -567,7 +788,8 @@ class TestBuild:
                 "123",
             )
 
-    def test_build_completed_repository_not_found(self):
+    def test_build_completed_repository_not_found(self) -> None:
+        """Test build completed repository not found."""
         self.setup_with_build()
         with self.app.app_context(), pytest.raises(RepositoryNotFound):
             build_completed(
@@ -577,7 +799,8 @@ class TestBuild:
             )
 
     @patch("pubgrade.modules.endpoints.builds.delete_pod", mocked_delete_pod)
-    def test_remove_files(self):
+    def test_remove_files(self) -> None:
+        """Test remove files."""
         os.mkdir("build123")
         remove_files("build123", "pod_name", "namespace")
         assert not os.path.isdir("build123")
@@ -587,7 +810,8 @@ class TestBuild:
         "kubernetes.client.api.core_v1_api.CoreV1Api.create_namespaced_pod",
         mocked_create_namespaced_pod,
     )
-    def test_build_push_image_using_kaniko(self):
+    def test_build_push_image_using_kaniko(self) -> None:
+        """Test build push image using kaniko."""
         builds.template_file = "pubgrade/modules/endpoints/kaniko/template.yaml"
         with self.app.app_context():
             build_push_image_using_kaniko(builds.template_file)
@@ -609,7 +833,8 @@ class TestBuild:
         mocked_get_kube_config_loader,
     )
     @patch("kubernetes.config.kube_config.KubeConfigLoader", MockKubeConfigLoader)
-    def test_build_push_image_using_kaniko_create_pod_error(self):
+    def test_build_push_image_using_kaniko_create_pod_error(self) -> None:
+        """Test build push image using kaniko create pod error."""
         builds.template_file = "pubgrade/modules/endpoints/kaniko/template.yaml"
         with self.app.app_context(), pytest.raises(CreatePodError):
             build_push_image_using_kaniko(builds.template_file)
@@ -619,7 +844,8 @@ class TestBuild:
         "kubernetes.client.api.core_v1_api.CoreV1Api.delete_namespaced_pod",
         mocked_delete_namespaced_pod,
     )
-    def test_delete_pod(self):
+    def test_delete_pod(self) -> None:
+        """Test delete pod."""
         with self.app.app_context():
             builds.delete_pod("name", "namespace")
 
@@ -628,7 +854,8 @@ class TestBuild:
         "kubernetes.client.api.core_v1_api.CoreV1Api.delete_namespaced_pod",
         mocked_delete_namespaced_pod_error,
     )
-    def test_delete_pod_api_error(self):
+    def test_delete_pod_api_error(self) -> None:
+        """Test delete pod api error."""
         with self.app.app_context(), pytest.raises(DeletePodError):
             builds.delete_pod("name", "namespace")
 
@@ -637,7 +864,8 @@ class TestBuild:
         "kubernetes.client.api.core_v1_api.CoreV1Api.create_namespaced_pod",
         mocked_create_namespaced_pod,
     )
-    def test_build_push_image_using_kaniko_incluster(self):
+    def test_build_push_image_using_kaniko_incluster(self) -> None:
+        """Test build push image using kaniko incluster."""
         os.environ["KUBERNETES_SERVICE_HOST"] = "Incluster"
         builds.template_file = "pubgrade/modules/endpoints/kaniko/template.yaml"
         with self.app.app_context():
@@ -654,8 +882,11 @@ class TestBuild:
         mocked_create_namespaced_pod_echo,
     )
     def test_build_push_image_using_kaniko_logs_no_token(
-        self, caplog, tmp_path, monkeypatch
-    ):
+        self,
+        caplog: pytest.LogCaptureFixture,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         """Log messages name the created pod, without its environment."""
         monkeypatch.delenv("KUBERNETES_SERVICE_HOST", raising=False)
         monkeypatch.setattr(
@@ -686,8 +917,8 @@ class TestBuild:
         mocked_create_namespaced_pod_error_body,
     )
     def test_build_push_image_using_kaniko_error_logs_no_body(
-        self, caplog, monkeypatch
-    ):
+        self, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Errors of the Kubernetes API are logged by status and reason."""
         monkeypatch.delenv("KUBERNETES_SERVICE_HOST", raising=False)
         with self.app.app_context(), pytest.raises(CreatePodError) as raised:
@@ -709,8 +940,11 @@ class TestBuild:
         mocked_create_namespaced_pod_error_body,
     )
     def test_build_push_image_using_kaniko_error_without_name(
-        self, caplog, monkeypatch, tmp_path
-    ):
+        self,
+        caplog: pytest.LogCaptureFixture,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
         """A manifest without name still gets its error, without context."""
         monkeypatch.delenv("KUBERNETES_SERVICE_HOST", raising=False)
         deployment_file = tmp_path / "pod.yaml"
@@ -725,7 +959,9 @@ class TestBuild:
         "kubernetes.client.api.core_v1_api.CoreV1Api.delete_namespaced_pod",
         mocked_delete_namespaced_pod_error_body,
     )
-    def test_delete_pod_error_logs_no_body(self, caplog):
+    def test_delete_pod_error_logs_no_body(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
         """Errors of the Kubernetes API are logged by status and reason."""
         with self.app.app_context(), pytest.raises(DeletePodError) as raised:
             builds.delete_pod("name", "namespace")
@@ -739,22 +975,24 @@ class TestBuild:
 
     @patch("requests.request")
     def test_trigger_signing_image_error_logs_no_header(
-        self, request, caplog, monkeypatch
-    ):
+        self,
+        request: MagicMock,
+        caplog: pytest.LogCaptureFixture,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         """Failed requests are logged by type: messages can quote headers."""
         request.side_effect = requests.exceptions.InvalidHeader(
             "Invalid header value: 'Bearer gh-secret'"
         )
         monkeypatch.setenv("GH_ACCESS_TOKEN", " gh-secret\n")
         self.setup()
-        with self.app.app_context():
-            with pytest.raises(InternalServerError) as raised:
-                builds.trigger_signing_image(
-                    dockerhub_token="dXNlcjpwYXNzd2Q=",
-                    image_path="image",
-                    pull_tag="registry/image:1",
-                    push_tag="image:1",
-                )
+        with self.app.app_context(), pytest.raises(InternalServerError) as raised:
+            builds.trigger_signing_image(
+                dockerhub_token="dXNlcjpwYXNzd2Q=",
+                image_path="image",
+                pull_tag="registry/image:1",
+                push_tag="image:1",
+            )
         assert request.call_args.kwargs["headers"]["Authorization"] == (
             "Bearer gh-secret"
         )
@@ -767,18 +1005,17 @@ class TestBuild:
 class TestPublish:
     """Tests for publishing prebuilt images, with builds switched off."""
 
-    app = Flask(__name__)
+    app = FocaApp(__name__)
     repository = MOCK_REPOSITORY_2
-    payload = {
+    payload: ClassVar[dict[str, Any]] = {
         "images": [{"name": "elixircloud/tesk-api:v1.2.0"}],
         "head_commit": {"tag": "v1.2.0"},
     }
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         """Set up the app with a repository and a matching subscription."""
-        self.app.config.foca = Config(
-            db=MongoConfig(**MONGO_CONFIG),
-            endpoints=copy.deepcopy(ENDPOINT_CONFIG),
+        self.app.config.foca = make_config(
+            copy.deepcopy(ENDPOINT_CONFIG),
         )
         self.app.config.foca.endpoints["builds"]["enabled"] = False
         for name in ("repositories", "builds", "subscriptions"):
@@ -790,7 +1027,7 @@ class TestPublish:
             {**MOCK_SUBSCRIPTION_INFO, "type": "tag", "value": "*"}
         )
 
-    def collection(self, name):
+    def collection(self, name: str) -> Any:
         """Get the configuration of a collection.
 
         Args:
@@ -801,7 +1038,7 @@ class TestPublish:
         """
         return self.app.config.foca.db.dbs["pubgradeStore"].collections[name]
 
-    def publish(self, payload):
+    def publish(self, payload: dict[str, Any]) -> Any:
         """Publish an image.
 
         Args:
@@ -819,7 +1056,7 @@ class TestPublish:
 
     @patch("pubgrade.modules.endpoints.builds.create_build")
     @patch("requests.request")
-    def test_publish(self, request, create_build):
+    def test_publish(self, request: MagicMock, create_build: MagicMock) -> None:
         """Subscribers get the image, and nothing gets built."""
         request.return_value = MagicMock(status_code=200)
         res = self.publish(self.payload)
@@ -835,14 +1072,14 @@ class TestPublish:
         assert build["notifications"][0]["result"] == "delivered"
 
     @patch("requests.request")
-    def test_publish_failed_notification(self, request):
+    def test_publish_failed_notification(self, request: MagicMock) -> None:
         """A failed notification shows in the build's status."""
         request.return_value = MagicMock(status_code=500)
         res = self.publish(self.payload)
         with self.app.app_context():
             assert get_build_info(res["id"])["status"] == "FAILED"
 
-    def test_publish_without_subscriptions(self):
+    def test_publish_without_subscriptions(self) -> None:
         """A repository without subscriptions has nothing to notify."""
         self.collection("repositories").client.update_one(
             {"id": self.repository["id"]},
@@ -861,7 +1098,7 @@ class TestPublish:
             {"images": [{"name": "org/image:1", "location": "./Dockerfile"}]},
         ],
     )
-    def test_publish_rejects_build_requests(self, extra):
+    def test_publish_rejects_build_requests(self, extra: dict[str, Any]) -> None:
         """Requests that ask for a build are rejected."""
         with pytest.raises(BuildsDisabled):
             self.publish({**self.payload, **extra})
@@ -877,13 +1114,13 @@ class TestPublish:
             [{"name": "org/image:1 --flag"}],
         ],
     )
-    def test_publish_rejects_invalid_images(self, images):
+    def test_publish_rejects_invalid_images(self, images: list[dict[str, str]]) -> None:
         """Exactly one image with a tag is required."""
         with pytest.raises(InvalidImage):
             self.publish({**self.payload, "images": images})
 
     @patch("requests.request")
-    def test_publish_registry_with_port(self, request):
+    def test_publish_registry_with_port(self, request: MagicMock) -> None:
         """A registry's port isn't mistaken for a tag."""
         request.return_value = MagicMock(status_code=200)
         self.publish(
@@ -897,13 +1134,13 @@ class TestPublish:
             "tag": "1",
         }
 
-    def test_publish_unauthorized_before_validation(self):
+    def test_publish_unauthorized_before_validation(self) -> None:
         """A wrong token gets a 401, whatever the request is."""
         with self.app.app_context(), pytest.raises(Unauthorized):
             register_builds(self.repository["id"], "wrong", {"images": []})
 
     @patch("pubgrade.modules.endpoints.builds.create_build")
-    def test_build_rejects_image_without_tag(self, create_build):
+    def test_build_rejects_image_without_tag(self, create_build: MagicMock) -> None:
         """Also with builds on, images need a tag."""
         self.app.config.foca.endpoints["builds"]["enabled"] = True
         with pytest.raises(InvalidImage):
@@ -925,7 +1162,7 @@ class TestPublish:
             [{"name": "registry.example.org/Org/image:1"}],
         ],
     )
-    def test_build_rejects_invalid_images(self, images):
+    def test_build_rejects_invalid_images(self, images: list[dict[str, str]]) -> None:
         """Requests without valid image references are rejected."""
         self.app.config.foca.endpoints["builds"]["enabled"] = True
         with pytest.raises(InvalidImage):
@@ -942,11 +1179,11 @@ class TestPublish:
             "localhost/org/image:1",
         ],
     )
-    def test_image_with_tag_accepts_references(self, name):
+    def test_image_with_tag_accepts_references(self, name: str) -> None:
         """Valid references pass, with or without a registry."""
         assert IMAGE_WITH_TAG.fullmatch(name)
 
-    def test_build_completed_rejected(self):
+    def test_build_completed_rejected(self) -> None:
         """`PUT` on a build is rejected."""
         with self.app.app_context(), pytest.raises(BuildsDisabled):
             build_completed(

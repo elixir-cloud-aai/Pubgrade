@@ -28,7 +28,7 @@ import re
 import string
 from typing import Any
 
-from foca import get_config
+from pubgrade.settings import endpoints
 
 # Character sets that the settings may name
 NAMED: dict[str, str] = {
@@ -235,5 +235,5 @@ def get_charset(section: str, key: str) -> str:
     Returns:
         The characters (cf. `resolve_charset()`).
     """
-    value = get_config().endpoints[section][key]
+    value = endpoints()[section][key]
     return resolve_charset(value, f"endpoints.{section}.{key}", _allowed(section))

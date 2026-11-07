@@ -60,9 +60,10 @@ def test_builds_off(config: dict[str, Any]) -> None:
 def test_admin_users_follow_configuration() -> None:
     """Tokens get replaced, and users missing in the configuration removed."""
     app = Flask(__name__)
-    app.config.foca = Config(
-        db=MongoConfig(**MONGO_CONFIG),
-        endpoints={
+    flask_config: Any = app.config
+    settings: dict[str, Any] = {
+        "db": MongoConfig(**MONGO_CONFIG),
+        "endpoints": {
             **ENDPOINT_CONFIG,
             "subscriptions": {
                 "admin_users": [
@@ -71,15 +72,16 @@ def test_admin_users_follow_configuration() -> None:
                 ]
             },
         },
-    )
-    collection = mongomock.MongoClient().db.collection
+    }
+    flask_config.foca = Config(**settings)
+    collection: Any = mongomock.MongoClient().db.collection
     collection.insert_many(
         [
             {"name": "A", "uid": "a", "user_access_token": "old"},
             {"name": "B", "uid": "b", "user_access_token": "gone"},
         ]
     )
-    app.config.foca.db.dbs["pubgradeStore"].collections[
+    flask_config.foca.db.dbs["pubgradeStore"].collections[
         "admin_users"
     ].client = collection
     create_admin_user(SimpleNamespace(app=app))

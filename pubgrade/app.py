@@ -9,9 +9,10 @@ import logging
 from pathlib import Path
 
 from connexion import App
-from foca import Foca, get_collection, get_config
+from foca import Foca
 
 from pubgrade.charsets import check_charsets
+from pubgrade.settings import DB, collection, endpoints
 from pubgrade.timestamps import repair_timestamps
 
 logger = logging.getLogger(__name__)
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 # The configuration of the app, independent of the working directory;
 # deployments mount their own copy over it
 CONFIG_FILE = Path(__file__).resolve().parent / "config.yaml"
-DB = "pubgradeStore"
+__all__ = ["CONFIG_FILE", "DB", "create_app", "main"]
 
 
 def create_admin_user(app: App) -> None:
@@ -32,8 +33,8 @@ def create_admin_user(app: App) -> None:
         app: The app, as returned by FOCA.
     """
     with app.app.app_context():
-        admin_users = get_config().endpoints["subscriptions"]["admin_users"]
-        db_collection = get_collection(DB, "admin_users")
+        admin_users = endpoints()["subscriptions"]["admin_users"]
+        db_collection = collection("admin_users")
         for user in admin_users:
             db_collection.replace_one(
                 {"uid": user["uid"]},
@@ -62,12 +63,10 @@ def create_app() -> App:
     """
     app = Foca(config_file=CONFIG_FILE).create_app()
     with app.app.app_context():
-        check_charsets(get_config().endpoints)
+        check_charsets(endpoints())
     create_admin_user(app)
     with app.app.app_context():
-        repair_timestamps(
-            get_collection(DB, "builds"), get_collection(DB, "subscriptions")
-        )
+        repair_timestamps(collection("builds"), collection("subscriptions"))
     return app
 
 

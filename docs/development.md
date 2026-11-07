@@ -47,13 +47,44 @@ built from the branch `dev` of
 [Pubgrade-Sidecar](https://github.com/elixir-cloud-aai/Pubgrade-Sidecar); set
 `SIDECAR_IMAGE` to use a local image instead.
 
+## Lint
+
+Code style, type hints and the absence of secrets are checked with
+[pre-commit](https://pre-commit.com/) (`.pre-commit-config.yaml`):
+
+- [Ruff](https://docs.astral.sh/ruff/) lints and formats the Python code
+  (Black style; rules in `[tool.ruff]` of `pyproject.toml`), including
+  Google-style docstrings for all modules, classes and functions.
+- [mypy](https://mypy.readthedocs.io/) checks the type hints, which must be
+  complete (`[tool.mypy]`).
+- [gitleaks](https://github.com/gitleaks/gitleaks) looks for secrets in the
+  staged changes; CI also scans all files.
+- [actionlint](https://github.com/rhysd/actionlint) checks the GitHub
+  workflows, and further hooks the YAML syntax, whitespace and file endings.
+
+`make lint` runs all hooks on all files, as CI does. To run them on each
+commit, install them once:
+
+```bash
+uv sync
+uv run pre-commit install
+uv run pre-commit run --all-files  # without make
+```
+
+The Sidecar's submodule in `external/` is left out. Formatting changes that
+touch many lines go in a commit of their own, listed in
+`.git-blame-ignore-revs`, so that `git blame` skips them; for GitHub's blame
+view this works as is, locally after
+`git config blame.ignoreRevsFile .git-blame-ignore-revs`.
+
 ## CI
 
 [CI](https://github.com/elixir-cloud-aai/Pubgrade/blob/dev/.github/workflows/ci.yml)
 runs on pull requests and pushes to `dev`: the pull request title
 (Conventional Commits, at most 50 characters, as it becomes the commit message
-of the squash merge), lint (the citation metadata in `CITATION.cff`), the
-tests with coverage to Codecov, the chart, the smoke
+of the squash merge), lint (the pre-commit hooks, see [Lint](#lint), and the
+citation metadata in `CITATION.cff`), the tests with coverage to Codecov,
+the chart, the smoke
 and upgrade tests, the documentation, and a scan of the images. The scan fails
 on critical and high vulnerabilities that have a fix in the app's image; the
 updater's image, which isn't built on FOCA, is only reported for now.

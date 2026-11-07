@@ -7,7 +7,7 @@ import sys
 import tomllib
 
 from foca import gunicorn_config
-from gunicorn.app.wsgiapp import WSGIApplication
+from gunicorn.app.wsgiapp import WSGIApplication  # type: ignore[import-untyped]  # gunicorn ships no stubs
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]

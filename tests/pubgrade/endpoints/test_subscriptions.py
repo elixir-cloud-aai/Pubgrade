@@ -1,9 +1,10 @@
-"""Tests for /subscriptions endpoint"""
+"""Tests for /subscriptions endpoint."""
 
 import json
 import logging
 import threading
 import time
+from typing import Any, NoReturn
 from unittest.mock import MagicMock, patch
 
 from flask import Flask
@@ -45,29 +46,105 @@ from tests.mock_data import (
 )
 
 
-def mocked_request_api(method, url, data, headers, **kwargs):
+class FocaApp(Flask):
+    """Flask app whose configuration holds the FOCA configuration."""
+
+    config: Any
+
+
+def make_config(endpoints: dict[str, Any]) -> Config:
+    """Create a FOCA configuration with the mock database.
+
+    Args:
+        endpoints: Configuration of the endpoints.
+
+    Returns:
+        The FOCA configuration.
+    """
+    extra: dict[str, Any] = {"endpoints": endpoints}
+    return Config(db=MongoConfig(**MONGO_CONFIG), **extra)
+
+
+def mocked_request_api(
+    method: str, url: str, data: Any, headers: Any, **kwargs: Any
+) -> MagicMock:
+    """Mock `requests.request` with a successful response.
+
+    Args:
+        method: HTTP method of the request.
+        url: URL of the request.
+        data: Request body.
+        headers: Request headers.
+        **kwargs: Ignored.
+
+    Returns:
+        A response with status code 200.
+    """
     return MagicMock(status_code=200)
 
 
-def mocked_request_api_timeout_error(method, url, data, headers, **kwargs):
+def mocked_request_api_timeout_error(
+    method: str, url: str, data: Any, headers: Any, **kwargs: Any
+) -> NoReturn:
+    """Mock `requests.request` raising a timeout.
+
+    Args:
+        method: HTTP method of the request.
+        url: URL of the request.
+        data: Request body.
+        headers: Request headers.
+        **kwargs: Ignored.
+
+    Raises:
+        Timeout: Always.
+    """
     raise requests.exceptions.Timeout
 
 
-def mocked_request_api_too_many_redirects(method, url, data, headers, **kwargs):
+def mocked_request_api_too_many_redirects(
+    method: str, url: str, data: Any, headers: Any, **kwargs: Any
+) -> NoReturn:
+    """Mock `requests.request` raising too many redirects.
+
+    Args:
+        method: HTTP method of the request.
+        url: URL of the request.
+        data: Request body.
+        headers: Request headers.
+        **kwargs: Ignored.
+
+    Raises:
+        TooManyRedirects: Always.
+    """
     raise requests.exceptions.TooManyRedirects
 
 
-def mocked_request_api_request_exception(method, url, data, headers, **kwargs):
+def mocked_request_api_request_exception(
+    method: str, url: str, data: Any, headers: Any, **kwargs: Any
+) -> NoReturn:
+    """Mock `requests.request` raising a request exception.
+
+    Args:
+        method: HTTP method of the request.
+        url: URL of the request.
+        data: Request body.
+        headers: Request headers.
+        **kwargs: Ignored.
+
+    Raises:
+        RequestException: Always.
+    """
     raise requests.exceptions.RequestException
 
 
 class TestSubscriptions:
-    app = Flask(__name__)
+    """Tests for TestSubscriptions."""
 
-    def setup(self):
-        self.app.config.foca = Config(
-            db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG
-        )
+    app = FocaApp(__name__)
+
+    def setup(self) -> None:
+        """Set up the app with mock data."""
+        self.app.config.foca = make_config(ENDPOINT_CONFIG)
         self.app.config.foca.db.dbs["pubgradeStore"].collections[
             "repositories"
         ].client = mongomock.MongoClient().db.collection
@@ -97,7 +174,8 @@ class TestSubscriptions:
             "users"
         ].client.insert_one(MOCK_USER_NOT_VERIFIED)
 
-    def insert_subscription(self):
+    def insert_subscription(self) -> None:
+        """Insert the mock subscription and list it for the mock user."""
         self.app.config.foca.db.dbs["pubgradeStore"].collections[
             "users"
         ].client.update_one(
@@ -108,7 +186,9 @@ class TestSubscriptions:
             "subscriptions"
         ].client.insert_one(MOCK_SUBSCRIPTION_INFO)
 
-    def test_register_subscription_logs_no_token(self, caplog):
+    def test_register_subscription_logs_no_token(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
         """Log messages don't contain the subscription's token."""
         self.setup()
         caplog.set_level(logging.DEBUG)
@@ -121,7 +201,9 @@ class TestSubscriptions:
         assert f"Added subscription {res['subscription_id']}." in caplog.messages
         assert "subscription-secret" not in caplog.text
 
-    def test_register_subscription_charset(self, monkeypatch):
+    def test_register_subscription_charset(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Identifiers use the characters of the repositories' setting."""
         self.setup()
         monkeypatch.setitem(
@@ -136,7 +218,8 @@ class TestSubscriptions:
         assert len(res["subscription_id"]) == 6
         assert set(res["subscription_id"]) <= {"q", "z"}
 
-    def test_register_subscription(self):
+    def test_register_subscription(self) -> None:
+        """Test register subscription."""
         self.setup()
         with self.app.app_context():
             res = register_subscription(
@@ -158,7 +241,7 @@ class TestSubscriptions:
             assert res["subscription_id"] in data["subscription_list"]
             assert subscription["state"] == "Inactive"
 
-    def test_register_subscription_closed(self):
+    def test_register_subscription_closed(self) -> None:
         """Registration can be closed by configuration."""
         self.setup()
         self.app.config.foca.endpoints["subscriptions"]["registration_enabled"] = False
@@ -169,7 +252,7 @@ class TestSubscriptions:
                 SUBSCRIPTION_PAYLOAD,
             )
 
-    def test_register_subscription_limit(self):
+    def test_register_subscription_limit(self) -> None:
         """A repository takes no more subscriptions than configured."""
         self.setup()
         self.app.config.foca.endpoints["subscriptions"]["max_per_repository"] = 1
@@ -186,7 +269,8 @@ class TestSubscriptions:
                     dict(SUBSCRIPTION_PAYLOAD),
                 )
 
-    def test_register_subscription_duplicate_key_error(self):
+    def test_register_subscription_duplicate_key_error(self) -> None:
+        """Test register subscription duplicate key error."""
         self.setup()
         mock_resp = MagicMock(side_effect=DuplicateKeyError(""))
         self.app.config.foca.db.dbs["pubgradeStore"].collections[
@@ -199,7 +283,8 @@ class TestSubscriptions:
                 SUBSCRIPTION_PAYLOAD,
             )
 
-    def test_register_subscription_repo_not_found(self):
+    def test_register_subscription_repo_not_found(self) -> None:
+        """Test register subscription repo not found."""
         self.setup()
         with self.app.app_context(), pytest.raises(RepositoryNotFound):
             SUBSCRIPTION_PAYLOAD["repository_id"] = "abcd"
@@ -209,7 +294,8 @@ class TestSubscriptions:
                 SUBSCRIPTION_PAYLOAD,
             )
 
-    def test_register_subscription_user_not_verified(self):
+    def test_register_subscription_user_not_verified(self) -> None:
+        """Test register subscription user not verified."""
         self.setup()
         with self.app.app_context(), pytest.raises(UserNotVerified):
             register_subscription(
@@ -218,24 +304,25 @@ class TestSubscriptions:
                 SUBSCRIPTION_PAYLOAD,
             )
 
-    def test_register_subscription_unauthorized(self):
+    def test_register_subscription_unauthorized(self) -> None:
+        """Test register subscription unauthorized."""
         self.setup()
         with self.app.app_context(), pytest.raises(Unauthorized):
             register_subscription(
                 MOCK_USER["uid"], "user_access_token", SUBSCRIPTION_PAYLOAD
             )
 
-    def test_register_subscription_user_not_found(self):
+    def test_register_subscription_user_not_found(self) -> None:
+        """Test register subscription user not found."""
         self.setup()
         with self.app.app_context(), pytest.raises(UserNotFound):
             register_subscription(
                 "uid", MOCK_USER["user_access_token"], SUBSCRIPTION_PAYLOAD
             )
 
-    def test_get_subscriptions(self):
-        self.app.config.foca = Config(
-            db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG
-        )
+    def test_get_subscriptions(self) -> None:
+        """Test get subscriptions."""
+        self.app.config.foca = make_config(ENDPOINT_CONFIG)
         self.app.config.foca.db.dbs["pubgradeStore"].collections[
             "repositories"
         ].client = mongomock.MongoClient().db.collection
@@ -266,7 +353,8 @@ class TestSubscriptions:
             assert isinstance(res, list)
             assert res[0]["subscription_id"] == MOCK_USER_DB["subscription_list"][0]
 
-    def test_get_subscriptions_subscription_not_found(self):
+    def test_get_subscriptions_subscription_not_found(self) -> None:
+        """Test get subscriptions subscription not found."""
         self.setup()
         self.app.config.foca.db.dbs["pubgradeStore"].collections[
             "users"
@@ -274,19 +362,22 @@ class TestSubscriptions:
         with self.app.app_context(), pytest.raises(SubscriptionNotFound):
             get_subscriptions(MOCK_USER["uid"], MOCK_USER["user_access_token"])
 
-    def test_get_subscriptions_unauthorized(self):
+    def test_get_subscriptions_unauthorized(self) -> None:
+        """Test get subscriptions unauthorized."""
         self.setup()
         self.insert_subscription()
         with self.app.app_context(), pytest.raises(Unauthorized):
             get_subscriptions(MOCK_USER["uid"], "user_access_token")
 
-    def test_get_subscriptions_user_not_found(self):
+    def test_get_subscriptions_user_not_found(self) -> None:
+        """Test get subscriptions user not found."""
         self.setup()
         self.insert_subscription()
         with self.app.app_context(), pytest.raises(UserNotFound):
             get_subscriptions("uid", MOCK_USER["user_access_token"])
 
-    def test_get_subscriptions_user_not_verified(self):
+    def test_get_subscriptions_user_not_verified(self) -> None:
+        """Test get subscriptions user not verified."""
         self.setup()
         self.insert_subscription()
         with self.app.app_context(), pytest.raises(UserNotVerified):
@@ -295,7 +386,8 @@ class TestSubscriptions:
                 MOCK_USER_NOT_VERIFIED["user_access_token"],
             )
 
-    def test_get_subscription_info(self):
+    def test_get_subscription_info(self) -> None:
+        """Test get subscription info."""
         self.setup()
         self.insert_subscription()
         with self.app.app_context():
@@ -309,7 +401,7 @@ class TestSubscriptions:
             assert "id" in res
             assert res["state"] == "Inactive"
 
-    def test_get_subscription_info_old_format(self):
+    def test_get_subscription_info_old_format(self) -> None:
         """Subscriptions written by the previous version get a time zone."""
         self.setup()
         self.insert_subscription()
@@ -327,7 +419,8 @@ class TestSubscriptions:
             )
         assert res["updated_at"] == "2026-01-02T03:04:05+00:00"
 
-    def test_get_subscription_info_subscription_not_found(self):
+    def test_get_subscription_info_subscription_not_found(self) -> None:
+        """Test get subscription info subscription not found."""
         self.setup()
         with self.app.app_context(), pytest.raises(SubscriptionNotFound):
             get_subscription_info(
@@ -336,7 +429,8 @@ class TestSubscriptions:
                 MOCK_SUBSCRIPTION_INFO["id"],
             )
 
-    def test_get_subscription_info_unauthorized(self):
+    def test_get_subscription_info_unauthorized(self) -> None:
+        """Test get subscription info unauthorized."""
         self.setup()
         self.insert_subscription()
         with self.app.app_context(), pytest.raises(Unauthorized):
@@ -346,7 +440,8 @@ class TestSubscriptions:
                 MOCK_SUBSCRIPTION_INFO["id"],
             )
 
-    def test_get_subscription_info_user_not_found(self):
+    def test_get_subscription_info_user_not_found(self) -> None:
+        """Test get subscription info user not found."""
         self.setup()
         self.insert_subscription()
         with self.app.app_context(), pytest.raises(UserNotFound):
@@ -356,7 +451,8 @@ class TestSubscriptions:
                 MOCK_SUBSCRIPTION_INFO["id"],
             )
 
-    def test_get_subscription_info_user_not_verified(self):
+    def test_get_subscription_info_user_not_verified(self) -> None:
+        """Test get subscription info user not verified."""
         self.setup()
         self.insert_subscription()
         with self.app.app_context(), pytest.raises(UserNotVerified):
@@ -366,7 +462,8 @@ class TestSubscriptions:
                 MOCK_SUBSCRIPTION_INFO["id"],
             )
 
-    def test_delete_subscription(self):
+    def test_delete_subscription(self) -> None:
+        """Test delete subscription."""
         self.setup()
         self.insert_subscription()
         with self.app.app_context():
@@ -376,12 +473,14 @@ class TestSubscriptions:
                 MOCK_SUBSCRIPTION_INFO["id"],
             )
 
-    def test_delete_subscription_subscription_not_found(self):
+    def test_delete_subscription_subscription_not_found(self) -> None:
+        """Test delete subscription subscription not found."""
         self.setup()
         with self.app.app_context(), pytest.raises(SubscriptionNotFound):
             delete_subscription(MOCK_USER["uid"], MOCK_USER["user_access_token"], "id")
 
-    def test_delete_subscription_unauthorized(self):
+    def test_delete_subscription_unauthorized(self) -> None:
+        """Test delete subscription unauthorized."""
         self.setup()
         self.insert_subscription()
         with self.app.app_context(), pytest.raises(Unauthorized):
@@ -391,7 +490,8 @@ class TestSubscriptions:
                 MOCK_SUBSCRIPTION_INFO["id"],
             )
 
-    def test_delete_subscription_user_not_found(self):
+    def test_delete_subscription_user_not_found(self) -> None:
+        """Test delete subscription user not found."""
         self.setup()
         self.insert_subscription()
         with self.app.app_context(), pytest.raises(UserNotFound):
@@ -401,7 +501,8 @@ class TestSubscriptions:
                 MOCK_SUBSCRIPTION_INFO["id"],
             )
 
-    def test_delete_subscription_user_not_verified(self):
+    def test_delete_subscription_user_not_verified(self) -> None:
+        """Test delete subscription user not verified."""
         self.setup()
         self.insert_subscription()
         with self.app.app_context(), pytest.raises(UserNotVerified):
@@ -412,7 +513,8 @@ class TestSubscriptions:
             )
 
     @patch("requests.request", mocked_request_api)
-    def test_notify_subscriptions(self):
+    def test_notify_subscriptions(self) -> None:
+        """Test notify subscriptions."""
         self.setup()
         self.insert_subscription()
         with self.app.app_context():
@@ -431,7 +533,8 @@ class TestSubscriptions:
             assert data["build_id"] == MOCK_BUILD_INFO["id"]
 
     @patch("requests.request", mocked_request_api)
-    def test_notify_subscriptions_subscription_not_found(self):
+    def test_notify_subscriptions_subscription_not_found(self) -> None:
+        """Test notify subscriptions subscription not found."""
         self.setup()
         self.insert_subscription()
         with self.app.app_context(), pytest.raises(SubscriptionNotFound):
@@ -442,7 +545,8 @@ class TestSubscriptions:
             )
 
     @patch("requests.request", mocked_request_api)
-    def test_notify_subscriptions_build_not_found(self):
+    def test_notify_subscriptions_build_not_found(self) -> None:
+        """Test notify subscriptions build not found."""
         self.setup()
         self.insert_subscription()
         with self.app.app_context(), pytest.raises(BuildNotFound):
@@ -453,7 +557,8 @@ class TestSubscriptions:
             )
 
     @patch("requests.request", mocked_request_api_timeout_error)
-    def test_notify_subscriptions_timeout(self):
+    def test_notify_subscriptions_timeout(self) -> None:
+        """Test notify subscriptions timeout."""
         self.setup()
         self.insert_subscription()
         with self.app.app_context():
@@ -472,7 +577,8 @@ class TestSubscriptions:
             assert data["state"] == "Inactive"
 
     @patch("requests.request", mocked_request_api_too_many_redirects)
-    def test_notify_subscriptions_too_many_redirects(self):
+    def test_notify_subscriptions_too_many_redirects(self) -> None:
+        """Test notify subscriptions too many redirects."""
         self.setup()
         self.insert_subscription()
         with self.app.app_context():
@@ -491,7 +597,8 @@ class TestSubscriptions:
             assert data["state"] == "Inactive"
 
     @patch("requests.request", mocked_request_api_request_exception)
-    def test_notify_subscriptions_request_exception(self):
+    def test_notify_subscriptions_request_exception(self) -> None:
+        """Test notify subscriptions request exception."""
         self.setup()
         self.insert_subscription()
         with self.app.app_context():
@@ -510,7 +617,8 @@ class TestSubscriptions:
             assert data["state"] == "Inactive"
 
     @patch("requests.request", mocked_request_api)
-    def test_notify_subscriptions_value_not_matched(self):
+    def test_notify_subscriptions_value_not_matched(self) -> None:
+        """Test notify subscriptions value not matched."""
         self.setup()
         MOCK_SUBSCRIPTION_INFO["value"] = "master"
         self.insert_subscription()
@@ -530,7 +638,8 @@ class TestSubscriptions:
             assert "build_id" not in data
 
     @patch("requests.request", mocked_request_api)
-    def test_notify_subscriptions_type_not_matched(self):
+    def test_notify_subscriptions_type_not_matched(self) -> None:
+        """Test notify subscriptions type not matched."""
         self.setup()
         MOCK_SUBSCRIPTION_INFO["type"] = "tag"
         self.insert_subscription()
@@ -550,7 +659,7 @@ class TestSubscriptions:
             assert "build_id" not in data
 
     @patch("requests.request")
-    def test_notify_subscriptions_error_status(self, request):
+    def test_notify_subscriptions_error_status(self, request: MagicMock) -> None:
         """A response other than 2xx counts as a failure."""
         request.return_value = MagicMock(status_code=500)
         self.setup()
@@ -565,7 +674,7 @@ class TestSubscriptions:
         assert result["http_status"] == 500
 
     @patch("requests.request")
-    def test_notify_subscriptions_request(self, request):
+    def test_notify_subscriptions_request(self, request: MagicMock) -> None:
         """The call has a timeout and follows no redirects."""
         request.return_value = MagicMock(status_code=200)
         self.setup()
@@ -586,7 +695,7 @@ class TestSubscriptions:
             "tag": "0.0.1",
         }
 
-    def insert_subscriptions(self, *ids):
+    def insert_subscriptions(self, *ids: str) -> None:
         """Insert subscriptions that match `MOCK_BUILD_INFO`.
 
         Args:
@@ -604,7 +713,7 @@ class TestSubscriptions:
                 }
             )
 
-    def get_stored_notifications(self):
+    def get_stored_notifications(self) -> Any:
         """Get the results stored on the build.
 
         Returns:
@@ -616,11 +725,20 @@ class TestSubscriptions:
             .client.find_one({"id": MOCK_BUILD_INFO["id"]})["notifications"]
         )
 
-    def test_notify_all_concurrently(self):
+    def test_notify_all_concurrently(self) -> None:
         """All calls are in progress at the same time."""
         barrier = threading.Barrier(3, timeout=10)
 
-        def request(*args, **kwargs):
+        def request(*args: Any, **kwargs: Any) -> MagicMock:
+            """Mock `requests.request`.
+
+            Args:
+                *args: Ignored.
+                **kwargs: Ignored.
+
+            Returns:
+                A response with status code 200.
+            """
             barrier.wait()
             return MagicMock(status_code=200)
 
@@ -632,13 +750,22 @@ class TestSubscriptions:
             )
         assert [result["result"] for result in results] == ["delivered"] * 3
 
-    def test_notify_all_does_not_queue_behind_hanging_calls(self):
+    def test_notify_all_does_not_queue_behind_hanging_calls(self) -> None:
         """Every subscriber gets its call, however many others hang."""
         count = 40
         ids = [f"sub{i}" for i in range(count)]
         barrier = threading.Barrier(count, timeout=10)
 
-        def request(*args, **kwargs):
+        def request(*args: Any, **kwargs: Any) -> MagicMock:
+            """Mock `requests.request`.
+
+            Args:
+                *args: Ignored.
+                **kwargs: Ignored.
+
+            Returns:
+                A response with status code 200.
+            """
             barrier.wait()
             return MagicMock(status_code=200)
 
@@ -650,13 +777,22 @@ class TestSubscriptions:
             )
         assert [result["result"] for result in results] == ["delivered"] * count
 
-    def test_notify_all_bounds_threads_by_limit(self):
+    def test_notify_all_bounds_threads_by_limit(self) -> None:
         """IDs beyond the limit, e.g., from older data, add no more threads."""
         lock = threading.Lock()
         running = [0]
         highest = [0]
 
-        def request(*args, **kwargs):
+        def request(*args: Any, **kwargs: Any) -> MagicMock:
+            """Mock `requests.request`.
+
+            Args:
+                *args: Ignored.
+                **kwargs: Ignored.
+
+            Returns:
+                A response with status code 200.
+            """
             with lock:
                 running[0] += 1
                 highest[0] = max(highest[0], running[0])
@@ -676,10 +812,20 @@ class TestSubscriptions:
         assert [result["result"] for result in results] == ["delivered"] * 6
         assert highest[0] == 2
 
-    def test_notify_all_failure_does_not_stop_others(self):
+    def test_notify_all_failure_does_not_stop_others(self) -> None:
         """Failures of any kind stay with their subscription."""
 
-        def request(method, url, **kwargs):
+        def request(method: str, url: str, **kwargs: Any) -> MagicMock:
+            """Mock `requests.request`.
+
+            Args:
+                method: HTTP method of the request.
+                url: URL of the request.
+                **kwargs: Ignored.
+
+            Returns:
+                A response with status code 200.
+            """
             if url.endswith("timeout"):
                 raise requests.exceptions.Timeout
             if url.endswith("unexpected"):
@@ -699,7 +845,7 @@ class TestSubscriptions:
             "good": "delivered",
         }
 
-    def test_notify_all_deleted_subscription(self):
+    def test_notify_all_deleted_subscription(self) -> None:
         """A deleted subscription, still listed at its repository, is skipped."""
         self.setup()
         with self.app.app_context():
@@ -709,7 +855,7 @@ class TestSubscriptions:
         assert results[0]["result"] == "skipped"
 
     @patch("requests.request", mocked_request_api)
-    def test_notify_all_stores_results_without_secrets(self):
+    def test_notify_all_stores_results_without_secrets(self) -> None:
         """Builds are public: their results hold no URLs or tokens."""
         self.setup()
         self.insert_subscriptions("sub1")
@@ -721,7 +867,7 @@ class TestSubscriptions:
         assert "example.org" not in str(stored)
         assert MOCK_SUBSCRIPTION_INFO["access_token"] not in str(stored)
 
-    def test_notify_all_without_subscriptions(self):
+    def test_notify_all_without_subscriptions(self) -> None:
         """Without subscriptions, the build has an empty list of results."""
         self.setup()
         with self.app.app_context():
@@ -729,11 +875,21 @@ class TestSubscriptions:
         assert results == []
         assert self.get_stored_notifications() == []
 
-    def test_notify_all_bounds_total_time(self):
+    def test_notify_all_bounds_total_time(self) -> None:
         """A call that goes on past its timeouts counts as failed."""
         release = threading.Event()
 
-        def request(method, url, **kwargs):
+        def request(method: str, url: str, **kwargs: Any) -> MagicMock:
+            """Mock `requests.request`.
+
+            Args:
+                method: HTTP method of the request.
+                url: URL of the request.
+                **kwargs: Ignored.
+
+            Returns:
+                A response with status code 200.
+            """
             if url.endswith("hanging"):
                 release.wait(30)
             return MagicMock(status_code=200)
@@ -760,7 +916,7 @@ class TestSubscriptions:
             "good": "delivered",
         }
 
-    def test_get_subscription_info_of_other_user(self):
+    def test_get_subscription_info_of_other_user(self) -> None:
         """Users only see their own subscriptions."""
         self.setup()
         self.app.config.foca.db.dbs["pubgradeStore"].collections[
@@ -773,7 +929,7 @@ class TestSubscriptions:
                 MOCK_SUBSCRIPTION_INFO["id"],
             )
 
-    def test_delete_subscription_of_other_user(self):
+    def test_delete_subscription_of_other_user(self) -> None:
         """Users only delete their own subscriptions."""
         self.setup()
         self.app.config.foca.db.dbs["pubgradeStore"].collections[
@@ -786,7 +942,7 @@ class TestSubscriptions:
                 MOCK_SUBSCRIPTION_INFO["id"],
             )
 
-    def test_subscription_gone_but_listed(self):
+    def test_subscription_gone_but_listed(self) -> None:
         """A subscription listed for its user, but deleted, isn't found."""
         self.setup()
         self.insert_subscription()
@@ -808,7 +964,7 @@ class TestSubscriptions:
                 )
 
     @patch("requests.request", mocked_request_api)
-    def test_notify_subscriptions_any_value(self):
+    def test_notify_subscriptions_any_value(self) -> None:
         """The value `*` matches any value of the subscription's type."""
         self.setup()
         MOCK_SUBSCRIPTION_INFO["value"] = "*"
@@ -822,7 +978,7 @@ class TestSubscriptions:
         assert result["result"] == "delivered"
 
     @patch("requests.request", mocked_request_api)
-    def test_notify_subscriptions_any_value_other_type(self):
+    def test_notify_subscriptions_any_value_other_type(self) -> None:
         """The value `*` doesn't match other types."""
         self.setup()
         MOCK_SUBSCRIPTION_INFO["value"] = "*"

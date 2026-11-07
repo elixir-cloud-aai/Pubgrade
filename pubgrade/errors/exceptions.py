@@ -1,3 +1,5 @@
+"""Exceptions of Pubgrade and their API responses."""
+
 from connexion.exceptions import (
     BadRequestProblem,
     ExtraParameterProblem,

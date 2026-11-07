@@ -1,11 +1,13 @@
+"""Registration of builds and publication of images."""
+
 import base64
 import json
 import logging
 import os
 import re
 import shutil
+from typing import Any
 
-from foca import get_config
 from git import GitCommandError, Repo
 from kubernetes import client, config
 from kubernetes.client import ApiException
@@ -27,14 +29,16 @@ from pubgrade.errors.exceptions import (
 )
 from pubgrade.modules.endpoints.repositories import generate_id
 from pubgrade.modules.endpoints.subscriptions import notify_all_subscriptions
+from pubgrade.settings import collection, endpoints
 from pubgrade.timestamps import now, repaired_build
 
 logger = logging.getLogger(__name__)
 
 template_file = "/app/pubgrade/modules/endpoints/kaniko/template.yaml"
-BASE_DIR = os.getenv("BASE_DIR")
-if BASE_DIR is None:
-    BASE_DIR = "/pubgrade_temp_files"
+BASE_DIR = os.getenv("BASE_DIR", "/pubgrade_temp_files")
+# Seconds to connect to GitHub and for its response, when triggering the
+# signing of an image
+REQUEST_TIMEOUT = 30
 
 # An image with a tag (no digest), optionally with a registry and its port,
 # following Docker's rules for references
@@ -52,10 +56,10 @@ def builds_enabled() -> bool:
     Returns:
         The setting `endpoints.builds.enabled`; False if it isn't set.
     """
-    return get_config().endpoints["builds"].get("enabled", False)
+    return endpoints()["builds"].get("enabled", False)
 
 
-def validate_prebuilt_image(build_data: dict) -> None:
+def validate_prebuilt_image(build_data: dict[str, Any]) -> None:
     """Check a request to publish a prebuilt image.
 
     Args:
@@ -72,7 +76,7 @@ def validate_prebuilt_image(build_data: dict) -> None:
         raise InvalidImage
 
 
-def publish_prebuilt_image(build_id: str, image: str, subscriptions: list):
+def publish_prebuilt_image(build_id: str, image: str, subscriptions: list[str]) -> None:
     """Notify subscriptions of a prebuilt image and finish its build.
 
     Args:
@@ -82,7 +86,7 @@ def publish_prebuilt_image(build_id: str, image: str, subscriptions: list):
     """
     results = notify_all_subscriptions(subscriptions, image, build_id)
     failed = any(result["result"] == "failed" for result in results)
-    get_config().db.dbs["pubgradeStore"].collections["builds"].client.update_one(
+    collection("builds").update_one(
         {"id": build_id},
         {
             "$set": {
@@ -93,7 +97,9 @@ def publish_prebuilt_image(build_id: str, image: str, subscriptions: list):
     )
 
 
-def register_builds(repository_id: str, access_token: str, build_data: dict):
+def register_builds(
+    repository_id: str, access_token: str, build_data: dict[str, Any]
+) -> dict[str, str]:
     """Register new builds for already registered repository.
 
     With builds switched off (`endpoints.builds.enabled`), the request names a
@@ -119,21 +125,17 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
         reference with a tag, or a request for a prebuilt image doesn't name
         exactly one.
     """
-    db_collection_builds = (
-        get_config().db.dbs["pubgradeStore"].collections["builds"].client
-    )
-    db_collection_repositories = (
-        get_config().db.dbs["pubgradeStore"].collections["repositories"].client
-    )
-    retries = get_config().endpoints["repository"]["retries"]
-    id_length: int = get_config().endpoints["repository"]["id_length"]
+    db_collection_builds = collection("builds")
+    db_collection_repositories = collection("repositories")
+    retries = endpoints()["repository"]["retries"]
+    id_length: int = endpoints()["repository"]["id_length"]
     id_charset = get_charset("repository", "id_charset")
 
     data_from_db = db_collection_repositories.find_one({"id": repository_id})
 
     if data_from_db is None:
         logger.error(
-            "Could not find repository with given identifier: " + repository_id
+            "Could not find repository with given identifier: %s", repository_id
         )
         raise RepositoryNotFound
     if data_from_db["access_token"] != access_token:
@@ -147,7 +149,7 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
     if not build_path:
         validate_prebuilt_image(build_data)
     for i in range(retries):
-        logger.debug(f"Trying to insert/update object: try {i}")
+        logger.debug("Trying to insert/update object: try %s", i)
         build_data["id"] = repository_id + generate_id(
             charset=id_charset,
             length=id_length,
@@ -160,7 +162,7 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
             build_data["started_at"] = now()
             build_data["status"] = "QUEUED"
             db_collection_builds.insert_one(build_data)
-            logger.info(f"Added build {build_data['id']}.")
+            logger.info("Added build %s.", build_data["id"])
             if not build_path:
                 break
             branch = ""
@@ -173,7 +175,7 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
                     commit_sha = ""
             except KeyError:
                 commit_sha = build_data["head_commit"]["tag"]
-            intermediate_registry_format = get_config().endpoints["builds"][
+            intermediate_registry_format = endpoints()["builds"][
                 "intermediate_registery_format"
             ]
             intermediate_registry_path = intermediate_registry_format.format(
@@ -193,13 +195,13 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
             break
         except DuplicateKeyError:
             logger.error(
-                f"DuplicateKeyError ({build_data['id']}): Key "
-                f"generated is already present."
+                "DuplicateKeyError (%s): Key generated is already present.",
+                build_data["id"],
             )
             continue
     else:
         logger.error(
-            f"Could not generate unique identifier. Tried {retries + 1} times."
+            "Could not generate unique identifier. Tried %s times.", retries + 1
         )
         raise InternalServerError
     if not build_path:
@@ -211,7 +213,7 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
     return {"id": build_data["id"]}
 
 
-def get_builds(repository_id: str):
+def get_builds(repository_id: str) -> list[dict[str, Any]]:
     """Retrieve build information.
 
     Args:
@@ -226,9 +228,7 @@ def get_builds(repository_id: str):
         BuildNotFound: Raised when object with given build identifier was
         not found.
     """
-    db_collection_repositories = (
-        get_config().db.dbs["pubgradeStore"].collections["repositories"].client
-    )
+    db_collection_repositories = collection("repositories")
     build_object_list = []
     data_from_db = db_collection_repositories.find_one({"id": repository_id})
     if data_from_db is None:
@@ -239,12 +239,14 @@ def get_builds(repository_id: str):
             build_data["id"] = build_id
             build_object_list.append(build_data)
     except Exception:
-        logger.error(f"No build found for given repository identifier. {repository_id}")
-        raise BuildNotFound
+        logger.error(
+            "No build found for given repository identifier. %s", repository_id
+        )
+        raise BuildNotFound from None
     return build_object_list
 
 
-def get_build_info(build_id: str):
+def get_build_info(build_id: str) -> dict[str, Any]:
     """Retrieve build information.
 
     Args:
@@ -259,9 +261,7 @@ def get_build_info(build_id: str):
         BuildNotFound: Raised when object with given build identifier was
         not found.
     """
-    db_collection_builds = (
-        get_config().db.dbs["pubgradeStore"].collections["builds"].client
-    )
+    db_collection_builds = collection("builds")
     try:
         build_object = (
             db_collection_builds.find({"id": build_id}, {"_id": False}).limit(1).next()
@@ -270,7 +270,7 @@ def get_build_info(build_id: str):
         build_object.pop("dockerhub_token", None)
         return repaired_build(build_object)
     except StopIteration:
-        raise BuildNotFound
+        raise BuildNotFound from None
 
 
 def create_build(
@@ -283,7 +283,7 @@ def create_build(
     intermediate_registry_path: str,
     dockerhub_token: str,
     project_access_token: str,
-):
+) -> None:
     """Create build and push to DockerHub.
 
     Args:
@@ -301,8 +301,8 @@ def create_build(
         project_access_token (str): Secret used to verify source, will be used
         by callback_url to inform pubgrade for build completion.
     """
-    deployment_file_location = "%s/%s/%s.yaml" % (base_dir, build_id, build_id)
-    config_file_location = "%s/%s/config.json" % (base_dir, build_id)
+    deployment_file_location = f"{base_dir}/{build_id}/{build_id}.yaml"
+    config_file_location = f"{base_dir}/{build_id}/config.json"
 
     # Clone project repository.
     clone_path = git_clone_and_checkout(
@@ -315,11 +315,11 @@ def create_build(
 
     # Create kaniko deployment file.
     create_deployment_YAML(
-        "%s/%s" % (clone_path, dockerfile_location),
+        f"{clone_path}/{dockerfile_location}",
         intermediate_registry_path,
         clone_path,
         deployment_file_location,
-        "%s/config.json" % build_id,
+        f"{build_id}/config.json",
         project_access_token,
     )
 
@@ -335,7 +335,7 @@ def create_build(
 
 def git_clone_and_checkout(
     repo_url: str, branch: str, commit: str, base_dir: str, build_id: str
-):
+) -> str:
     """Clone git repository and checkout to specified branch/commit/tag.
 
     Args:
@@ -352,11 +352,8 @@ def git_clone_and_checkout(
     Raises:
         GitCloningError: Raised when there is problem while cloning repository.
     """
-    clone_path = "%s/%s/%s" % (
-        base_dir,
-        build_id,
-        repo_url.split("/")[4].split(".", maxsplit=1)[0],
-    )
+    repo_name = repo_url.split("/")[4].split(".", maxsplit=1)[0]
+    clone_path = f"{base_dir}/{build_id}/{repo_name}"
     try:
         # Check if head commit is branch or tag.
         if branch != "":
@@ -371,7 +368,7 @@ def git_clone_and_checkout(
             repo.git.checkout(commit)
         return clone_path
     except GitCommandError:
-        raise GitCloningError
+        raise GitCloningError from None
 
 
 def create_deployment_YAML(
@@ -381,7 +378,7 @@ def create_deployment_YAML(
     deployment_file_location: str,
     config_file_location: str,
     project_access_token: str,
-):
+) -> str:
     """Create kaniko deployment file.
 
     Use template kaniko deployment file and create a new deployment file with
@@ -408,8 +405,8 @@ def create_deployment_YAML(
     """
     try:
         build_id = deployment_file_location.split("/")[2]
-        file_stream = open(template_file)
-        data = yaml.load(file_stream, Loader=yaml.FullLoader)
+        with open(template_file) as file_stream:
+            data = yaml.safe_load(file_stream)
         data["metadata"]["name"] = build_id
         data["spec"]["containers"][0]["args"] = [
             f"--dockerfile={dockerfile_location}",
@@ -442,10 +439,12 @@ def create_deployment_YAML(
             yaml_file.write(yaml.dump(data, default_flow_style=False))
         return deployment_file_location
     except OSError:
-        raise OSError
+        raise
 
 
-def create_dockerhub_config_file(dockerhub_token: str, config_file_location: str):
+def create_dockerhub_config_file(
+    dockerhub_token: str, config_file_location: str
+) -> None:
     """Create dockerhub config file.
 
     Args:
@@ -454,27 +453,19 @@ def create_dockerhub_config_file(dockerhub_token: str, config_file_location: str
         config_file_location (str): Location to create Dockerhub config file,
         it contains dockerhub access token.
     """
-    intermediate_registry_format = get_config().endpoints["builds"][
+    intermediate_registry_format = endpoints()["builds"][
         "intermediate_registery_format"
     ]
+    registry = intermediate_registry_format.split("/", 1)[0]
+    token = os.getenv("INTERMEDIATE_REGISTRY_TOKEN")
     template_config_file = (
-        """{
-"auths": {
-"%s": {
-"auth": "%s"
-        }
-    }
-}"""
-    ) % (
-        intermediate_registry_format.split("/", 1)[0],
-        os.getenv("INTERMEDIATE_REGISTRY_TOKEN"),
+        f'{{\n"auths": {{\n"{registry}": {{\n"auth": "{token}"\n        }}\n    }}\n}}'
     )
-    f = open(config_file_location, "w")
-    f.write(template_config_file)
-    f.close()
+    with open(config_file_location, "w") as config_file:
+        config_file.write(template_config_file)
 
 
-def build_push_image_using_kaniko(deployment_file_location: str):
+def build_push_image_using_kaniko(deployment_file_location: str) -> None:
     """Create kaniko deployment. Build and push image.
 
     Args:
@@ -485,7 +476,7 @@ def build_push_image_using_kaniko(deployment_file_location: str):
     """
     # Retrieve values of NAMESPACE and KUBERNETES_SERVICE_HOST from
     # environment variables.
-    namespace = os.getenv("NAMESPACE") if os.getenv("NAMESPACE") else "default"
+    namespace = os.getenv("NAMESPACE") or "default"
     if os.getenv("KUBERNETES_SERVICE_HOST"):
         config.load_incluster_config()
     else:
@@ -500,12 +491,14 @@ def build_push_image_using_kaniko(deployment_file_location: str):
         try:
             v1.create_namespaced_pod(body=dep, namespace=namespace)
         except ApiException as e:
-            logger.error(f"Creating pod {name} failed: {e.status} {e.reason}")
+            logger.error("Creating pod %s failed: %s %s", name, e.status, e.reason)
             raise CreatePodError from None
-        logger.info(f"Pod {name} created.")
+        logger.info("Pod %s created.", name)
 
 
-def build_completed(repository_id: str, build_id: str, project_access_token: str):
+def build_completed(
+    repository_id: str, build_id: str, project_access_token: str
+) -> dict[str, str]:
     """Update build completion.
 
     Args:
@@ -525,12 +518,8 @@ def build_completed(repository_id: str, build_id: str, project_access_token: str
     """
     if not builds_enabled():
         raise BuildsDisabled
-    db_collection_repositories = (
-        get_config().db.dbs["pubgradeStore"].collections["repositories"].client
-    )
-    db_collection_builds = (
-        get_config().db.dbs["pubgradeStore"].collections["builds"].client
-    )
+    db_collection_repositories = collection("repositories")
+    db_collection_builds = collection("builds")
 
     data_from_db = db_collection_repositories.find_one({"id": repository_id})
     if data_from_db is None:
@@ -546,7 +535,7 @@ def build_completed(repository_id: str, build_id: str, project_access_token: str
         data["status"] = "SUCCEEDED"
         data["finished_at"] = now()
 
-        intermediate_registry_format = get_config().endpoints["builds"][
+        intermediate_registry_format = endpoints()["builds"][
             "intermediate_registery_format"
         ]
         trigger_signing_image(
@@ -560,7 +549,7 @@ def build_completed(repository_id: str, build_id: str, project_access_token: str
 
         db_collection_builds.update_one({"id": data["id"]}, {"$set": data})
         remove_files(
-            BASE_DIR + "/" + build_id,
+            f"{BASE_DIR}/{build_id}",
             build_id,
             os.getenv("NAMESPACE", "default"),
         )
@@ -573,10 +562,10 @@ def build_completed(repository_id: str, build_id: str, project_access_token: str
         )
         return {"id": build_id}
     except StopIteration:
-        raise BuildNotFound
+        raise BuildNotFound from None
 
 
-def remove_files(dir_location: str, pod_name: str, namespace: str):
+def remove_files(dir_location: str, pod_name: str, namespace: str) -> None:
     """Removes build directory and kaniko pod.
 
     Args:
@@ -589,7 +578,7 @@ def remove_files(dir_location: str, pod_name: str, namespace: str):
     delete_pod(pod_name, namespace)
 
 
-def delete_pod(name: str, namespace: str):
+def delete_pod(name: str, namespace: str) -> Any:
     """Delete pod.
 
     Args:
@@ -608,16 +597,31 @@ def delete_pod(name: str, namespace: str):
         api_response = api_instance.delete_namespaced_pod(name, namespace)
         return api_response
     except ApiException as e:
-        logger.error(f"Deleting pod {name} failed: {e.status} {e.reason}")
+        logger.error("Deleting pod %s failed: %s %s", name, e.status, e.reason)
         raise DeletePodError from None
 
 
 def trigger_signing_image(
     dockerhub_token: str, image_path: str, pull_tag: str, push_tag: str
-):
+) -> None:
+    """Trigger the signing and publication of a built image on GitHub.
+
+    Dispatches the `sign-image` event to the repository in
+    `endpoints.builds.gh_action_path`, whose workflow pulls the image from
+    the intermediate registry, signs it and pushes it.
+
+    Args:
+        dockerhub_token: Base64 encoded `USER:PASSWORD` for Docker Hub.
+        image_path: Name of the image.
+        pull_tag: Image in the intermediate registry.
+        push_tag: Image to publish.
+
+    Raises:
+        InternalServerError: If GitHub can't be reached.
+    """
     username, password = base64.b64decode(dockerhub_token).decode("utf-8").split(":")
     url = "https://api.github.com/repos/{}/dispatches".format(
-        get_config().endpoints["builds"]["gh_action_path"]
+        endpoints()["builds"]["gh_action_path"]
     )
     payload = json.dumps(
         {
@@ -642,11 +646,13 @@ def trigger_signing_image(
         "Content-Type": "application/json",
     }
     try:
-        requests.request("POST", url, headers=headers, data=payload)
+        requests.request(
+            "POST", url, headers=headers, data=payload, timeout=REQUEST_TIMEOUT
+        )
     except requests.exceptions.RequestException as error:
         # Log only the type: messages of requests can quote the Authorization
         # header
         logger.error(
-            f"Triggering the signing of {push_tag} failed: {type(error).__name__}"
+            "Triggering the signing of %s failed: %s", push_tag, type(error).__name__
         )
         raise InternalServerError from None

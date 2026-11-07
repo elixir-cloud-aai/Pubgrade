@@ -1,4 +1,6 @@
-"""Controllers for pubgrade endpoints"""
+"""Controllers for pubgrade endpoints."""
+
+from typing import Any
 
 from flask import request
 from foca.utils.logging import log_traffic
@@ -31,7 +33,7 @@ from pubgrade.modules.endpoints.users import (
 
 
 @log_traffic
-def getRepositories():
+def getRepositories() -> list[dict[str, Any]]:
     """Get available Repositories.
 
     Returns:
@@ -41,7 +43,7 @@ def getRepositories():
 
 
 @log_traffic
-def postRepositories():
+def postRepositories() -> dict[str, Any]:
     """Register a new Repository.
 
     Returns:
@@ -54,7 +56,7 @@ def postRepositories():
 
 
 @log_traffic
-def getRepository(id: str):
+def getRepository(id: str) -> dict[str, Any]:
     """Get Repository info.
 
     Args:
@@ -67,7 +69,7 @@ def getRepository(id: str):
 
 
 @log_traffic
-def putRepositories(id: str):
+def putRepositories(id: str) -> dict[str, Any]:
     """Modify already registered Repository.
 
     Args:
@@ -84,7 +86,7 @@ def putRepositories(id: str):
 
 
 @log_traffic
-def deleteRepository(id: str):
+def deleteRepository(id: str) -> dict[str, str] | None:
     """Delete Repository.
 
     Args:
@@ -96,10 +98,11 @@ def deleteRepository(id: str):
     """
     if delete_repository(id, request.headers["X-Project-Access-Token"]) != 0:
         return {"message": "Repository deleted successfully"}
+    return None
 
 
 @log_traffic
-def postBuild(id: str):
+def postBuild(id: str) -> dict[str, str]:
     """Register a new build.
 
     Args:
@@ -112,7 +115,7 @@ def postBuild(id: str):
 
 
 @log_traffic
-def getBuilds(id: str):
+def getBuilds(id: str) -> list[dict[str, Any]]:
     """Get available builds for this Repository.
 
     Args:
@@ -125,7 +128,7 @@ def getBuilds(id: str):
 
 
 @log_traffic
-def getBuildInfo(id: str, build_id: str):
+def getBuildInfo(id: str, build_id: str) -> dict[str, Any]:
     """Get build information.
 
     Args:
@@ -139,7 +142,7 @@ def getBuildInfo(id: str, build_id: str):
 
 
 @log_traffic
-def updateBuild(id: str, build_id: str):
+def updateBuild(id: str, build_id: str) -> dict[str, str]:
     """Update build complete status.
 
     Args:
@@ -153,7 +156,7 @@ def updateBuild(id: str, build_id: str):
 
 
 @log_traffic
-def postSubscription():
+def postSubscription() -> dict[str, str]:
     """Register new subscription.
 
     Returns:
@@ -168,7 +171,7 @@ def postSubscription():
 
 
 @log_traffic
-def getSubscriptions():
+def getSubscriptions() -> list[dict[str, str]]:
     """Get all registered subscriptions for the user.
 
     Returns:
@@ -180,7 +183,7 @@ def getSubscriptions():
 
 
 @log_traffic
-def getSubscriptionInfo(subscription_id: str):
+def getSubscriptionInfo(subscription_id: str) -> dict[str, Any]:
     """Get subscription information for this subscription_id.
 
     Args:
@@ -197,7 +200,7 @@ def getSubscriptionInfo(subscription_id: str):
 
 
 @log_traffic
-def deleteSubscription(subscription_id: str):
+def deleteSubscription(subscription_id: str) -> dict[str, str] | None:
     """Delete subscription.
 
     Args:
@@ -215,10 +218,11 @@ def deleteSubscription(subscription_id: str):
         != 0
     ):
         return {"subscription_id": subscription_id}
+    return None
 
 
 @log_traffic
-def postUser():
+def postUser() -> dict[str, Any]:
     """Register user.
 
     Returns:
@@ -229,7 +233,7 @@ def postUser():
 
 
 @log_traffic
-def deleteUser():
+def deleteUser() -> str:
     """Delete User.
 
     Returns:
@@ -242,7 +246,7 @@ def deleteUser():
 
 
 @log_traffic
-def getUsers():
+def getUsers() -> list[dict[str, Any]]:
     """Get available users.
 
     Returns:
@@ -255,7 +259,7 @@ def getUsers():
 
 
 @log_traffic
-def verifyUser(uid: str):
+def verifyUser(uid: str) -> str:
     """Verify user status.
 
     Args:
@@ -273,7 +277,7 @@ def verifyUser(uid: str):
 
 
 @log_traffic
-def unverifyUser(uid: str):
+def unverifyUser(uid: str) -> str:
     """Verify user status.
 
     Args:
