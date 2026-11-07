@@ -1,0 +1,5 @@
+# Commits that `git blame` skips (GitHub does so by default; locally, run
+# `git config blame.ignoreRevsFile .git-blame-ignore-revs`)
+
+# style: apply ruff format and import sorting (#72)
+24a809ef81e332a3b04dd5e6b0ec7d9dd2c77861
