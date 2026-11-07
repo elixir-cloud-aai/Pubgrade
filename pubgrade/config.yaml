@@ -128,5 +128,10 @@ endpoints:
         enabled: False
         # GitHub repository, `<owner>/<name>`, with the workflow that signs images
         gh_action_path: ""
-        # Registry path for built images, with `{}` for the image's name
+        # Registry path for built images, with `{}` for the image's name (the
+        # last part of its name, e.g., `app`); without a tag, each build gets
+        # `build-<build ID>`. If empty, `<host>/<namespace>/{}` from the
+        # environment variables `INTERMEDIATE_REGISTRY_HOST` (`docker.io` if
+        # unset) and `INTERMEDIATE_REGISTRY_NAMESPACE` (none if unset), which
+        # the chart sets from `builds.registry`; if set, it takes precedence
         intermediate_registery_format: ""

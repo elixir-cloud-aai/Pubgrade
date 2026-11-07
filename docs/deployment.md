@@ -141,6 +141,41 @@ the notifications have started already. Finished builds are only marked;
 their files, if their cleanup failed, are removed when their repository is
 deleted.
 
+### Registries
+
+Images can come from any registry that implements the OCI distribution API
+(e.g., Docker Hub, Harbor, GitLab, Quay or GHCR). With builds off, Pubgrade
+never contacts a registry: it passes the image name of the request,
+including its registry host (e.g., `harbor.example.org/project/app`), to
+the subscribers, which check for the image themselves (see the sidecar's
+[Deployment](sidecar/deployment.md#registries)).
+
+With builds on, build pods push each image to an intermediate registry, set
+by the chart values `builds.registry.host` (default `docker.io`) and
+`builds.registry.namespace` (e.g., a Harbor project, or a Docker Hub
+organization, which Docker Hub needs): the image
+`harbor.example.org/project/app:1.0` goes to `<host>/<namespace>/app:build-<build ID>`.
+Without the chart, set the environment variables `INTERMEDIATE_REGISTRY_HOST`
+and `INTERMEDIATE_REGISTRY_NAMESPACE`. The credentials
+are base64 of `<user>:<password>` (e.g., of a Harbor robot account that may
+push), by default in the key `intermediate_registry_token` of
+`builds.existingSecret`, or in `builds.registry.existingSecret` and
+`builds.registry.key`. The setting
+`endpoints.builds.intermediate_registery_format` of the app's configuration
+(a path with `{}` for the image's name) still works, and takes precedence
+over the chart values if it is set; without a tag in it, each build
+gets the tag `build-<build ID>`, and with one (e.g., `ttl.sh/{}:1h`), the
+image name gets a suffix derived from the build ID, so that each build has
+its own image there.
+
+The signing workflow (`endpoints.builds.gh_action_path`) then pulls the
+image from the intermediate registry, signs it and pushes it to its final
+name. It logs in to Docker Hub only, with the request's `dockerhub_token`:
+with builds on, images are still published to Docker Hub, so the names of
+the images to build must be Docker Hub names (e.g., `org/app:1.0`, not
+`harbor.example.org/project/app:1.0`), and the intermediate registry must
+be one that the workflow can pull from.
+
 ## Upgrading to FOCA 0.21 (API 2.0.0)
 
 From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA
@@ -209,7 +244,21 @@ From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA
   (see [Usage](usage.md#cancel-a-build)), and the status of builds has the
   new value `CANCELED`: clients that check `status` against a fixed list
   of values need to accept it. Completion reports of canceled builds get a
-  409.
+  409. The intermediate registry can be set with the chart values
+  `builds.registry` (see [Registries](#registries)); before, only with
+  `endpoints.builds.intermediate_registery_format`, which still works and
+  takes precedence. Images whose name has a registry host or no namespace
+  (e.g., `harbor.example.org/project/app`, `app`) are built under their
+  last name part, `app`, and the tag `build-<build ID>` (unless
+  `intermediate_registery_format` has a tag; then the name gets a suffix
+  derived from the build ID), so that builds of images with
+  the same name no longer replace each other's image before it is signed;
+  before, a registry host broke the build. The
+  credentials of a Docker Hub intermediate registry are stored under
+  Docker's key for Docker Hub, so that build pods can push there. Let
+  running builds finish before the upgrade, and before changing the
+  intermediate registry: Pubgrade works out the image to sign again when a
+  build completes.
 - **Image:** it runs as user 1000 (group 0), and its app files are read-only;
   any user ID works, e.g., on OpenShift.
 - **MongoDB:** FOCA 0.21 needs MongoDB 4.4 or later; the chart's MongoDB is

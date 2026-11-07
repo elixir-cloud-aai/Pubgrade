@@ -671,3 +671,33 @@ def test_cancel_running_build(
     assert stored["status"] == "CANCELED"
     assert stored["finished_at"] is not None
     assert [item["id"] for item in check(api.get(path))] == [build["id"]]
+
+
+@pytest.mark.parametrize(
+    "image_name",
+    [
+        "harbor.example.org/project/image",
+        "registry.example.org:8443/group/sub/image",
+        "localhost:5000/image",
+    ],
+)
+def test_publish_image_of_any_registry(
+    api: FlaskClient, subscriber: Subscriber, image_name: str
+) -> None:
+    """Prebuilt images of any registry are published with their host."""
+    user = register_user(api)
+    repository = register_repository(api)
+    subscribe(api, user, repository["id"], subscriber.url)
+    check(
+        api.post(
+            f"/repositories/{repository['id']}/builds",
+            headers={"X-Project-Access-Token": repository["access_token"]},
+            json={
+                "images": [{"name": f"{image_name}:1"}],
+                "head_commit": {"tag": "1"},
+            },
+        )
+    )
+    assert [item["body"] for item in subscriber.received] == [
+        {"image_name": image_name, "tag": "1"}
+    ]

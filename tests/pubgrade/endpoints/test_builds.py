@@ -1,6 +1,7 @@
 """Tests for /builds endpoint."""
 
 import copy
+import hashlib
 import json
 import logging
 import os
@@ -44,8 +45,12 @@ from pubgrade.modules.endpoints.builds import (
     get_build_info,
     get_builds,
     git_clone_and_checkout,
+    image_basename,
+    intermediate_image,
+    intermediate_registry_format,
     publish_prebuilt_image,
     register_builds,
+    registry_auth_key,
     remove_build_dir,
     remove_files,
     start_build,
@@ -562,10 +567,31 @@ class TestBuild:
         create.assert_called_once()
         assert create.call_args.kwargs["branch"] == branch
         assert create.call_args.kwargs["commit"] == commit
-        assert (
-            create.call_args.kwargs["intermediate_registry_path"]
-            == "ttl.sh/test-updater:1h"
-        )
+        path = create.call_args.kwargs["intermediate_registry_path"]
+        assert path.startswith("ttl.sh/test-updater-")
+        assert path.endswith(":1h")
+
+    @pytest.mark.parametrize(
+        "image",
+        ["harbor.example.org/project/test-updater:1", "test-updater:1"],
+    )
+    def test_start_build_image_of_any_registry(self, image: str) -> None:
+        """Images with a registry host, or without a namespace, are built.
+
+        Args:
+            image: Name of the image to build.
+        """
+        self.setup()
+        build = {**copy.deepcopy(MOCK_BUILD_PAYLOAD), "id": "build123"}
+        build["images"][0]["name"] = image
+        with (
+            patch.object(builds, "create_build") as create,
+            self.app.app_context(),
+        ):
+            start_build(build, self.repository_url, "access_token")
+        path = create.call_args.kwargs["intermediate_registry_path"]
+        assert path.startswith("ttl.sh/test-updater-")
+        assert path.endswith(":1h")
 
     @pytest.mark.parametrize(
         "head_commit",
@@ -1169,6 +1195,30 @@ class TestBuild:
             )
             assert data["status"] == "SUCCEEDED"
             assert res["id"] == MOCK_REPOSITORY_2["build_list"][0]
+
+    def test_build_and_signing_use_one_image(self) -> None:
+        """The signing pulls the image that the build pushed."""
+        self.setup_with_build()
+        build_id = MOCK_REPOSITORY_2["build_list"][0]
+        with self.app.app_context():
+            stored = builds.collection("builds").find_one({"id": build_id})
+            assert stored is not None
+            with patch.object(builds, "create_build") as create:
+                start_build(
+                    {**stored, "id": build_id}, self.repository_url, "access_token"
+                )
+            with (
+                patch.object(builds, "trigger_signing_image") as trigger,
+                patch.object(builds, "notify_all_subscriptions"),
+                patch.object(builds, "remove_files"),
+            ):
+                build_completed(
+                    MOCK_REPOSITORY_2["id"],
+                    build_id,
+                    MOCK_REPOSITORY_2["access_token"],
+                )
+        pushed = create.call_args.kwargs["intermediate_registry_path"]
+        assert trigger.call_args.kwargs["pull_tag"] == pushed
 
     @patch("pubgrade.modules.endpoints.builds.remove_files")
     @patch("requests.request", mocked_request_api)
@@ -2145,3 +2195,109 @@ class TestCancelBuild:
         with self.app.app_context():
             stop_builds(self.repository["build_list"])
         self.load.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "image,basename",
+    [
+        ("app:1", "app"),
+        ("org/app:1", "app"),
+        ("harbor.example.org/project/app:1.0", "app"),
+        ("registry.example.org:8443/group/sub/app:1", "app"),
+        ("localhost:5000/app:latest", "app"),
+    ],
+)
+def test_image_basename(image: str, basename: str) -> None:
+    """The name of an image in the intermediate registry is its last part."""
+    assert image_basename(image) == basename
+
+
+@pytest.mark.parametrize(
+    "path,key",
+    [
+        ("docker.io/org/{}", "https://index.docker.io/v1/"),
+        ("index.docker.io/org/{}", "https://index.docker.io/v1/"),
+        ("registry-1.docker.io/org/{}", "https://index.docker.io/v1/"),
+        # No registry host: Docker Hub
+        ("org/{}", "https://index.docker.io/v1/"),
+        ("harbor.example.org/project/{}", "harbor.example.org"),
+        ("registry:5000/{}", "registry:5000"),
+        ("localhost/{}", "localhost"),
+        ("ttl.sh/{}:1h", "ttl.sh"),
+    ],
+)
+def test_registry_auth_key(path: str, key: str) -> None:
+    """Credentials are stored under the key that Docker's clients look up."""
+    assert registry_auth_key(path) == key
+
+
+@pytest.mark.parametrize(
+    "configured,host,namespace,expected",
+    [
+        # The free-form setting wins, for compatibility
+        ("ttl.sh/{}:1h", "harbor.example.org", "project", "ttl.sh/{}:1h"),
+        ("", "harbor.example.org", "project", "harbor.example.org/project/{}"),
+        ("", "harbor.example.org", "/project/", "harbor.example.org/project/{}"),
+        ("", None, "org", "docker.io/org/{}"),
+        ("", "registry:5000", None, "registry:5000/{}"),
+    ],
+)
+def test_intermediate_registry_format(
+    monkeypatch: pytest.MonkeyPatch,
+    configured: str,
+    host: str | None,
+    namespace: str | None,
+    expected: str,
+) -> None:
+    """The intermediate registry comes from the settings or the environment."""
+    for variable, value in (
+        ("INTERMEDIATE_REGISTRY_HOST", host),
+        ("INTERMEDIATE_REGISTRY_NAMESPACE", namespace),
+    ):
+        if value is None:
+            monkeypatch.delenv(variable, raising=False)
+        else:
+            monkeypatch.setenv(variable, value)
+    settings = {"builds": {"intermediate_registery_format": configured}}
+    with patch.object(builds, "endpoints", return_value=settings):
+        assert intermediate_registry_format() == expected
+
+
+def test_config_file_for_intermediate_registry(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The credentials of the intermediate registry are stored under its key."""
+    # Base64 of `user:passwd`, a test value
+    token = "dXNlcjpwYXNzd2Q="  # gitleaks:allow
+    monkeypatch.setenv("INTERMEDIATE_REGISTRY_TOKEN", token)
+    settings = {"builds": {"intermediate_registery_format": "docker.io/org/{}"}}
+    path = tmp_path / "config.json"
+    with patch.object(builds, "endpoints", return_value=settings):
+        create_dockerhub_config_file("token", str(path))
+    assert json.loads(path.read_text()) == {
+        "auths": {"https://index.docker.io/v1/": {"auth": token}}
+    }
+
+
+@pytest.mark.parametrize(
+    "configured,image,expected",
+    [
+        # A tag in the setting stays; the name is the build's own then
+        (
+            "ttl.sh/{}:1h",
+            "org/app:1",
+            "ttl.sh/app-" + hashlib.sha256(b"repo.b1").hexdigest()[:16] + ":1h",
+        ),
+        ("", "harbor.example.org/project/app:1", "docker.io/org/app:build-repo.b1"),
+        ("registry:5000/{}", "app:1", "registry:5000/app:build-repo.b1"),
+    ],
+)
+def test_intermediate_image(
+    monkeypatch: pytest.MonkeyPatch, configured: str, image: str, expected: str
+) -> None:
+    """Each build has its own image in the intermediate registry."""
+    monkeypatch.delenv("INTERMEDIATE_REGISTRY_HOST", raising=False)
+    monkeypatch.setenv("INTERMEDIATE_REGISTRY_NAMESPACE", "org")
+    settings = {"builds": {"intermediate_registery_format": configured}}
+    with patch.object(builds, "endpoints", return_value=settings):
+        assert intermediate_image(image, "repo.b1") == expected
