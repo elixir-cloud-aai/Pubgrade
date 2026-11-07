@@ -80,7 +80,7 @@ jobs:
       - name: Validate citation metadata
         run: pipx run --spec cffconvert==2.0.0 cffconvert --validate -i CITATION.cff
 
-  # In the image, as the FOCA base image pins most of the dependencies
+  # With the locked dependencies (`uv.lock`), as in the image
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -90,20 +90,29 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # The Python version of the base image in the `Dockerfile`
-      - name: Set up Python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+      # uv, at the version locked in `uv.lock` (a dev dependency); the action
+      # checks its checksum
+      - name: Set up uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
-          python-version: "3.13"
+          version-file: uv.lock
+      # The versions of `uv.lock`, checked against its hashes, with the dev
+      # dependencies, for the Python version of the base image in the
+      # `Dockerfile` (`requires-python` in `pyproject.toml`), from uv
+      - name: Install dependencies
+        run: |
+          uv sync --locked --python 3.13
+          echo "${PWD}/.venv/bin" >> "$GITHUB_PATH"
+      # Fails below 100% coverage (`fail_under` in `pyproject.toml`)
       - name: Run unit tests with coverage
-        run: make test
+        run: pytest --cov --cov-report=term-missing --cov-report=xml
       # Upload errors fail the workflow only on pushes, because pull requests
       # from forks and Dependabot get no access to the Codecov token
       - name: Submit report to Codecov
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./reports/coverage.xml
+          files: ./coverage.xml
           fail_ci_if_error: ${{ github.event_name == 'push' }}
           verbose: true
 
@@ -125,8 +134,9 @@ jobs:
       - name: Check rendered chart
         run: tests/chart.sh
 
-  # Builds the documentation (`mkdocs.yml`) as Read the Docs does
-  # (`.readthedocs.yaml`), with the documentation of Pubgrade-Sidecar from the
+  # Builds the documentation (`mkdocs.yml`) from the dependency group `docs`
+  # of the lock (Read the Docs installs it from the ranges in `pyproject.toml`,
+  # `.readthedocs.yaml`), with the documentation of Pubgrade-Sidecar from the
   # submodule `external/pubgrade-sidecar` (see `docs/hooks.py`)
   docs:
     name: Docs
@@ -138,13 +148,15 @@ jobs:
         with:
           persist-credentials: false
           submodules: true
-      # Python version of Read the Docs (`.readthedocs.yaml`)
-      - name: Set up Python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+      # As in `test`
+      - name: Set up uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
-          python-version: "3.13"
+          version-file: uv.lock
       - name: Install dependencies
-        run: python -m pip install ".[docs]"
+        run: |
+          uv sync --locked --only-group docs --python 3.13
+          echo "${PWD}/.venv/bin" >> "$GITHUB_PATH"
       # Fails on warnings, e.g., of broken links, anchors and references
       - name: Build documentation
         run: mkdocs build --strict

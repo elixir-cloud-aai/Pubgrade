@@ -1,0 +1,98 @@
+[project]
+name = "pubgrade"
+version = "0.1.0"
+description = "Publish-subscribe service that notifies deployments of new images"
+authors = [
+    {name = "ELIXIR On-Cloud", email = "cloud-service@elixir-europe.org"},
+]
+license = "Apache-2.0"
+readme = "README.md"
+keywords = [
+    "pubgrade", "pubsub", "subscription", "upgrade", "ci-cd", "devops",
+    "docker", "kubernetes", "elixir", "ga4gh", "api", "openapi", "flask",
+    "mongodb", "python",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Information Technology",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+]
+# The Python version of the base image in the `Dockerfile`, the only one the
+# app runs on, so that the lock resolves for it alone
+requires-python = "==3.13.*"
+# The runtime dependencies, installed into the image from the lock
+# (`Dockerfile`)
+dependencies = [
+    "connexion>=2.15.1,<3",
+    "flask>=3.1.3,<4",
+    # FOCA is bumped by hand, together with the base image in the
+    # `Dockerfile` (`.github/dependabot.yml`; checked by
+    # `tests/test_image.py`)
+    "foca>=0.21.0,<0.22",
+    "gitpython>=3.2.1,<4",
+    "gunicorn>=26.2.0,<27",
+    "kubernetes>=37.0.2,<38",
+    "pymongo>=4.19.0,<5",
+    "pyyaml>=6.0.3,<7",
+    "requests>=2.34.2,<3",
+    "werkzeug>=3.1.9,<4",
+]
+
+[project.urls]
+homepage = "https://github.com/elixir-cloud-aai/Pubgrade"
+Documentation = "https://pubgrade.readthedocs.io"
+
+[dependency-groups]
+# Tests, linters and type checks; local hooks of `.pre-commit-config.yaml` use
+# these too. `uv sync` installs them by default; the image build leaves them
+# out (`--no-dev`)
+dev = [
+    "mongomock>=4.3.0",
+    "mypy>=1.19",
+    "pre-commit>=4.3",
+    "pytest>=9.2",
+    "pytest-cov>=7.0",
+    "ruff>=0.14",
+    "types-PyYAML>=6.0.12",
+    "types-requests>=2.32",
+    # Locks the dependencies of the image (`uv lock`, checked in CI); also the
+    # version of uv that CI installs (`astral-sh/setup-uv`)
+    "uv>=0.13",
+]
+# Documentation (`mkdocs.yml`), built in CI from the lock and on Read the Docs
+# from these ranges (`.readthedocs.yaml`). The packages that add warnings,
+# which fail the strict build, are bounded to their major versions
+docs = [
+    "griffelib>=2.4,<3",
+    "mkdocs>=1.6.1,<2",
+    "mkdocs-autorefs>=1.4.4,<2",
+    "mkdocs-material>=9.7.7,<10",
+    # 1.0.6 and earlier fail with pymdown-extensions 12
+    "mkdocstrings>=1.0.8,<2",
+    "mkdocstrings-python>=2.0.10,<3",
+    "pymdown-extensions>=12.3,<13",
+]
+
+[tool.uv]
+# The app runs from its source directory (`pubgrade/`), not as an installed
+# package, so `uv sync` installs only its dependencies
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+# Not the tests of the submodule with Pubgrade-Sidecar (`external/`)
+testpaths = ["tests"]
+
+[tool.coverage.run]
+relative_files = true
+source = ["pubgrade", "scripts"]
+
+[tool.coverage.report]
+# The scripts' entry points, run as programs (their `main` is tested)
+exclude_also = ['if __name__ == "__main__":']
+# `pytest --cov` fails below 100%; Codecov's targets are the same
+# (`codecov.yml`)
+fail_under = 100

@@ -3,7 +3,8 @@
 # copies its own directory
 *
 !pubgrade/
-!requirements.txt
+!pyproject.toml
+!uv.lock
 !build-complete-updater/
 
 # Exclude caches and local files within the included paths

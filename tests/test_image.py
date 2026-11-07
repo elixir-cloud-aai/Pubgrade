@@ -1,9 +1,10 @@
-"""Tests for the image build (`Dockerfile`) and its requirements."""
+"""Tests for the image build (`Dockerfile`) and its consistency with the lock."""
 
 import json
 from pathlib import Path
 import re
 import sys
+import tomllib
 
 from foca import gunicorn_config
 from gunicorn.app.wsgiapp import WSGIApplication
@@ -25,15 +26,32 @@ def _dockerfile() -> str:
     return (ROOT / "Dockerfile").read_text(encoding="utf-8")
 
 
-def test_base_image_has_required_foca() -> None:
-    """The base image has the FOCA release of `requirements.txt`.
+def _base_image() -> re.Match[str]:
+    """Find the base image in the `Dockerfile`.
 
-    Otherwise the image build would install another FOCA on top of it.
+    Returns:
+        Match with the FOCA version and Python version of the base image.
     """
     match = BASE_IMAGE.search(_dockerfile())
     assert match is not None, "No FOCA base image pinned by digest"
-    requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
-    assert f"foca=={match['version']}" in requirements.splitlines()
+    return match
+
+
+def test_base_image_has_locked_foca() -> None:
+    """The base image has the FOCA release of the lock (`uv.lock`).
+
+    Otherwise the image build would install another FOCA on top of it.
+    """
+    lock = tomllib.loads((ROOT / "uv.lock").read_text(encoding="utf-8"))
+    locked = {package["name"]: package["version"] for package in lock["package"]}
+    assert _base_image()["version"] == locked["foca"]
+
+
+def test_base_image_has_required_python() -> None:
+    """The base image has the Python version that `pyproject.toml` requires."""
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    required = project["project"]["requires-python"]
+    assert required == f"=={_base_image()['python']}.*"
 
 
 def test_image_serves_app_with_gunicorn() -> None:

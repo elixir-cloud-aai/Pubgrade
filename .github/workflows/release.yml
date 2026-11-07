@@ -11,7 +11,7 @@
 # the GitHub release with the chart attached, checked against its recorded
 # name and SHA-256, also attested and signed (`publish`). The images and the
 # chart are released together, with one version: the tag must match
-# `__version__` in `pubgrade/__init__.py` and the chart's `version` and
+# `version` in `[project]` of `pyproject.toml` and the chart's `version` and
 # `appVersion` (set by the release-prep pull request; see "Versioning and
 # releases" in `docs/development.md`). `push` and `publish` each need
 # approval in the `release` environment. Re-running all jobs builds, scans,

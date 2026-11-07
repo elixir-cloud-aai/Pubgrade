@@ -3,20 +3,31 @@ version: 2
 # requests whatever the default branch is (`main` only moves forward to
 # releases); security updates always target the default branch, though
 updates:
-  # Dependencies of the app in `requirements.txt` and `setup.py` (test
-  # dependencies), installed on top of the FOCA base image
-  - package-ecosystem: pip
+  # Dependencies in `pyproject.toml` and the lock (`uv.lock`), updated
+  # together; the image build installs the locked ones (`Dockerfile`)
+  - package-ecosystem: uv
     directory: /
     schedule:
       interval: monthly
     target-branch: dev
+    versioning-strategy: increase-if-necessary
     ignore:
       # FOCA is bumped by hand, together with the base image (see the `docker`
-      # entry) and the code that a newer FOCA needs
+      # entry) and the code that a newer FOCA needs, and with it connexion
       - dependency-name: foca
+      - dependency-name: connexion
     groups:
+      # Dependencies of the documentation (the `docs` group), in pull
+      # requests of their own
+      docs-dependencies:
+        patterns: [
+          "griffelib", "mkdocs", "mkdocs-*", "mkdocstrings", "mkdocstrings-*",
+          "pymdown-extensions",
+        ]
+      # Dependencies match the first group listed
       python-dependencies:
         patterns: ["*"]
+        exclude-patterns: ["connexion", "foca"]
   # Dependencies of the updater's image (`build-complete-updater/`)
   - package-ecosystem: pip
     directory: /build-complete-updater
@@ -44,11 +55,20 @@ updates:
       interval: monthly
     target-branch: dev
     ignore:
-      # FOCA is bumped by hand, in the base image and `requirements.txt`
-      # together (see the `pip` entry)
+      # FOCA is bumped by hand, in the base image and the `foca` requirement
+      # in `pyproject.toml` and `uv.lock` together (see the `uv` entry)
       - dependency-name: elixircloud/foca
     groups:
       docker:
+        patterns: ["*"]
+  # Hook revisions in `.pre-commit-config.yaml`
+  - package-ecosystem: pre-commit
+    directory: /
+    schedule:
+      interval: monthly
+    target-branch: dev
+    groups:
+      pre-commit:
         patterns: ["*"]
   # The submodule with Pubgrade-Sidecar, whose documentation is a section of
   # this one (`docs/hooks.py`), at the newest commit of its branch `dev`
