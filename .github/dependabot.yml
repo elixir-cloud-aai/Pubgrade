@@ -58,6 +58,11 @@ updates:
       # FOCA is bumped by hand, in the base image and the `foca` requirement
       # in `pyproject.toml` and `uv.lock` together (see the `uv` entry)
       - dependency-name: elixircloud/foca
+      # The default image uses the newest Python in its security phase (3.13
+      # now), rotated by hand each October (the org's Python version policy);
+      # patch updates within 3.13 still come through
+      - dependency-name: python
+        versions: [">=3.14"]
     groups:
       docker:
         patterns: ["*"]
