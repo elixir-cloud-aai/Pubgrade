@@ -4,6 +4,7 @@ import socket
 from typing import Any
 
 from flask.testing import FlaskClient
+import pytest
 
 from tests.integration.conftest import ADMIN, Subscriber
 
@@ -194,21 +195,21 @@ def test_publish_with_error_response(api: FlaskClient, subscriber: Subscriber) -
     assert state == "Inactive"
 
 
-def test_publish_with_unreachable_subscriber(
-    api: FlaskClient, subscriber: Subscriber
-) -> None:
+# For its proxy bypass only
+@pytest.mark.usefixtures("subscriber")
+def test_publish_with_unreachable_subscriber(api: FlaskClient) -> None:
     """A subscriber that can't be reached fails the build, without a status."""
-    # A port that nothing listens on: bound, then released
+    user = register_user(api)
+    repository = register_repository(api)
+    # A port that is bound but not listening refuses connections, and no other
+    # process can take it meanwhile
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
-    user = register_user(api)
-    repository = register_repository(api)
-    subscription = subscribe(
-        api, user, repository["id"], f"http://127.0.0.1:{port}/update"
-    )
-
-    build = publish(api, repository, "1")
+        subscription = subscribe(
+            api, user, repository["id"], f"http://127.0.0.1:{port}/update"
+        )
+        build = publish(api, repository, "1")
 
     assert build["status"] == "FAILED"
     assert results(build) == {subscription: ("failed", None)}

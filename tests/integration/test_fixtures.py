@@ -11,7 +11,7 @@ from tests.integration.conftest import MONGODB_TEST_URI
 
 
 def test_response_validation(api: FlaskClient) -> None:
-    """The app validates its responses against the API specification."""
+    """The app is configured to validate its responses against the API."""
     flask_config: Any = api.application.config
     spec = flask_config.foca.api.specs[0]
     assert spec.connexion.validate_responses is True

@@ -28,7 +28,7 @@ from pubgrade.settings import collection
 
 MONGODB_TEST_URI = os.environ.get("MONGODB_TEST_URI", "")
 
-# FOCA's settings of the database from the environment
+# FOCA's settings from the environment that would affect the tests
 MONGO_ENV = (
     "MONGO_URI",
     "MONGO_HOST",
@@ -36,6 +36,11 @@ MONGO_ENV = (
     "MONGO_DBNAME",
     "MONGO_USERNAME",
     "MONGO_PASSWORD",
+    "MONGO_URI_FILE",
+    "MONGO_USERNAME_FILE",
+    "MONGO_PASSWORD_FILE",
+    # Configuration files that FOCA merges into the app's
+    "FOCA_CONFIG_OVERLAY",
 )
 
 # Admin user of the configuration, who verifies users
@@ -109,6 +114,7 @@ def api(
         mongodb.drop_database(DB)
     app = create_app().app
     yield app.test_client()
+    # All collections share FOCA's client
     with app.app_context():
         collection("repositories").database.client.close()
 
