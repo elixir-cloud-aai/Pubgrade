@@ -1,56 +1,56 @@
-"""Tests for /builds endpoint """
+"""Tests for /builds endpoint"""
+
 import copy
 import json
 import logging
 import os
 import shutil
 import traceback
-from unittest.mock import patch, MagicMock
+from typing import Any
+from unittest.mock import MagicMock, patch
 
-import mongomock
-import pytest
-import requests
-import yaml
 from flask import Flask
 from foca.models.config import Config, MongoConfig
-from typing import Any
-
 from kubernetes.client import ApiException
+import mongomock
 from pymongo.errors import DuplicateKeyError
-from werkzeug.exceptions import Unauthorized, InternalServerError
+import pytest
+import requests
+from werkzeug.exceptions import InternalServerError, Unauthorized
+import yaml
 
 from pubgrade.errors.exceptions import (
-    BuildsDisabled,
-    InvalidImage,
-    RepositoryNotFound,
     BuildNotFound,
+    BuildsDisabled,
     CreatePodError,
     DeletePodError,
     GitCloningError,
-)
-from pubgrade.modules.endpoints.builds import (
-    IMAGE_WITH_TAG,
-    register_builds,
-    get_builds,
-    get_build_info,
-    git_clone_and_checkout,
-    create_deployment_YAML,
-    create_dockerhub_config_file,
-    create_build,
-    build_completed,
-    remove_files,
-    build_push_image_using_kaniko,
+    InvalidImage,
+    RepositoryNotFound,
 )
 import pubgrade.modules.endpoints.builds as builds
+from pubgrade.modules.endpoints.builds import (
+    IMAGE_WITH_TAG,
+    build_completed,
+    build_push_image_using_kaniko,
+    create_build,
+    create_deployment_YAML,
+    create_dockerhub_config_file,
+    get_build_info,
+    get_builds,
+    git_clone_and_checkout,
+    register_builds,
+    remove_files,
+)
 from tests.mock_data import (
     ENDPOINT_CONFIG,
-    MONGO_CONFIG,
-    MOCK_REPOSITORIES,
-    MOCK_BUILD_PAYLOAD,
     MOCK_BUILD_INFO,
     MOCK_BUILD_INFO_2,
+    MOCK_BUILD_PAYLOAD,
+    MOCK_REPOSITORIES,
     MOCK_REPOSITORY_2,
     MOCK_SUBSCRIPTION_INFO,
+    MONGO_CONFIG,
 )
 
 
@@ -72,9 +72,7 @@ def mocked_remove_files(dir_location: str, pod_name: str, namespace: str):
     return "removed"
 
 
-def mocked_notify_subscriptions(
-    subscription_id: str, image: str, build_id: str
-):
+def mocked_notify_subscriptions(subscription_id: str, image: str, build_id: str):
     return "Notified"
 
 
@@ -82,15 +80,11 @@ def mocked_delete_pod(name, namespace):
     return "Pod deleted."
 
 
-def mocked_delete_namespaced_pod(
-    self, name: str, namespace: str, **kwargs: Any
-):
+def mocked_delete_namespaced_pod(self, name: str, namespace: str, **kwargs: Any):
     return "Pod deleted."
 
 
-def mocked_delete_namespaced_pod_error(
-    self, name: str, namespace: str, **kwargs: Any
-):
+def mocked_delete_namespaced_pod_error(self, name: str, namespace: str, **kwargs: Any):
     raise ApiException
 
 
@@ -115,21 +109,15 @@ def mocked_core_v1_api():
     return "v1 API"
 
 
-def mocked_create_namespaced_pod(
-    self, namespace: str, body: Any, **kwargs: Any
-):
+def mocked_create_namespaced_pod(self, namespace: str, body: Any, **kwargs: Any):
     return {"metadata": {"name": "kaniko"}}
 
 
-def mocked_create_namespaced_pod_error(
-    self, namespace: str, body: Any, **kwargs: Any
-):
+def mocked_create_namespaced_pod_error(self, namespace: str, body: Any, **kwargs: Any):
     raise ApiException
 
 
-def mocked_create_namespaced_pod_echo(
-    self, namespace: str, body: Any, **kwargs: Any
-):
+def mocked_create_namespaced_pod_echo(self, namespace: str, body: Any, **kwargs: Any):
     """Return the created pod, as the Kubernetes API does."""
     return body
 
@@ -188,9 +176,7 @@ class TestBuild:
         self.app.config.foca.db.dbs["pubgradeStore"].collections[
             "repositories"
         ].client = mongomock.MongoClient().db.collection
-        self.id_length = self.app.config.foca.endpoints["repository"][
-            "id_length"
-        ]
+        self.id_length = self.app.config.foca.endpoints["repository"]["id_length"]
         for repository in MOCK_REPOSITORIES:
             self.app.config.foca.db.dbs["pubgradeStore"].collections[
                 "repositories"
@@ -208,9 +194,7 @@ class TestBuild:
             "builds"
         ].client.insert_one(MOCK_BUILD_INFO_2)
 
-    @patch(
-        "pubgrade.modules.endpoints.builds.create_build", mocked_create_build
-    )
+    @patch("pubgrade.modules.endpoints.builds.create_build", mocked_create_build)
     def test_register_builds(self):
         self.setup()
         with self.app.app_context():
@@ -226,9 +210,7 @@ class TestBuild:
                 and res["id"][: self.id_length] == MOCK_REPOSITORIES[1]["id"]
             )
 
-    @patch(
-        "pubgrade.modules.endpoints.builds.create_build", mocked_create_build
-    )
+    @patch("pubgrade.modules.endpoints.builds.create_build", mocked_create_build)
     def test_register_builds_logs_no_token(self, caplog):
         """Log messages don't contain the token for DockerHub."""
         self.setup()
@@ -242,9 +224,7 @@ class TestBuild:
         assert f"Added build {res['id']}." in caplog.messages
         assert "dockerhub-secret" not in caplog.text
 
-    @patch(
-        "pubgrade.modules.endpoints.builds.create_build", mocked_create_build
-    )
+    @patch("pubgrade.modules.endpoints.builds.create_build", mocked_create_build)
     def test_register_builds_branch_only(self):
         self.setup()
         del MOCK_BUILD_PAYLOAD["head_commit"]
@@ -262,9 +242,7 @@ class TestBuild:
                 and res["id"][: self.id_length] == MOCK_REPOSITORIES[1]["id"]
             )
 
-    @patch(
-        "pubgrade.modules.endpoints.builds.create_build", mocked_create_build
-    )
+    @patch("pubgrade.modules.endpoints.builds.create_build", mocked_create_build)
     def test_register_builds_tag(self):
         self.setup()
         del MOCK_BUILD_PAYLOAD["head_commit"]
@@ -282,9 +260,7 @@ class TestBuild:
                 and res["id"][: self.id_length] == MOCK_REPOSITORIES[1]["id"]
             )
 
-    @patch(
-        "pubgrade.modules.endpoints.builds.create_build", mocked_create_build
-    )
+    @patch("pubgrade.modules.endpoints.builds.create_build", mocked_create_build)
     def test_register_builds_duplicate_key_error(self):
         self.setup()
         mock_resp = MagicMock(side_effect=DuplicateKeyError(""))
@@ -299,9 +275,7 @@ class TestBuild:
                     MOCK_BUILD_PAYLOAD,
                 )
 
-    @patch(
-        "pubgrade.modules.endpoints.builds.create_build", mocked_create_build
-    )
+    @patch("pubgrade.modules.endpoints.builds.create_build", mocked_create_build)
     def test_register_builds_unauthorized(self):
         self.setup()
         with self.app.app_context():
@@ -312,9 +286,7 @@ class TestBuild:
                     MOCK_BUILD_PAYLOAD,
                 )
 
-    @patch(
-        "pubgrade.modules.endpoints.builds.create_build", mocked_create_build
-    )
+    @patch("pubgrade.modules.endpoints.builds.create_build", mocked_create_build)
     def test_register_builds_repository_not_found(self):
         self.setup()
         with self.app.app_context():
@@ -371,9 +343,7 @@ class TestBuild:
             res = get_build_info(MOCK_BUILD_INFO["id"])
         assert res["started_at"] == "2026-01-02T03:04:05+00:00"
         assert res["finished_at"] is None
-        assert res["notifications"] == [
-            {"finished_at": "2026-01-02T03:04:06+00:00"}
-        ]
+        assert res["notifications"] == [{"finished_at": "2026-01-02T03:04:06+00:00"}]
 
     def test_get_build_info_build_not_found(self):
         self.setup_with_build()
@@ -433,9 +403,7 @@ class TestBuild:
         shutil.rmtree("./build123")
 
     def test_create_deployment_yaml(self):
-        builds.template_file = (
-            "pubgrade/modules/endpoints/kaniko" "/template.yaml"
-        )
+        builds.template_file = "pubgrade/modules/endpoints/kaniko/template.yaml"
         os.mkdir("build123")
         os.mkdir("build123/drs-filer")
         deployment_file_location = create_deployment_YAML(
@@ -446,18 +414,13 @@ class TestBuild:
             "build_id/config.json",
             "project_access_token",
         )
-        assert (
-            deployment_file_location == "./build123/drs-filer/"
-            "deployment_file"
-        )
+        assert deployment_file_location == "./build123/drs-filer/deployment_file"
         assert os.path.isfile(deployment_file_location)
         shutil.rmtree("./build123")
 
     def test_create_deployment_yaml_if_env_present(self):
         os.environ["NAMESPACE"] = "pubgrade"
-        builds.template_file = (
-            "pubgrade/modules/endpoints/kaniko" "/template.yaml"
-        )
+        builds.template_file = "pubgrade/modules/endpoints/kaniko/template.yaml"
         os.mkdir("build123")
         os.mkdir("build123/drs-filer")
         deployment_file_location = create_deployment_YAML(
@@ -468,19 +431,14 @@ class TestBuild:
             "build_id/config.json",
             "project_access_token",
         )
-        assert (
-            deployment_file_location == "./build123/drs-filer/"
-            "deployment_file"
-        )
+        assert deployment_file_location == "./build123/drs-filer/deployment_file"
         assert os.path.isfile(deployment_file_location)
         shutil.rmtree("./build123")
         del os.environ["NAMESPACE"]
 
     def test_create_deployment_yaml_os_error(self):
         with pytest.raises(OSError):
-            builds.template_file = (
-                "pubgrade/modules/endpoints/kaniko" "/template.yaml"
-            )
+            builds.template_file = "pubgrade/modules/endpoints/kaniko/template.yaml"
             deployment_file_location = create_deployment_YAML(
                 "./build123/drs-filer/dockerfile_location",
                 "registry_destination",
@@ -489,10 +447,7 @@ class TestBuild:
                 "build_id" + "/config.json",
                 "project_access_token",
             )
-            assert (
-                deployment_file_location == "./build123/drs-filer/"
-                "deployment_file"
-            )
+            assert deployment_file_location == "./build123/drs-filer/deployment_file"
             assert os.path.isfile(deployment_file_location)
             shutil.rmtree("./build123")
 
@@ -503,13 +458,9 @@ class TestBuild:
         assert os.path.isfile("config.json")
         os.remove("config.json")
 
-    @patch(
-        "pubgrade.modules.endpoints.builds." "build_push_image_using_kaniko"
-    )
+    @patch("pubgrade.modules.endpoints.builds.build_push_image_using_kaniko")
     def test_create_build(self, push_image):
-        builds.template_file = (
-            "pubgrade/modules/endpoints/kaniko" "/template.yaml"
-        )
+        builds.template_file = "pubgrade/modules/endpoints/kaniko/template.yaml"
         os.mkdir("basedir")
         os.mkdir("basedir/drs-filer")
         f = open("basedir/drs-filer/Dockerfile", "w")
@@ -532,14 +483,10 @@ class TestBuild:
         assert os.path.isfile(deployment_file)
         assert os.path.isfile("basedir/build123/config.json")
         assert os.path.isdir("basedir/build123/drs-filer/.git")
-        push_image.assert_called_once_with(
-            deployment_file_location=deployment_file
-        )
+        push_image.assert_called_once_with(deployment_file_location=deployment_file)
         shutil.rmtree("basedir")
 
-    @patch(
-        "pubgrade.modules.endpoints.builds.remove_files", mocked_remove_files
-    )
+    @patch("pubgrade.modules.endpoints.builds.remove_files", mocked_remove_files)
     @patch("requests.request", mocked_request_api)
     def test_build_completed(self):
         self.setup_with_build()
@@ -556,8 +503,7 @@ class TestBuild:
                 MOCK_REPOSITORY_2["access_token"],
             )
             data = (
-                self.app.config.foca
-                .db.dbs["pubgradeStore"]
+                self.app.config.foca.db.dbs["pubgradeStore"]
                 .collections["builds"]
                 .client.find_one(res)
             )
@@ -588,10 +534,7 @@ class TestBuild:
         """A repository's token only completes that repository's builds."""
         self.setup_with_build()
         builds_collection = (
-            self.app.config.foca
-            .db.dbs["pubgradeStore"]
-            .collections["builds"]
-            .client
+            self.app.config.foca.db.dbs["pubgradeStore"].collections["builds"].client
         )
         builds_collection.insert_one({"id": "other", "status": "QUEUED"})
         with self.app.app_context():
@@ -656,9 +599,7 @@ class TestBuild:
         mocked_create_namespaced_pod,
     )
     def test_build_push_image_using_kaniko(self):
-        builds.template_file = (
-            "pubgrade/modules/endpoints/kaniko" "/template.yaml"
-        )
+        builds.template_file = "pubgrade/modules/endpoints/kaniko/template.yaml"
         with self.app.app_context():
             build_push_image_using_kaniko(builds.template_file)
         os.environ["NAMESPACE"] = "pubgrade"
@@ -678,20 +619,16 @@ class TestBuild:
         "kubernetes.config.kube_config._get_kube_config_loader",
         mocked_get_kube_config_loader,
     )
-    @patch(
-        "kubernetes.config.kube_config.KubeConfigLoader", MockKubeConfigLoader
-    )
+    @patch("kubernetes.config.kube_config.KubeConfigLoader", MockKubeConfigLoader)
     def test_build_push_image_using_kaniko_create_pod_error(self):
-        builds.template_file = (
-            "pubgrade/modules/endpoints/kaniko" "/template.yaml"
-        )
+        builds.template_file = "pubgrade/modules/endpoints/kaniko/template.yaml"
         with self.app.app_context():
             with pytest.raises(CreatePodError):
                 build_push_image_using_kaniko(builds.template_file)
 
     @patch("kubernetes.client.api.core_v1_api.CoreV1Api", mocked_core_v1_api)
     @patch(
-        "kubernetes.client.api.core_v1_api.CoreV1Api" ".delete_namespaced_pod",
+        "kubernetes.client.api.core_v1_api.CoreV1Api.delete_namespaced_pod",
         mocked_delete_namespaced_pod,
     )
     def test_delete_pod(self):
@@ -700,7 +637,7 @@ class TestBuild:
 
     @patch("kubernetes.client.api.core_v1_api.CoreV1Api", mocked_core_v1_api)
     @patch(
-        "kubernetes.client.api.core_v1_api.CoreV1Api" ".delete_namespaced_pod",
+        "kubernetes.client.api.core_v1_api.CoreV1Api.delete_namespaced_pod",
         mocked_delete_namespaced_pod_error,
     )
     def test_delete_pod_api_error(self):
@@ -708,18 +645,14 @@ class TestBuild:
             with pytest.raises(DeletePodError):
                 builds.delete_pod("name", "namespace")
 
-    @patch(
-        "kubernetes.config.load_incluster_config", mocked_load_incluster_config
-    )
+    @patch("kubernetes.config.load_incluster_config", mocked_load_incluster_config)
     @patch(
         "kubernetes.client.api.core_v1_api.CoreV1Api.create_namespaced_pod",
         mocked_create_namespaced_pod,
     )
     def test_build_push_image_using_kaniko_incluster(self):
         os.environ["KUBERNETES_SERVICE_HOST"] = "Incluster"
-        builds.template_file = (
-            "pubgrade/modules/endpoints/kaniko" "/template.yaml"
-        )
+        builds.template_file = "pubgrade/modules/endpoints/kaniko/template.yaml"
         with self.app.app_context():
             build_push_image_using_kaniko(builds.template_file)
         os.environ["NAMESPACE"] = "pubgrade"
@@ -782,9 +715,7 @@ class TestBuild:
             )
         ]
         # FOCA logs the exception with its context
-        assert "pod-secret" not in "".join(
-            traceback.format_exception(raised.value)
-        )
+        assert "pod-secret" not in "".join(traceback.format_exception(raised.value))
 
     @patch("kubernetes.config.load_kube_config", mocked_load_cluster_config)
     @patch(
@@ -801,14 +732,12 @@ class TestBuild:
         with self.app.app_context():
             with pytest.raises(CreatePodError) as raised:
                 build_push_image_using_kaniko(str(deployment_file))
-        assert caplog.messages == [
-            "Creating pod None failed: 422 Unprocessable Entity"
-        ]
+        assert caplog.messages == ["Creating pod None failed: 422 Unprocessable Entity"]
         assert raised.value.__suppress_context__
 
     @patch("kubernetes.client.api.core_v1_api.CoreV1Api", mocked_core_v1_api)
     @patch(
-        "kubernetes.client.api.core_v1_api.CoreV1Api" ".delete_namespaced_pod",
+        "kubernetes.client.api.core_v1_api.CoreV1Api.delete_namespaced_pod",
         mocked_delete_namespaced_pod_error_body,
     )
     def test_delete_pod_error_logs_no_body(self, caplog):
@@ -822,9 +751,7 @@ class TestBuild:
                 "Deleting pod name failed: 422 Unprocessable Entity",
             )
         ]
-        assert "pod-secret" not in "".join(
-            traceback.format_exception(raised.value)
-        )
+        assert "pod-secret" not in "".join(traceback.format_exception(raised.value))
 
     @patch("requests.request")
     def test_trigger_signing_image_error_logs_no_header(
@@ -850,9 +777,7 @@ class TestBuild:
         assert caplog.messages == [
             "Triggering the signing of image:1 failed: InvalidHeader"
         ]
-        assert "gh-secret" not in "".join(
-            traceback.format_exception(raised.value)
-        )
+        assert "gh-secret" not in "".join(traceback.format_exception(raised.value))
 
 
 class TestPublish:
@@ -890,9 +815,7 @@ class TestPublish:
         Returns:
             The collection's configuration, with its client.
         """
-        return (
-            self.app.config.foca.db.dbs["pubgradeStore"].collections[name]
-        )
+        return self.app.config.foca.db.dbs["pubgradeStore"].collections[name]
 
     def publish(self, payload):
         """Publish an image.
@@ -994,9 +917,7 @@ class TestPublish:
         """A wrong token gets a 401, whatever the request is."""
         with self.app.app_context():
             with pytest.raises(Unauthorized):
-                register_builds(
-                    self.repository["id"], "wrong", {"images": []}
-                )
+                register_builds(self.repository["id"], "wrong", {"images": []})
 
     @patch("pubgrade.modules.endpoints.builds.create_build")
     def test_build_rejects_image_without_tag(self, create_build):

@@ -1,16 +1,15 @@
-"""Tests for /repositories endpoint """
+"""Tests for /repositories endpoint"""
+
 import logging
+import string
 from unittest.mock import MagicMock
 
-import mongomock
-import pytest
 from flask import Flask
-from foca.models.config import Config
-from foca.models.config import MongoConfig
-import string
-
+from foca.models.config import Config, MongoConfig
+import mongomock
 from pymongo.errors import DuplicateKeyError
-from werkzeug.exceptions import Unauthorized, InternalServerError
+import pytest
+from werkzeug.exceptions import InternalServerError, Unauthorized
 
 from pubgrade.errors.exceptions import (
     RegistrationDisabled,
@@ -19,14 +18,14 @@ from pubgrade.errors.exceptions import (
 )
 from pubgrade.modules.endpoints import repositories
 from pubgrade.modules.endpoints.repositories import (
-    register_repository,
-    get_repositories,
+    delete_repository,
     generate_id,
+    get_repositories,
     get_repository,
     modify_repository_info,
-    delete_repository,
+    register_repository,
 )
-from tests.mock_data import MONGO_CONFIG, ENDPOINT_CONFIG, MOCK_REPOSITORIES
+from tests.mock_data import ENDPOINT_CONFIG, MOCK_REPOSITORIES, MONGO_CONFIG
 
 
 class TestRepository:
@@ -67,9 +66,7 @@ class TestRepository:
     def test_register_repository_closed(self):
         """Registration can be closed by configuration."""
         self.setup()
-        self.app.config.foca.endpoints["repository"][
-            "registration_enabled"
-        ] = False
+        self.app.config.foca.endpoints["repository"]["registration_enabled"] = False
         with self.app.app_context():
             with pytest.raises(RegistrationDisabled):
                 register_repository(data={"url": self.repository_url})
@@ -220,9 +217,7 @@ class TestRepository:
         data = {"url": self.repository_url}
         with self.app.app_context():
             with pytest.raises(Unauthorized):
-                modify_repository_info(
-                    MOCK_REPOSITORIES[1]["id"], "access_token", data
-                )
+                modify_repository_info(MOCK_REPOSITORIES[1]["id"], "access_token", data)
 
     def test_delete_repository(self):
         self.setup()

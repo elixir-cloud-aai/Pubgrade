@@ -1,40 +1,40 @@
-import logging
-import os
-import shutil
-import requests
 import base64
 import json
+import logging
+import os
 import re
+import shutil
 
-import yaml
 from foca import get_config
-from git import Repo, GitCommandError
+from git import GitCommandError, Repo
 from kubernetes import client, config
 from kubernetes.client import ApiException
 from pymongo.errors import DuplicateKeyError
+import requests
 from werkzeug.exceptions import Unauthorized
+import yaml
 
 from pubgrade.charsets import get_charset
-from pubgrade.timestamps import now, repaired_build
 from pubgrade.errors.exceptions import (
-    BuildsDisabled,
-    InvalidImage,
-    RepositoryNotFound,
     BuildNotFound,
-    DeletePodError,
+    BuildsDisabled,
     CreatePodError,
+    DeletePodError,
     GitCloningError,
     InternalServerError,
+    InvalidImage,
+    RepositoryNotFound,
 )
 from pubgrade.modules.endpoints.repositories import generate_id
 from pubgrade.modules.endpoints.subscriptions import notify_all_subscriptions
+from pubgrade.timestamps import now, repaired_build
 
 logger = logging.getLogger(__name__)
 
-template_file = '/app/pubgrade/modules/endpoints/kaniko/template.yaml'
+template_file = "/app/pubgrade/modules/endpoints/kaniko/template.yaml"
 BASE_DIR = os.getenv("BASE_DIR")
 if BASE_DIR is None:
-    BASE_DIR = '/pubgrade_temp_files'
+    BASE_DIR = "/pubgrade_temp_files"
 
 # An image with a tag (no digest), optionally with a registry and its port,
 # following Docker's rules for references
@@ -66,9 +66,7 @@ def validate_prebuilt_image(build_data: dict) -> None:
         InvalidImage: Raised when the request doesn't name exactly one image.
     """
     images = build_data["images"]
-    if "dockerhub_token" in build_data or any(
-        "location" in image for image in images
-    ):
+    if "dockerhub_token" in build_data or any("location" in image for image in images):
         raise BuildsDisabled
     if len(images) != 1:
         raise InvalidImage
@@ -84,9 +82,7 @@ def publish_prebuilt_image(build_id: str, image: str, subscriptions: list):
     """
     results = notify_all_subscriptions(subscriptions, image, build_id)
     failed = any(result["result"] == "failed" for result in results)
-    get_config().db.dbs["pubgradeStore"].collections[
-        "builds"
-    ].client.update_one(
+    get_config().db.dbs["pubgradeStore"].collections["builds"].client.update_one(
         {"id": build_id},
         {
             "$set": {
@@ -124,21 +120,13 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
         exactly one.
     """
     db_collection_builds = (
-        get_config()
-        .db.dbs["pubgradeStore"]
-        .collections["builds"]
-        .client
+        get_config().db.dbs["pubgradeStore"].collections["builds"].client
     )
     db_collection_repositories = (
-        get_config()
-        .db.dbs["pubgradeStore"]
-        .collections["repositories"]
-        .client
+        get_config().db.dbs["pubgradeStore"].collections["repositories"].client
     )
     retries = get_config().endpoints["repository"]["retries"]
-    id_length: int = get_config().endpoints["repository"][
-        "id_length"
-    ]
+    id_length: int = get_config().endpoints["repository"]["id_length"]
     id_charset = get_charset("repository", "id_charset")
 
     data_from_db = db_collection_repositories.find_one({"id": repository_id})
@@ -186,9 +174,11 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
             except KeyError:
                 commit_sha = build_data["head_commit"]["tag"]
             intermediate_registry_format = get_config().endpoints["builds"][
-                "intermediate_registery_format"]
+                "intermediate_registery_format"
+            ]
             intermediate_registry_path = intermediate_registry_format.format(
-                build_data["images"][0]["name"].split("/")[1].split(":")[0])
+                build_data["images"][0]["name"].split("/")[1].split(":")[0]
+            )
             create_build(
                 repo_url=data_from_db["url"],
                 branch=branch,
@@ -209,8 +199,7 @@ def register_builds(repository_id: str, access_token: str, build_data: dict):
             continue
     else:
         logger.error(
-            f"Could not generate unique identifier."
-            f" Tried {retries + 1} times."
+            f"Could not generate unique identifier. Tried {retries + 1} times."
         )
         raise InternalServerError
     if not build_path:
@@ -238,10 +227,7 @@ def get_builds(repository_id: str):
         not found.
     """
     db_collection_repositories = (
-        get_config()
-        .db.dbs["pubgradeStore"]
-        .collections["repositories"]
-        .client
+        get_config().db.dbs["pubgradeStore"].collections["repositories"].client
     )
     build_object_list = []
     data_from_db = db_collection_repositories.find_one({"id": repository_id})
@@ -253,9 +239,7 @@ def get_builds(repository_id: str):
             build_data["id"] = build_id
             build_object_list.append(build_data)
     except Exception:
-        logger.error(
-            f"No build found for given repository identifier. {repository_id}"
-        )
+        logger.error(f"No build found for given repository identifier. {repository_id}")
         raise BuildNotFound
     return build_object_list
 
@@ -276,16 +260,11 @@ def get_build_info(build_id: str):
         not found.
     """
     db_collection_builds = (
-        get_config()
-        .db.dbs["pubgradeStore"]
-        .collections["builds"]
-        .client
+        get_config().db.dbs["pubgradeStore"].collections["builds"].client
     )
     try:
         build_object = (
-            db_collection_builds.find({"id": build_id}, {"_id": False})
-            .limit(1)
-            .next()
+            db_collection_builds.find({"id": build_id}, {"_id": False}).limit(1).next()
         )
         del build_object["id"]
         build_object.pop("dockerhub_token", None)
@@ -295,15 +274,15 @@ def get_build_info(build_id: str):
 
 
 def create_build(
-        repo_url: str,
-        branch: str,
-        commit: str,
-        base_dir: str,
-        build_id: str,
-        dockerfile_location: str,
-        intermediate_registry_path: str,
-        dockerhub_token: str,
-        project_access_token: str,
+    repo_url: str,
+    branch: str,
+    commit: str,
+    base_dir: str,
+    build_id: str,
+    dockerfile_location: str,
+    intermediate_registry_path: str,
+    dockerhub_token: str,
+    project_access_token: str,
 ):
     """
     Create build and push to DockerHub.
@@ -352,13 +331,11 @@ def create_build(
     )
 
     # Create kaniko deployment to build and publish image.
-    build_push_image_using_kaniko(
-        deployment_file_location=deployment_file_location
-    )
+    build_push_image_using_kaniko(deployment_file_location=deployment_file_location)
 
 
 def git_clone_and_checkout(
-        repo_url: str, branch: str, commit: str, base_dir: str, build_id: str
+    repo_url: str, branch: str, commit: str, base_dir: str, build_id: str
 ):
     """Clone git repository and checkout to specified branch/commit/tag.
 
@@ -399,12 +376,12 @@ def git_clone_and_checkout(
 
 
 def create_deployment_YAML(
-        dockerfile_location: str,
-        intermediate_registry_path: str,
-        build_context: str,
-        deployment_file_location: str,
-        config_file_location: str,
-        project_access_token: str,
+    dockerfile_location: str,
+    intermediate_registry_path: str,
+    build_context: str,
+    deployment_file_location: str,
+    config_file_location: str,
+    project_access_token: str,
 ):
     """Create kaniko deployment file.
 
@@ -441,30 +418,26 @@ def create_deployment_YAML(
             f"--context={build_context}",
             "--cleanup",
         ]
-        data["spec"]["containers"][0]["volumeMounts"][1][
-            "mountPath"
-        ] = "/kaniko/.docker/config.json"
-        data["spec"]["volumes"][0]["persistentVolumeClaim"][
-            "claimName"
-        ] = os.getenv("PV_NAME")
-        data["spec"]["containers"][0]["volumeMounts"][1][
-            "subPath"
-        ] = config_file_location
-        data["spec"]["containers"][0]["env"][0][
-            "value"
-        ] = build_id  # BUILDNAME
-        data["spec"]["containers"][0]["env"][1][
-            "value"
-        ] = project_access_token  # ACCESSTOKEN
+        data["spec"]["containers"][0]["volumeMounts"][1]["mountPath"] = (
+            "/kaniko/.docker/config.json"
+        )
+        data["spec"]["volumes"][0]["persistentVolumeClaim"]["claimName"] = os.getenv(
+            "PV_NAME"
+        )
+        data["spec"]["containers"][0]["volumeMounts"][1]["subPath"] = (
+            config_file_location
+        )
+        data["spec"]["containers"][0]["env"][0]["value"] = build_id  # BUILDNAME
+        data["spec"]["containers"][0]["env"][1]["value"] = (
+            project_access_token  # ACCESSTOKEN
+        )
         if os.getenv("NAMESPACE"):
             data["spec"]["containers"][0]["env"][2]["value"] = os.getenv(
                 "NAMESPACE"
             )  # NAMESPACE
         else:
             data["spec"]["containers"][0]["env"][2]["value"] = "default"
-        data["spec"]["containers"][0]["env"][3][
-            "value"
-        ] = os.getenv("PUBGRADE_URL")
+        data["spec"]["containers"][0]["env"][3]["value"] = os.getenv("PUBGRADE_URL")
         data["spec"]["containers"][0]["env"][4]["value"] = "8080"  # PORT
         with open(deployment_file_location, "w") as yaml_file:
             yaml_file.write(yaml.dump(data, default_flow_style=False))
@@ -473,9 +446,7 @@ def create_deployment_YAML(
         raise OSError
 
 
-def create_dockerhub_config_file(
-        dockerhub_token: str, config_file_location: str
-):
+def create_dockerhub_config_file(dockerhub_token: str, config_file_location: str):
     """Create dockerhub config file.
 
     Args:
@@ -484,17 +455,21 @@ def create_dockerhub_config_file(
         config_file_location (str): Location to create Dockerhub config file,
         it contains dockerhub access token.
     """
-    intermediate_registry_format = get_config().endpoints["builds"]["intermediate_registery_format"]
+    intermediate_registry_format = get_config().endpoints["builds"][
+        "intermediate_registery_format"
+    ]
     template_config_file = (
-            """{
+        """{
 "auths": {
 "%s": {
 "auth": "%s"
         }
     }
 }"""
-                           ) % (intermediate_registry_format.split("/", 1)[0],
-                                os.getenv("INTERMEDIATE_REGISTRY_TOKEN") )
+    ) % (
+        intermediate_registry_format.split("/", 1)[0],
+        os.getenv("INTERMEDIATE_REGISTRY_TOKEN"),
+    )
     f = open(config_file_location, "w")
     f.write(template_config_file)
     f.close()
@@ -534,9 +509,7 @@ def build_push_image_using_kaniko(deployment_file_location: str):
         logger.info(f"Pod {name} created.")
 
 
-def build_completed(
-        repository_id: str, build_id: str, project_access_token: str
-):
+def build_completed(repository_id: str, build_id: str, project_access_token: str):
     """Update build completion.
 
     Args:
@@ -557,16 +530,10 @@ def build_completed(
     if not builds_enabled():
         raise BuildsDisabled
     db_collection_repositories = (
-        get_config()
-        .db.dbs["pubgradeStore"]
-        .collections["repositories"]
-        .client
+        get_config().db.dbs["pubgradeStore"].collections["repositories"].client
     )
     db_collection_builds = (
-        get_config()
-        .db.dbs["pubgradeStore"]
-        .collections["builds"]
-        .client
+        get_config().db.dbs["pubgradeStore"].collections["builds"].client
     )
 
     data_from_db = db_collection_repositories.find_one({"id": repository_id})
@@ -577,22 +544,25 @@ def build_completed(
     if build_id not in data_from_db.get("build_list", []):
         raise BuildNotFound
     try:
-        data = db_collection_builds.find(
-            {'id': build_id}, {'_id': False}
-        ).limit(1).next()
-        data['status'] = "SUCCEEDED"
-        data['finished_at'] = now()
+        data = (
+            db_collection_builds.find({"id": build_id}, {"_id": False}).limit(1).next()
+        )
+        data["status"] = "SUCCEEDED"
+        data["finished_at"] = now()
 
-        intermediate_registry_format = get_config().endpoints["builds"]["intermediate_registery_format"]
+        intermediate_registry_format = get_config().endpoints["builds"][
+            "intermediate_registery_format"
+        ]
         trigger_signing_image(
             image_path=data["images"][0]["name"],
             dockerhub_token=data["dockerhub_token"],
-            pull_tag=intermediate_registry_format.format(data["images"][0]["name"].split("/")[1].split(":")[0]),
-            push_tag=data["images"][0]["name"]
+            pull_tag=intermediate_registry_format.format(
+                data["images"][0]["name"].split("/")[1].split(":")[0]
+            ),
+            push_tag=data["images"][0]["name"],
         )
 
-        db_collection_builds.update_one({"id": data['id']},
-                                        {"$set": data})
+        db_collection_builds.update_one({"id": data["id"]}, {"$set": data})
         remove_files(
             BASE_DIR + "/" + build_id,
             build_id,
@@ -646,31 +616,34 @@ def delete_pod(name: str, namespace: str):
         raise DeletePodError from None
 
 
-def trigger_signing_image(dockerhub_token: str,
-                          image_path: str, pull_tag: str, push_tag: str):
-    username, password = base64.b64decode(dockerhub_token).decode('utf-8').split(":")
+def trigger_signing_image(
+    dockerhub_token: str, image_path: str, pull_tag: str, push_tag: str
+):
+    username, password = base64.b64decode(dockerhub_token).decode("utf-8").split(":")
     url = "https://api.github.com/repos/{}/dispatches".format(
-        get_config().endpoints["builds"]["gh_action_path"])
-    payload = json.dumps({
-        "event_type": "sign-image",
-        "client_payload": {
-            "cosign_key": os.getenv("COSIGN_PRIVATE_KEY"),
-            "docker_username": username,
-            "docker_password": password,
-            "cosign_password": os.getenv("COSIGN_PASSWORD"),
-            "image_path": image_path,
-            "pull_tag": pull_tag,
-            "push_tag": push_tag,
-
+        get_config().endpoints["builds"]["gh_action_path"]
+    )
+    payload = json.dumps(
+        {
+            "event_type": "sign-image",
+            "client_payload": {
+                "cosign_key": os.getenv("COSIGN_PRIVATE_KEY"),
+                "docker_username": username,
+                "docker_password": password,
+                "cosign_password": os.getenv("COSIGN_PASSWORD"),
+                "image_path": image_path,
+                "pull_tag": pull_tag,
+                "push_tag": push_tag,
+            },
         }
-    })
+    )
     headers = {
-        'Accept': 'application/vnd.github+json',
-        'Authorization': 'Bearer {}'.format(
+        "Accept": "application/vnd.github+json",
+        "Authorization": "Bearer {}".format(
             (os.getenv("GH_ACCESS_TOKEN") or "").strip()
         ),
-        'X-GitHub-Api-Version': '2022-11-28',
-        'Content-Type': 'application/json'
+        "X-GitHub-Api-Version": "2022-11-28",
+        "Content-Type": "application/json",
     }
     try:
         requests.request("POST", url, headers=headers, data=payload)
@@ -678,7 +651,6 @@ def trigger_signing_image(dockerhub_token: str,
         # Log only the type: messages of requests can quote the Authorization
         # header
         logger.error(
-            f"Triggering the signing of {push_tag} failed: "
-            f"{type(error).__name__}"
+            f"Triggering the signing of {push_tag} failed: {type(error).__name__}"
         )
         raise InternalServerError from None

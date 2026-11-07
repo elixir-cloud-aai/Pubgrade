@@ -1,46 +1,47 @@
-"""Tests for /subscriptions endpoint """
+"""Tests for /subscriptions endpoint"""
+
 import json
 import logging
 import threading
 import time
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-import mongomock
-import pytest
-import requests
 from flask import Flask
 from foca.models.config import Config, MongoConfig
+import mongomock
 from pymongo.errors import DuplicateKeyError
-from werkzeug.exceptions import Unauthorized, InternalServerError
+import pytest
+import requests
+from werkzeug.exceptions import InternalServerError, Unauthorized
 
 from pubgrade.errors.exceptions import (
+    BuildNotFound,
     RegistrationDisabled,
     RepositoryNotFound,
-    UserNotFound,
     SubscriptionNotFound,
     TooManySubscriptions,
-    BuildNotFound,
+    UserNotFound,
     UserNotVerified,
 )
 from pubgrade.modules.endpoints.subscriptions import (
-    register_subscription,
-    get_subscriptions,
-    get_subscription_info,
     delete_subscription,
+    get_subscription_info,
+    get_subscriptions,
     notify_all_subscriptions,
     notify_subscriptions,
+    register_subscription,
 )
 from tests.mock_data import (
-    MONGO_CONFIG,
     ENDPOINT_CONFIG,
-    MOCK_REPOSITORIES,
     MOCK_BUILD_INFO,
     MOCK_BUILD_INFO_2,
-    MOCK_USER,
+    MOCK_REPOSITORIES,
     MOCK_SUBSCRIPTION_INFO,
-    SUBSCRIPTION_PAYLOAD,
+    MOCK_USER,
     MOCK_USER_DB,
     MOCK_USER_NOT_VERIFIED,
+    MONGO_CONFIG,
+    SUBSCRIPTION_PAYLOAD,
 )
 
 
@@ -144,14 +145,12 @@ class TestSubscriptions:
                 SUBSCRIPTION_PAYLOAD,
             )
             data = (
-                self.app.config.foca
-                .db.dbs["pubgradeStore"]
+                self.app.config.foca.db.dbs["pubgradeStore"]
                 .collections["repositories"]
                 .client.find_one({"id": SUBSCRIPTION_PAYLOAD["repository_id"]})
             )
             subscription = (
-                self.app.config.foca
-                .db.dbs["pubgradeStore"]
+                self.app.config.foca.db.dbs["pubgradeStore"]
                 .collections["subscriptions"]
                 .client.find_one({"id": res["subscription_id"]})
             )
@@ -162,9 +161,7 @@ class TestSubscriptions:
     def test_register_subscription_closed(self):
         """Registration can be closed by configuration."""
         self.setup()
-        self.app.config.foca.endpoints["subscriptions"][
-            "registration_enabled"
-        ] = False
+        self.app.config.foca.endpoints["subscriptions"]["registration_enabled"] = False
         with self.app.app_context():
             with pytest.raises(RegistrationDisabled):
                 register_subscription(
@@ -176,9 +173,7 @@ class TestSubscriptions:
     def test_register_subscription_limit(self):
         """A repository takes no more subscriptions than configured."""
         self.setup()
-        self.app.config.foca.endpoints["subscriptions"][
-            "max_per_repository"
-        ] = 1
+        self.app.config.foca.endpoints["subscriptions"]["max_per_repository"] = 1
         with self.app.app_context():
             register_subscription(
                 MOCK_USER["uid"],
@@ -273,14 +268,9 @@ class TestSubscriptions:
             "users"
         ].client.insert_one(MOCK_USER_DB)
         with self.app.app_context():
-            res = get_subscriptions(
-                MOCK_USER["uid"], MOCK_USER["user_access_token"]
-            )
+            res = get_subscriptions(MOCK_USER["uid"], MOCK_USER["user_access_token"])
             assert isinstance(res, list)
-            assert (
-                res[0]["subscription_id"]
-                == MOCK_USER_DB["subscription_list"][0]
-            )
+            assert res[0]["subscription_id"] == MOCK_USER_DB["subscription_list"][0]
 
     def test_get_subscriptions_subscription_not_found(self):
         self.setup()
@@ -289,9 +279,7 @@ class TestSubscriptions:
         ].client.insert_one(MOCK_USER_DB)
         with self.app.app_context():
             with pytest.raises(SubscriptionNotFound):
-                get_subscriptions(
-                    MOCK_USER["uid"], MOCK_USER["user_access_token"]
-                )
+                get_subscriptions(MOCK_USER["uid"], MOCK_USER["user_access_token"])
 
     def test_get_subscriptions_unauthorized(self):
         self.setup()
@@ -454,8 +442,7 @@ class TestSubscriptions:
                 MOCK_BUILD_INFO["id"],
             )
             data = (
-                self.app.config.foca
-                .db.dbs["pubgradeStore"]
+                self.app.config.foca.db.dbs["pubgradeStore"]
                 .collections["subscriptions"]
                 .client.find_one({"id": MOCK_SUBSCRIPTION_INFO["id"]})
             )
@@ -500,8 +487,7 @@ class TestSubscriptions:
             assert result["result"] == "failed"
             assert result["http_status"] is None
             data = (
-                self.app.config.foca
-                .db.dbs["pubgradeStore"]
+                self.app.config.foca.db.dbs["pubgradeStore"]
                 .collections["subscriptions"]
                 .client.find_one({"id": MOCK_SUBSCRIPTION_INFO["id"]})
             )
@@ -520,8 +506,7 @@ class TestSubscriptions:
             assert result["result"] == "failed"
             assert result["http_status"] is None
             data = (
-                self.app.config.foca
-                .db.dbs["pubgradeStore"]
+                self.app.config.foca.db.dbs["pubgradeStore"]
                 .collections["subscriptions"]
                 .client.find_one({"id": MOCK_SUBSCRIPTION_INFO["id"]})
             )
@@ -540,8 +525,7 @@ class TestSubscriptions:
             assert result["result"] == "failed"
             assert result["http_status"] is None
             data = (
-                self.app.config.foca
-                .db.dbs["pubgradeStore"]
+                self.app.config.foca.db.dbs["pubgradeStore"]
                 .collections["subscriptions"]
                 .client.find_one({"id": MOCK_SUBSCRIPTION_INFO["id"]})
             )
@@ -559,8 +543,7 @@ class TestSubscriptions:
                 MOCK_BUILD_INFO["id"],
             )
             data = (
-                self.app.config.foca
-                .db.dbs["pubgradeStore"]
+                self.app.config.foca.db.dbs["pubgradeStore"]
                 .collections["subscriptions"]
                 .client.find_one({"id": MOCK_SUBSCRIPTION_INFO["id"]})
             )
@@ -580,8 +563,7 @@ class TestSubscriptions:
                 MOCK_BUILD_INFO["id"],
             )
             data = (
-                self.app.config.foca
-                .db.dbs["pubgradeStore"]
+                self.app.config.foca.db.dbs["pubgradeStore"]
                 .collections["subscriptions"]
                 .client.find_one({"id": MOCK_SUBSCRIPTION_INFO["id"]})
             )
@@ -651,8 +633,7 @@ class TestSubscriptions:
             The field `notifications` of the build.
         """
         return (
-            self.app.config.foca
-            .db.dbs["pubgradeStore"]
+            self.app.config.foca.db.dbs["pubgradeStore"]
             .collections["builds"]
             .client.find_one({"id": MOCK_BUILD_INFO["id"]})["notifications"]
         )
@@ -708,9 +689,7 @@ class TestSubscriptions:
 
         ids = [f"sub{i}" for i in range(6)]
         self.setup()
-        self.app.config.foca.endpoints["subscriptions"][
-            "max_per_repository"
-        ] = 2
+        self.app.config.foca.endpoints["subscriptions"]["max_per_repository"] = 2
         self.insert_subscriptions(*ids)
         with self.app.app_context(), patch("requests.request", request):
             results = notify_all_subscriptions(
@@ -757,9 +736,7 @@ class TestSubscriptions:
         self.setup()
         self.insert_subscriptions("sub1")
         with self.app.app_context():
-            notify_all_subscriptions(
-                ["sub1"], "org/image:1", MOCK_BUILD_INFO["id"]
-            )
+            notify_all_subscriptions(["sub1"], "org/image:1", MOCK_BUILD_INFO["id"])
         stored = self.get_stored_notifications()
         assert stored[0]["subscription_id"] == "sub1"
         assert stored[0]["http_status"] == 200
@@ -770,9 +747,7 @@ class TestSubscriptions:
         """Without subscriptions, the build has an empty list of results."""
         self.setup()
         with self.app.app_context():
-            results = notify_all_subscriptions(
-                [], "org/image:1", MOCK_BUILD_INFO["id"]
-            )
+            results = notify_all_subscriptions([], "org/image:1", MOCK_BUILD_INFO["id"])
         assert results == []
         assert self.get_stored_notifications() == []
 
@@ -786,16 +761,16 @@ class TestSubscriptions:
             return MagicMock(status_code=200)
 
         self.setup()
-        self.app.config.foca.endpoints["subscriptions"][
-            "notification_timeout"
-        ] = 0.1
+        self.app.config.foca.endpoints["subscriptions"]["notification_timeout"] = 0.1
         self.insert_subscriptions("hanging", "good")
         try:
-            with self.app.app_context(), patch(
-                "requests.request", request
-            ), patch(
-                "pubgrade.modules.endpoints.subscriptions.NOTIFICATION_MARGIN",
-                0,
+            with (
+                self.app.app_context(),
+                patch("requests.request", request),
+                patch(
+                    "pubgrade.modules.endpoints.subscriptions.NOTIFICATION_MARGIN",
+                    0,
+                ),
             ):
                 results = notify_all_subscriptions(
                     ["hanging", "good"], "org/image:1", MOCK_BUILD_INFO["id"]

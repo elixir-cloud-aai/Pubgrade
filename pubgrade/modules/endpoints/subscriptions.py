@@ -1,26 +1,27 @@
 from concurrent.futures import ThreadPoolExecutor, wait
+import json
 import logging
 from typing import Any, Dict, List, Optional
 
+from flask import current_app
+from foca import get_config
+from pymongo.errors import DuplicateKeyError
 import requests
+from werkzeug.exceptions import Unauthorized
+
 from pubgrade.charsets import get_charset
-from pubgrade.timestamps import now, repaired_subscription
 from pubgrade.errors.exceptions import (
-    RegistrationDisabled,
-    RepositoryNotFound,
-    UserNotFound,
-    SubscriptionNotFound,
-    TooManySubscriptions,
     BuildNotFound,
     InternalServerError,
+    RegistrationDisabled,
+    RepositoryNotFound,
+    SubscriptionNotFound,
+    TooManySubscriptions,
+    UserNotFound,
     UserNotVerified,
 )
 from pubgrade.modules.endpoints.repositories import generate_id
-from flask import current_app
-from foca import get_config
-import json
-from pymongo.errors import DuplicateKeyError
-from werkzeug.exceptions import Unauthorized
+from pubgrade.timestamps import now, repaired_subscription
 
 logger = logging.getLogger(__name__)
 
@@ -57,32 +58,19 @@ def register_subscription(uid: str, user_access_token: str, data: dict):
         TooManySubscriptions: Raised when the repository has reached the limit
         `endpoints.subscriptions.max_per_repository`.
     """
-    if not get_config().endpoints["subscriptions"].get(
-        "registration_enabled", True
-    ):
+    if not get_config().endpoints["subscriptions"].get("registration_enabled", True):
         raise RegistrationDisabled
     db_collection_subscriptions = (
-        get_config()
-        .db.dbs["pubgradeStore"]
-        .collections["subscriptions"]
-        .client
+        get_config().db.dbs["pubgradeStore"].collections["subscriptions"].client
     )
     db_collection_user = (
-        get_config()
-        .db.dbs["pubgradeStore"]
-        .collections["users"]
-        .client
+        get_config().db.dbs["pubgradeStore"].collections["users"].client
     )
     db_collection_repositories = (
-        get_config()
-        .db.dbs["pubgradeStore"]
-        .collections["repositories"]
-        .client
+        get_config().db.dbs["pubgradeStore"].collections["repositories"].client
     )
     retries = get_config().endpoints["repository"]["retries"]
-    id_length: int = get_config().endpoints["repository"][
-        "id_length"
-    ]
+    id_length: int = get_config().endpoints["repository"]["id_length"]
     id_charset = get_charset("repository", "id_charset")
     data_from_db_user = db_collection_user.find_one({"uid": uid})
     data_from_db_repository = db_collection_repositories.find_one(
@@ -96,9 +84,12 @@ def register_subscription(uid: str, user_access_token: str, data: dict):
         raise Unauthorized
     if data_from_db_repository is None:
         raise RepositoryNotFound
-    if db_collection_subscriptions.count_documents(
-        {"repository_id": data["repository_id"]}
-    ) >= _max_subscriptions():
+    if (
+        db_collection_subscriptions.count_documents(
+            {"repository_id": data["repository_id"]}
+        )
+        >= _max_subscriptions()
+    ):
         raise TooManySubscriptions
     for i in range(retries):
         logger.debug(f"Trying to insert/update object: try {i}")
@@ -121,14 +112,12 @@ def register_subscription(uid: str, user_access_token: str, data: dict):
             break
         except DuplicateKeyError:
             logger.error(
-                f"DuplicateKeyError ({data['id']}): Key "
-                f"generated is already present."
+                f"DuplicateKeyError ({data['id']}): Key generated is already present."
             )
             continue
     else:
         logger.error(
-            f"Could not generate unique identifier."
-            f" Tried {retries + 1} times."
+            f"Could not generate unique identifier. Tried {retries + 1} times."
         )
         raise InternalServerError
     return {"subscription_id": data["id"]}
@@ -152,10 +141,7 @@ def get_subscriptions(uid: str, user_access_token: str):
         UserNotFound: Raised when there is no user with specified uid.
     """
     db_collection_user = (
-        get_config()
-        .db.dbs["pubgradeStore"]
-        .collections["users"]
-        .client
+        get_config().db.dbs["pubgradeStore"].collections["users"].client
     )
     data_from_db_user = db_collection_user.find_one({"uid": uid})
     if data_from_db_user is None:
@@ -173,9 +159,7 @@ def get_subscriptions(uid: str, user_access_token: str):
         raise SubscriptionNotFound
 
 
-def get_subscription_info(
-    uid: str, user_access_token: str, subscription_id: str
-):
+def get_subscription_info(uid: str, user_access_token: str, subscription_id: str):
     """Retrieve subscription information.
 
     Args:
@@ -194,16 +178,10 @@ def get_subscription_info(
         UserNotFound: Raised when there is no user with specified uid.
     """
     db_collection_user = (
-        get_config()
-        .db.dbs["pubgradeStore"]
-        .collections["users"]
-        .client
+        get_config().db.dbs["pubgradeStore"].collections["users"].client
     )
     db_collection_subscriptions = (
-        get_config()
-        .db.dbs["pubgradeStore"]
-        .collections["subscriptions"]
-        .client
+        get_config().db.dbs["pubgradeStore"].collections["subscriptions"].client
     )
     data_from_db_user = db_collection_user.find_one({"uid": uid})
     if data_from_db_user is None:
@@ -214,9 +192,7 @@ def get_subscription_info(
         raise Unauthorized
     if subscription_id not in data_from_db_user.get("subscription_list", []):
         raise SubscriptionNotFound
-    subscription_object = db_collection_subscriptions.find_one(
-        {"id": subscription_id}
-    )
+    subscription_object = db_collection_subscriptions.find_one({"id": subscription_id})
     if subscription_object is None:
         raise SubscriptionNotFound
     del subscription_object["_id"]
@@ -224,9 +200,7 @@ def get_subscription_info(
     return repaired_subscription(subscription_object)
 
 
-def delete_subscription(
-    uid: str, user_access_token: str, subscription_id: str
-):
+def delete_subscription(uid: str, user_access_token: str, subscription_id: str):
     """Delete subscription.
 
     Args:
@@ -246,16 +220,10 @@ def delete_subscription(
         UserNotFound: Raised when there is no user with specified uid.
     """
     db_collection_user = (
-        get_config()
-        .db.dbs["pubgradeStore"]
-        .collections["users"]
-        .client
+        get_config().db.dbs["pubgradeStore"].collections["users"].client
     )
     db_collection_subscriptions = (
-        get_config()
-        .db.dbs["pubgradeStore"]
-        .collections["subscriptions"]
-        .client
+        get_config().db.dbs["pubgradeStore"].collections["subscriptions"].client
     )
     data_from_db_user = db_collection_user.find_one({"uid": uid})
     if data_from_db_user is None:
@@ -299,23 +267,15 @@ def notify_subscriptions(
         found.
     """
     db_collection_subscriptions = (
-        get_config()
-        .db.dbs["pubgradeStore"]
-        .collections["subscriptions"]
-        .client
+        get_config().db.dbs["pubgradeStore"].collections["subscriptions"].client
     )
     db_collection_builds = (
-        get_config()
-        .db.dbs["pubgradeStore"]
-        .collections["builds"]
-        .client
+        get_config().db.dbs["pubgradeStore"].collections["builds"].client
     )
     build_object = db_collection_builds.find_one({"id": build_id})
     if build_object is None:
         raise BuildNotFound
-    subscription_object = db_collection_subscriptions.find_one(
-        {"id": subscription_id}
-    )
+    subscription_object = db_collection_subscriptions.find_one({"id": subscription_id})
     if subscription_object is None:
         raise SubscriptionNotFound
     head_commit = build_object["head_commit"]
@@ -352,13 +312,10 @@ def notify_subscriptions(
         result = "delivered" if 200 <= http_status < 300 else "failed"
     except requests.exceptions.RequestException as error:
         logger.error(
-            f"Notifying subscription {subscription_id} failed: "
-            f"{type(error).__name__}"
+            f"Notifying subscription {subscription_id} failed: {type(error).__name__}"
         )
         result = "failed"
-    subscription_object["state"] = (
-        "Active" if result == "delivered" else "Inactive"
-    )
+    subscription_object["state"] = "Active" if result == "delivered" else "Inactive"
     subscription_object["updated_at"] = now()
     db_collection_subscriptions.update_one(
         {"id": subscription_id}, {"$set": subscription_object}
@@ -404,9 +361,7 @@ def notify_all_subscriptions(
                 # Deleting a subscription leaves its ID at the repository
                 return _notification_result(subscription_id, "skipped")
             except Exception:
-                logger.exception(
-                    f"Notifying subscription {subscription_id} failed."
-                )
+                logger.exception(f"Notifying subscription {subscription_id} failed.")
                 return _notification_result(subscription_id, "failed")
 
     results: List[Dict[str, Any]] = []
@@ -429,9 +384,9 @@ def notify_all_subscriptions(
             else _notification_result(subscription_id, "failed")
             for future, subscription_id in futures.items()
         ]
-    app.config.foca.db.dbs["pubgradeStore"].collections[
-        "builds"
-    ].client.update_one({"id": build_id}, {"$set": {"notifications": results}})
+    app.config.foca.db.dbs["pubgradeStore"].collections["builds"].client.update_one(
+        {"id": build_id}, {"$set": {"notifications": results}}
+    )
     return results
 
 
@@ -441,8 +396,10 @@ def _max_subscriptions() -> int:
     Returns:
         The setting `endpoints.subscriptions.max_per_repository`.
     """
-    return get_config().endpoints["subscriptions"].get(
-        "max_per_repository", DEFAULT_MAX_SUBSCRIPTIONS
+    return (
+        get_config()
+        .endpoints["subscriptions"]
+        .get("max_per_repository", DEFAULT_MAX_SUBSCRIPTIONS)
     )
 
 
@@ -452,8 +409,10 @@ def _notification_timeout() -> float:
     Returns:
         The setting `endpoints.subscriptions.notification_timeout`, in seconds.
     """
-    return get_config().endpoints["subscriptions"].get(
-        "notification_timeout", DEFAULT_NOTIFICATION_TIMEOUT
+    return (
+        get_config()
+        .endpoints["subscriptions"]
+        .get("notification_timeout", DEFAULT_NOTIFICATION_TIMEOUT)
     )
 
 

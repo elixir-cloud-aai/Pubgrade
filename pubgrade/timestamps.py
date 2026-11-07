@@ -69,9 +69,7 @@ def _repaired_fields(document: Dict[str, Any], fields: List[str]) -> Dict[str, A
         field: _repaired(document[field]) for field in fields if field in document
     }
     return {
-        field: value
-        for field, value in repaired.items()
-        if value != document[field]
+        field: value for field, value in repaired.items() if value != document[field]
     }
 
 

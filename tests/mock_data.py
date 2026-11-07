@@ -54,10 +54,10 @@ ENDPOINT_CONFIG = {
         }
     },
     "builds": {
-            "enabled": True,
-            "gh_action_path": "akash2237778/pubgrade-signer",
-            "intermediate_registery_format": "ttl.sh/{}:1h"
-        },
+        "enabled": True,
+        "gh_action_path": "akash2237778/pubgrade-signer",
+        "intermediate_registery_format": "ttl.sh/{}:1h",
+    },
 }
 
 MOCK_REPOSITORY_1 = {
@@ -85,12 +85,10 @@ MOCK_POST_REPOSITORY = {
 }
 
 MOCK_BUILD_INFO = {
-    "images": [
-        {"name": "akash7778/test-updater:0.0.1", "location": "./Dockerfile"}
-    ],
+    "images": [{"name": "akash7778/test-updater:0.0.1", "location": "./Dockerfile"}],
     "head_commit": {
         "branch": "main",
-        "commit_sha": "8cd58eb160014c91e4f181562352" "c693d3442c52",
+        "commit_sha": "8cd58eb160014c91e4f181562352c693d3442c52",
     },
     "dockerhub_token": "dXNlcjpwYXNzd2Q=",
     "id": "eiic.gngdgrs",
@@ -99,9 +97,7 @@ MOCK_BUILD_INFO = {
     "status": "QUEUED",
 }
 MOCK_BUILD_INFO_2 = {
-    "images": [
-        {"name": "akash7778/updater:0.0.1", "location": "./Dockerfile"}
-    ],
+    "images": [{"name": "akash7778/updater:0.0.1", "location": "./Dockerfile"}],
     "head_commit": {"tag": "0.4.2"},
     "dockerhub_token": "dockerhub token",
     "id": "eiic.gnabmns",
@@ -111,9 +107,7 @@ MOCK_BUILD_INFO_2 = {
 }
 
 MOCK_BUILD_PAYLOAD = {
-    "images": [
-        {"name": "akash7778/test-updater:0.0.1", "location": "./Dockerfile"}
-    ],
+    "images": [{"name": "akash7778/test-updater:0.0.1", "location": "./Dockerfile"}],
     "head_commit": {
         "branch": "main",
         "commit_sha": "8cd58eb160014c91e4f181562352c693d3442c52",
@@ -124,8 +118,7 @@ MOCK_BUILD_PAYLOAD = {
 MOCK_SUBSCRIPTION = {"subscription_id": "subscription-xyz"}
 MOCK_SUBSCRIPTION_INFO = {
     "repository_id": "eiic.g",
-    "callback_url": "https://ec2-54-203-145-132."
-    "compute-1.amazonaws.com/update",
+    "callback_url": "https://ec2-54-203-145-132.compute-1.amazonaws.com/update",
     "access_token": "xxxxxxxxxxxx",
     "type": "branch",
     "value": "main",
@@ -162,8 +155,7 @@ MOCK_USER_DB = {
 }
 SUBSCRIPTION_PAYLOAD = {
     "repository_id": "eiic.g",
-    "callback_url": "https://ec2-54-203-145-132."
-    "compute-1.amazonaws.com/update",
+    "callback_url": "https://ec2-54-203-145-132.compute-1.amazonaws.com/update",
     "access_token": "xxxxxxxxxxxx",
     "type": "tag",
     "value": "dev",

@@ -1,11 +1,10 @@
 from connexion.exceptions import (
+    BadRequestProblem,
     ExtraParameterProblem,
     Forbidden,
     Unauthorized,
-    BadRequestProblem,
 )
 from git import GitCommandError
-
 from werkzeug.exceptions import (
     BadRequest,
     InternalServerError,
@@ -179,9 +178,7 @@ exceptions = {
     GitCommandError: {
         "title": "Internal Server Error",
         "status": 500,
-        "detail": (
-            "An unexpected error occurred while cloning the Git repository."
-        ),
+        "detail": ("An unexpected error occurred while cloning the Git repository."),
     },
     OSError: {
         "title": "Internal Server Error",
@@ -192,8 +189,7 @@ exceptions = {
         "title": "Internal Server Error",
         "status": 500,
         "detail": (
-            "Unable to delete the pod; check the deployment name and "
-            "namespace."
+            "Unable to delete the pod; check the deployment name and namespace."
         ),
     },
     CreatePodError: {
