@@ -3,11 +3,11 @@ info:
   title: 'ELIXIR Pubgrade Registry API Specification'
   version: 2.0.0
   description: |
-    Pubgrade leverages the publish-subscribe (pub/sub) pattern to effectively 
-    decouple continuous integration (CI) from continuous deilivery (CD): 
-    developers can call Pubgrade in their CI pipelines to notify deployments of 
-    available updates ("publish"), while deployments can listen to update 
-    notifications ("subscribe") and trigger specific CD pipelines set up by 
+    Pubgrade leverages the publish-subscribe (pub/sub) pattern to effectively
+    decouple continuous integration (CI) from continuous deilivery (CD):
+    developers can call Pubgrade in their CI pipelines to notify deployments of
+    available updates ("publish"), while deployments can listen to update
+    notifications ("subscribe") and trigger specific CD pipelines set up by
     administrators.
 
     Pubgrade is particularly useful wherever deployments are managed by different
@@ -26,14 +26,14 @@ paths:
   /repositories:
     post:
       summary: 'Register repository'
-      description: Register a repository to enable publishing updates via the 
+      description: Register a repository to enable publishing updates via the
         `/repositories/{id}/builds` endpoint and allow administrators to
         subscribe to them.
       operationId: postRepositories
       tags:
         - repositories
       requestBody:
-        description: Schema for repository 
+        description: Schema for repository
         required: true
         content:
           application/json:
@@ -71,8 +71,8 @@ paths:
           $ref: '#/components/responses/Error'
     get:
       summary: 'List available repositories.'
-      description: List available repositories to publish updates via the 
-        `/repositories/{id}/builds` endpoint. Administrators can use this 
+      description: List available repositories to publish updates via the
+        `/repositories/{id}/builds` endpoint. Administrators can use this
         endpoint to get repository identifier which is used to subscribe service
         at `POST /subscriptions` endpoint.
       operationId: getRepositories
@@ -101,7 +101,7 @@ paths:
   /repositories/{id}:
     get:
       summary: Show repository information.
-      description: Show repository information like repository url, repository 
+      description: Show repository information like repository url, repository
         identifier for specific repository.
       operationId: getRepository
       tags:
@@ -131,7 +131,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
         default:
-          $ref: '#/components/responses/Error'  
+          $ref: '#/components/responses/Error'
     put:
       summary: Modify registered repository
       description: Modify already registered repository for any changes.
@@ -151,10 +151,10 @@ paths:
           required: true
           schema:
             type: string
-          description: Secret used to identify source, generated when first 
+          description: Secret used to identify source, generated when first
             registering the repository via `POST /repositories`
       requestBody:
-        description: Schema for repository 
+        description: Schema for repository
         required: true
         content:
           application/json:
@@ -192,8 +192,8 @@ paths:
           $ref: '#/components/responses/Error'
     delete:
       summary: 'Delete repository'
-      description: Delete repository from pubgrade permanently. It removes 
-        available builds and discard administrator's subscription for the 
+      description: Delete repository from pubgrade permanently. It removes
+        available builds and discard administrator's subscription for the
         repository.
       operationId: deleteRepository
       tags:
@@ -211,7 +211,7 @@ paths:
           required: true
           schema:
             type: string
-          description: Secret used to identify source, generated when first 
+          description: Secret used to identify source, generated when first
             registering the repository via `POST /repositories`
       responses:
         '200':
@@ -233,12 +233,12 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
         default:
-          $ref: '#/components/responses/Error'  
+          $ref: '#/components/responses/Error'
   /repositories/{id}/builds:
     post:
       summary: 'Register new build for repository.'
-      description: Register a new build for already registered repository. 
-        Ideally this endpoint is directly called by continuous integration (CI) 
+      description: Register a new build for already registered repository.
+        Ideally this endpoint is directly called by continuous integration (CI)
         pipelines. With builds switched off (the default), the request names one
         prebuilt image with a tag and no `location` or `dockerhub_token`, and
         Pubgrade notifies the repository's subscriptions of it; the build's
@@ -253,14 +253,14 @@ paths:
           required: true
           schema:
             type: string
-          description: Identifier generated when first registering the 
+          description: Identifier generated when first registering the
             repository via `POST /repositories`.
         - in: header
           name: X-Project-Access-Token
           required: true
           schema:
             type: string
-          description: Secret used to identify source, generated when first 
+          description: Secret used to identify source, generated when first
             registering the repository via `POST /repositories`
       requestBody:
         required: true
@@ -287,7 +287,7 @@ paths:
                 properties:
                     id:
                       type: string
-                      description: Unique identifier generated on registering 
+                      description: Unique identifier generated on registering
                         new build. It can be used later to check build status.
                       example: build_123
                 additionalProperties: false
@@ -303,7 +303,7 @@ paths:
           $ref: '#/components/responses/Error'
     get:
       summary: 'List available builds for repository.'
-      description: List available builds for repository with build information 
+      description: List available builds for repository with build information
         like build identifier, build status, build start time etc.
       operationId: getBuilds
       tags:
@@ -314,7 +314,7 @@ paths:
           required: true
           schema:
             type: string
-          description: Identifier generated when first registering the 
+          description: Identifier generated when first registering the
             repository via `POST /repositories`.
       responses:
         '200':
@@ -339,7 +339,7 @@ paths:
   /repositories/{id}/builds/{build_id}:
     get:
       summary: Show build information.
-      description: Show build information like build status, build start time 
+      description: Show build information like build status, build start time
         etc. for individual build.
       operationId: getBuildInfo
       tags:
@@ -350,7 +350,7 @@ paths:
           required: true
           schema:
             type: string
-          description: Identifier generated when first registering the 
+          description: Identifier generated when first registering the
             repository via `POST /repositories`.
         - in: path
           name: build_id
@@ -390,7 +390,7 @@ paths:
           required: true
           schema:
             type: string
-          description: Identifier generated when first registering the 
+          description: Identifier generated when first registering the
             repository via `POST /repositories`.
         - in: path
           name: build_id
@@ -404,7 +404,7 @@ paths:
           required: true
           schema:
             type: string
-          description: Secret used to identify source, generated when first 
+          description: Secret used to identify source, generated when first
             registering the repository via `POST /repositories`
       requestBody:
         required: true
@@ -415,7 +415,7 @@ paths:
                 properties:
                     id:
                       type: string
-                      description: Unique identifier generated on registering 
+                      description: Unique identifier generated on registering
                         new build. It can be used later to check build status.
                       example: build_123
                 additionalProperties: false
@@ -429,7 +429,7 @@ paths:
                 properties:
                     id:
                       type: string
-                      description: Unique identifier generated on registering 
+                      description: Unique identifier generated on registering
                         new build. It can be used later to check build status.
                       example: build_123
                 additionalProperties: false
@@ -477,7 +477,7 @@ paths:
                   properties:
                     access_token:
                         type: string
-                        description: Secret used by continuous delivery (CD) 
+                        description: Secret used by continuous delivery (CD)
                           pipelines to verify request source for `callback_url`.
                         example: xxxxxxxxxxxx
                   required:
@@ -510,7 +510,7 @@ paths:
         default:
           $ref: '#/components/responses/Error'
     get:
-      description: List subcription_id's of all subscribed repositories for 
+      description: List subcription_id's of all subscribed repositories for
         particular user identified by `X-User-Access-Token`
       summary: List subscribed subscription_id's
       operationId: getSubscriptions
@@ -569,7 +569,7 @@ paths:
           required: true
           schema:
             type: string
-          description: Identifier generated when registering new subscription 
+          description: Identifier generated when registering new subscription
             via `POST /subscriptions`
         - in: header
           name: X-User-Access-Token
@@ -638,7 +638,7 @@ paths:
           required: true
           schema:
             type: string
-          description: Identifier generated when registering new subscription 
+          description: Identifier generated when registering new subscription
             via `POST /subscriptions`
         - in: header
           name: X-User-Access-Token
@@ -1069,7 +1069,7 @@ components:
         callback_url:
             type: string
             format: uri
-            description: URL on which continuous delivery (CD) pipeline is 
+            description: URL on which continuous delivery (CD) pipeline is
               listening for image updates.
             example: https://ec2-54-203-145-132.compute-1.amazonaws.com/update
         type:
@@ -1113,19 +1113,19 @@ components:
           type: integer
           format: int32
           description: |
-            HTTP status code (as per 
-            [RFC 7231](https://tools.ietf.org/html/rfc7231)) generated by the 
-            server for this occurrence of the problem. This must match the 
-            status code in the actual HTTP response. Used for convenience of 
-            clients (e.g. to determine what the original status code was in 
-            cases where it has been changed by an intermediary or cache or when 
+            HTTP status code (as per
+            [RFC 7231](https://tools.ietf.org/html/rfc7231)) generated by the
+            server for this occurrence of the problem. This must match the
+            status code in the actual HTTP response. Used for convenience of
+            clients (e.g. to determine what the original status code was in
+            cases where it has been changed by an intermediary or cache or when
             message bodies persist without HTTP information).
           example: 500
         title:
           type: string
           description: |
             A short, human-readable description of the error.
-            The value should not change from occurrence to occurrence of an 
+            The value should not change from occurrence to occurrence of an
             error, except for purposes of localization.
           example: 'Internal server error'
         detail:

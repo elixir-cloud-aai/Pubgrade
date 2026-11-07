@@ -2,7 +2,8 @@
 
 The release workflow (`.github/workflows/release.yml`) releases the images
 and the chart together, with one version: the tag `vX.Y.Z` must match
-`__version__` in `pubgrade/__init__.py` and `appVersion` in `helm/Chart.yaml`,
+`version` in `[project]` of `pyproject.toml` and `appVersion` in
+`helm/Chart.yaml`,
 and the chart's `version` must be the SemVer form of it (e.g., `1.2.3-rc1` for
 `1.2.3rc1`). The release-prep pull request sets them (see "Versioning and
 releases" in `docs/development.md`). Errors are printed as GitHub annotations
@@ -18,11 +19,11 @@ Only the stdlib is used, so the workflow runs it without installing the app.
 from __future__ import annotations
 
 import argparse
-import ast
 from collections.abc import Sequence
 from pathlib import Path
 import re
 import sys
+import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -44,37 +45,22 @@ def _chart_key(name: str) -> re.Pattern[str]:
     )
 
 
-def app_version(text: str) -> str | None:
-    """Return the version of the app (`__version__`).
+def project_version(text: str) -> str | None:
+    """Return the version in `[project]` of `pyproject.toml`.
 
     Args:
-        text: Content of `pubgrade/__init__.py`.
+        text: Content of `pyproject.toml`.
 
     Returns:
-        The version, or `None` unless the module assigns `__version__` at the
-        top level exactly once, and to a string literal.
+        The version, or `None` unless it is a string; also if the file can't
+        be parsed.
     """
     try:
-        module = ast.parse(text)
-    except SyntaxError:
+        project = tomllib.loads(text).get("project", {})
+    except tomllib.TOMLDecodeError:
         return None
-    values = [
-        node.value
-        for node in module.body
-        if isinstance(node, (ast.Assign, ast.AnnAssign, ast.AugAssign))
-        and any(
-            isinstance(target, ast.Name) and target.id == "__version__"
-            for target in (
-                node.targets if isinstance(node, ast.Assign) else [node.target]
-            )
-        )
-    ]
-    if len(values) != 1:
-        return None
-    value = values[0]
-    if isinstance(value, ast.Constant) and isinstance(value.value, str):
-        return value.value
-    return None
+    version = project.get("version") if isinstance(project, dict) else None
+    return version if isinstance(version, str) else None
 
 
 def chart_value(text: str, name: str) -> str | None:
@@ -102,10 +88,10 @@ def check(version: str, chart_version: str, root: Path = ROOT) -> list[str]:
     Returns:
         One error message per mismatch; empty if all versions match.
     """
-    app = (root / "pubgrade/__init__.py").read_text(encoding="utf-8")
+    pyproject = (root / "pyproject.toml").read_text(encoding="utf-8")
     chart = (root / "helm/Chart.yaml").read_text(encoding="utf-8")
     expected = [
-        ("pubgrade/__init__.py", "__version__", app_version(app), version),
+        ("pyproject.toml", "[project] version", project_version(pyproject), version),
         ("helm/Chart.yaml", "version", chart_value(chart, "version"), chart_version),
         ("helm/Chart.yaml", "appVersion", chart_value(chart, "appVersion"), version),
     ]

@@ -1,11 +1,11 @@
-"""Tests for /users endpoint"""
+"""Tests for the /users endpoint."""
 
 import logging
 import string
 from unittest.mock import MagicMock
 
 from flask import Flask
-from foca.models.config import Config, MongoConfig
+from foca.models.config import MongoConfig
 import mongomock
 from pymongo.errors import DuplicateKeyError
 import pytest
@@ -23,6 +23,7 @@ from pubgrade.modules.endpoints.users import (
     sanitise_text,
     toggle_user_status,
 )
+from tests.helpers import foca_config, set_foca
 from tests.mock_data import (
     ENDPOINT_CONFIG,
     MOCK_ADMIN_USER_1,
@@ -34,26 +35,28 @@ from tests.mock_data import (
 
 
 class TestUsers:
+    """Tests for the user controllers."""
+
     app = Flask(__name__)
 
-    def setup(self):
-        self.app.config.foca = Config(
-            db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG
-        )
-        self.app.config.foca.db.dbs["pubgradeStore"].collections[
+    def setup(self) -> None:
+        """Prepare the configuration with a user and an admin user."""
+        set_foca(self.app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
+        foca_config(self.app).db.dbs["pubgradeStore"].collections[
             "users"
         ].client = mongomock.MongoClient().db.collection
-        self.app.config.foca.db.dbs["pubgradeStore"].collections[
+        foca_config(self.app).db.dbs["pubgradeStore"].collections[
             "users"
         ].client.insert_one(MOCK_USER_DB)
-        self.app.config.foca.db.dbs["pubgradeStore"].collections[
+        foca_config(self.app).db.dbs["pubgradeStore"].collections[
             "admin_users"
         ].client = mongomock.MongoClient().db.collection
-        self.app.config.foca.db.dbs["pubgradeStore"].collections[
+        foca_config(self.app).db.dbs["pubgradeStore"].collections[
             "admin_users"
         ].client.insert_one(MOCK_ADMIN_USER_1)
 
-    def test_register_user(self):
+    def test_register_user(self) -> None:
+        """A registered user gets an identifier, a token and its name."""
         self.setup()
         with self.app.app_context():
             name = "Akash Saini"
@@ -63,10 +66,14 @@ class TestUsers:
             assert "name" in response
             assert sanitise_text(name) == response["name"]
 
-    def test_register_user_charsets(self, monkeypatch):
-        """Identifiers and tokens use the characters the settings name."""
+    def test_register_user_charsets(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Identifiers and tokens use the characters the settings name.
+
+        Args:
+            monkeypatch: Fixture to change the settings.
+        """
         self.setup()
-        endpoints = self.app.config.foca.endpoints
+        endpoints = foca_config(self.app).endpoints
         monkeypatch.setitem(endpoints["user"], "uid_charset", "string.ascii_uppercase")
         monkeypatch.setitem(endpoints["access_token"], "charset", ["x", "y"])
         with self.app.app_context():
@@ -76,8 +83,14 @@ class TestUsers:
         assert len(response["user_access_token"]) == 32
         assert set(response["user_access_token"]) <= {"x", "y"}
 
-    def test_register_user_logs_no_token(self, caplog):
-        """Log messages name the new user, without its token."""
+    def test_register_user_logs_no_token(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Log messages name the new user, without its token.
+
+        Args:
+            caplog: Fixture to capture log messages.
+        """
         self.setup()
         caplog.set_level(logging.DEBUG)
         with self.app.app_context():
@@ -85,43 +98,44 @@ class TestUsers:
         assert response["uid"] in caplog.text
         assert response["user_access_token"] not in caplog.text
 
-    def test_register_user_closed(self):
+    def test_register_user_closed(self) -> None:
         """Registration can be closed by configuration."""
         self.setup()
-        self.app.config.foca.endpoints["user"]["registration_enabled"] = False
-        with self.app.app_context():
-            with pytest.raises(RegistrationDisabled):
-                register_user({"name": "Name"})
+        foca_config(self.app).endpoints["user"]["registration_enabled"] = False
+        with self.app.app_context(), pytest.raises(RegistrationDisabled):
+            register_user({"name": "Name"})
 
-    def test_register_user_keyerror(self):
+    def test_register_user_keyerror(self) -> None:
+        """Registration without a name fails."""
         self.setup()
-        with self.app.app_context():
-            with pytest.raises(NameNotFound):
-                register_user({"wrong_name_key": "Akash Saini"})
+        with self.app.app_context(), pytest.raises(NameNotFound):
+            register_user({"wrong_name_key": "Akash Saini"})
 
-    def test_register_user_duplicate_key_error(self):
+    def test_register_user_duplicate_key_error(self) -> None:
+        """A duplicate key on insertion is an internal error."""
         app = Flask(__name__)
-        app.config.foca = Config(
+        set_foca(
+            app,
             db=MongoConfig(**MONGO_CONFIG),
             endpoints=ENDPOINT_CONFIG,
         )
         mock_resp = MagicMock(side_effect=DuplicateKeyError(""))
-        app.config.foca.db.dbs["pubgradeStore"].collections[
+        foca_config(app).db.dbs["pubgradeStore"].collections[
             "users"
         ].client = MagicMock()
-        app.config.foca.db.dbs["pubgradeStore"].collections[
+        foca_config(app).db.dbs["pubgradeStore"].collections[
             "users"
         ].client.insert_one = mock_resp
-        with app.app_context():
-            with pytest.raises(InternalServerError):
-                register_user({"name": "Akash Saini"})
+        with app.app_context(), pytest.raises(InternalServerError):
+            register_user({"name": "Akash Saini"})
 
-    def test_delete_user(self):
+    def test_delete_user(self) -> None:
+        """A user can delete itself."""
         self.setup()
-        self.app.config.foca.db.dbs["pubgradeStore"].collections[
+        foca_config(self.app).db.dbs["pubgradeStore"].collections[
             "subscriptions"
         ].client = mongomock.MongoClient().db.collection
-        self.app.config.foca.db.dbs["pubgradeStore"].collections[
+        foca_config(self.app).db.dbs["pubgradeStore"].collections[
             "subscriptions"
         ].client.insert_one(MOCK_SUBSCRIPTION_INFO)
         with self.app.app_context():
@@ -131,46 +145,48 @@ class TestUsers:
             )
             assert response == "User deleted successfully."
 
-    def test_delete_user_user_not_found(self):
+    def test_delete_user_user_not_found(self) -> None:
+        """Deleting an unknown user fails."""
         self.setup()
-        self.app.config.foca.db.dbs["pubgradeStore"].collections[
+        foca_config(self.app).db.dbs["pubgradeStore"].collections[
             "subscriptions"
         ].client = mongomock.MongoClient().db.collection
-        self.app.config.foca.db.dbs["pubgradeStore"].collections[
+        foca_config(self.app).db.dbs["pubgradeStore"].collections[
             "subscriptions"
         ].client.insert_one(MOCK_SUBSCRIPTION_INFO)
-        with self.app.app_context():
-            with pytest.raises(UserNotFound):
-                delete_user(
-                    uid="wrong_uid",
-                    user_access_token=MOCK_USER["user_access_token"],
-                )
+        with self.app.app_context(), pytest.raises(UserNotFound):
+            delete_user(
+                uid="wrong_uid",
+                user_access_token=MOCK_USER["user_access_token"],
+            )
 
-    def test_delete_user_unauthorized(self):
+    def test_delete_user_unauthorized(self) -> None:
+        """Deleting a user with a wrong token fails."""
         self.setup()
-        self.app.config.foca.db.dbs["pubgradeStore"].collections[
+        foca_config(self.app).db.dbs["pubgradeStore"].collections[
             "subscriptions"
         ].client = mongomock.MongoClient().db.collection
-        self.app.config.foca.db.dbs["pubgradeStore"].collections[
+        foca_config(self.app).db.dbs["pubgradeStore"].collections[
             "subscriptions"
         ].client.insert_one(MOCK_SUBSCRIPTION_INFO)
-        with self.app.app_context():
-            with pytest.raises(Unauthorized):
-                delete_user(
-                    uid=MOCK_USER["uid"],
-                    user_access_token="wrong_access_token",
-                )
+        with self.app.app_context(), pytest.raises(Unauthorized):
+            delete_user(
+                uid=MOCK_USER["uid"],
+                user_access_token="wrong_access_token",
+            )
 
-    def test_delete_key_error(self):
-        self.app.config.foca = Config(
-            db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG
-        )
-        self.app.config.foca.db.dbs["pubgradeStore"].collections[
+    def test_delete_key_error(self) -> None:
+        """A user without subscriptions can be deleted."""
+        set_foca(self.app, db=MongoConfig(**MONGO_CONFIG), endpoints=ENDPOINT_CONFIG)
+        foca_config(self.app).db.dbs["pubgradeStore"].collections[
             "users"
         ].client = mongomock.MongoClient().db.collection
-        self.app.config.foca.db.dbs["pubgradeStore"].collections[
+        foca_config(self.app).db.dbs["pubgradeStore"].collections[
             "users"
         ].client.insert_one(MOCK_USER)
+        foca_config(self.app).db.dbs["pubgradeStore"].collections[
+            "subscriptions"
+        ].client = mongomock.MongoClient().db.subscriptions
         with self.app.app_context():
             response = delete_user(
                 uid=MOCK_USER["uid"],
@@ -178,7 +194,8 @@ class TestUsers:
             )
             assert response == "User deleted successfully."
 
-    def test_get_users(self):
+    def test_get_users(self) -> None:
+        """Admin users can list the users."""
         self.setup()
         with self.app.app_context():
             admin_uid = MOCK_ADMIN_USER_1["uid"]
@@ -187,20 +204,22 @@ class TestUsers:
             assert response[0]["name"] == "Akash Saini"
             assert isinstance(response, list)
 
-    def test_get_users_user_not_found(self):
+    def test_get_users_user_not_found(self) -> None:
+        """Listing users as an unknown admin user fails."""
         self.setup()
-        with self.app.app_context():
-            with pytest.raises(UserNotFound):
-                get_users("wrong_uid", "wrong_user_access_token")
+        with self.app.app_context(), pytest.raises(UserNotFound):
+            get_users("wrong_uid", "wrong_user_access_token")
 
-    def test_get_users_unauthorized(self):
+    def test_get_users_unauthorized(self) -> None:
+        """Listing users with a wrong token fails."""
         self.setup()
         with self.app.app_context():
             admin_uid = MOCK_ADMIN_USER_1["uid"]
             with pytest.raises(Unauthorized):
                 get_users(admin_uid, "wrong_user_access_token")
 
-    def test_toggle_user_status_false(self):
+    def test_toggle_user_status_false(self) -> None:
+        """Admin users can unverify a user."""
         self.setup()
         with self.app.app_context():
             admin_uid = MOCK_ADMIN_USER_1["uid"]
@@ -210,7 +229,8 @@ class TestUsers:
             )
             assert response == "User unverified successfully."
 
-    def test_toggle_user_status_true(self):
+    def test_toggle_user_status_true(self) -> None:
+        """Admin users can verify a user."""
         self.setup()
         with self.app.app_context():
             admin_uid = MOCK_ADMIN_USER_1["uid"]
@@ -220,18 +240,19 @@ class TestUsers:
             )
             assert response == "User verified successfully."
 
-    def test_toggle_user_status_superuser_not_found(self):
+    def test_toggle_user_status_superuser_not_found(self) -> None:
+        """Changing a status as an unknown admin user fails."""
         self.setup()
-        with self.app.app_context():
-            with pytest.raises(UserNotFound):
-                toggle_user_status(
-                    "wrong_uid",
-                    "wrong_user_access_token",
-                    MOCK_USER_DB["uid"],
-                    False,
-                )
+        with self.app.app_context(), pytest.raises(UserNotFound):
+            toggle_user_status(
+                "wrong_uid",
+                "wrong_user_access_token",
+                MOCK_USER_DB["uid"],
+                False,
+            )
 
-    def test_toggle_user_status_unauthorized(self):
+    def test_toggle_user_status_unauthorized(self) -> None:
+        """Changing a status with a wrong token fails."""
         self.setup()
         with self.app.app_context():
             admin_uid = MOCK_ADMIN_USER_1["uid"]
@@ -243,7 +264,8 @@ class TestUsers:
                     False,
                 )
 
-    def test_toggle_user_status_user_not_found(self):
+    def test_toggle_user_status_user_not_found(self) -> None:
+        """Changing the status of an unknown user fails."""
         self.setup()
         with self.app.app_context():
             admin_uid = MOCK_ADMIN_USER_1["uid"]

@@ -1,7 +1,8 @@
 """Shared test fixtures."""
 
+from collections.abc import Iterator
 import copy
-from typing import Dict, Iterator
+from typing import Any
 
 import pytest
 
@@ -20,7 +21,7 @@ def restore_mock_data() -> Iterator[None]:
     Yields:
         Nothing; the test runs at this point.
     """
-    originals: Dict[str, dict] = {
+    originals: dict[str, dict[str, Any]] = {
         name: copy.deepcopy(value)
         for name, value in vars(mock_data).items()
         if name.isupper() and isinstance(value, dict)

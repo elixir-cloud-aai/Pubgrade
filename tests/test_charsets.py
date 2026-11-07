@@ -115,7 +115,7 @@ def test_resolve_errors(value: Any, message: str) -> None:
         value: Value of the setting.
         message: Part of the error message.
     """
-    with pytest.raises(CharsetError, match="^endpoints.user.uid_charset: ") as error:
+    with pytest.raises(CharsetError, match=r"^endpoints\.user\.uid_charset: ") as error:
         resolve_charset(value, "endpoints.user.uid_charset")
     assert message in str(error.value)
 
@@ -171,7 +171,11 @@ def test_check_charsets_errors(endpoints: dict[str, Any], message: str) -> None:
 def test_get_charset() -> None:
     """The app's settings are read from its configuration."""
     app = Flask(__name__)
-    app.config.foca = Config(endpoints={"user": {"uid_charset": "string.digits+'x'"}})
+    flask_config: Any = app.config
+    settings: dict[str, Any] = {
+        "endpoints": {"user": {"uid_charset": "string.digits+'x'"}}
+    }
+    flask_config.foca = Config(**settings)
     with app.app_context():
         assert get_charset("user", "uid_charset") == "0123456789x"
 
@@ -179,6 +183,8 @@ def test_get_charset() -> None:
 def test_get_charset_repository() -> None:
     """Repository identifiers take lowercase letters, digits, `.` and `-` only."""
     app = Flask(__name__)
-    app.config.foca = Config(endpoints={"repository": {"id_charset": "AB"}})
+    flask_config: Any = app.config
+    settings: dict[str, Any] = {"endpoints": {"repository": {"id_charset": "AB"}}}
+    flask_config.foca = Config(**settings)
     with app.app_context(), pytest.raises(CharsetError, match="'AB' not allowed"):
         get_charset("repository", "id_charset")

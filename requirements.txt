@@ -1,4 +1,0 @@
-foca==0.21.0
-gitpython~=3.2.1
-gunicorn~=26.2.0
-kubernetes~=37.0.2

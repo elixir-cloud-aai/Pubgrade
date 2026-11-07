@@ -1,7 +1,7 @@
 """Tests for the app factory and the entry point for development."""
 
 from types import SimpleNamespace
-from typing import Any, Dict, List
+from typing import Any, ClassVar
 
 from flask import Flask
 from foca.models.config import Config, MongoConfig
@@ -17,8 +17,8 @@ from tests.mock_data import ENDPOINT_CONFIG, MONGO_CONFIG
 class FakeFoca:
     """Stands in for FOCA: returns an app with in-memory collections."""
 
-    config_files: List[Any] = []
-    app: Any = None
+    config_files: ClassVar[list[Any]] = []
+    app: ClassVar[Any] = None
 
     def __init__(self, config_file: Any) -> None:
         """Remember the configuration file.
@@ -38,7 +38,7 @@ class FakeFoca:
 
 
 @pytest.fixture(name="collections")
-def fixture_collections(monkeypatch: pytest.MonkeyPatch) -> Dict[str, Any]:
+def fixture_collections(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     """Prepare a FOCA app with in-memory collections, and return them.
 
     Args:
@@ -48,20 +48,22 @@ def fixture_collections(monkeypatch: pytest.MonkeyPatch) -> Dict[str, Any]:
         Collections of the database, by name.
     """
     flask_app = Flask(__name__)
-    flask_app.config.foca = Config(
-        db=MongoConfig(**MONGO_CONFIG),
-        endpoints={
+    flask_config: Any = flask_app.config
+    settings: dict[str, Any] = {
+        "db": MongoConfig(**MONGO_CONFIG),
+        "endpoints": {
             **ENDPOINT_CONFIG,
             "subscriptions": {
                 "admin_users": [{"name": "A", "uid": "a", "user_access_token": "token"}]
             },
         },
-    )
-    database = mongomock.MongoClient().db
-    collections = {}
+    }
+    flask_config.foca = Config(**settings)
+    database: Any = mongomock.MongoClient().db
+    collections: dict[str, Any] = {}
     for name in ("admin_users", "builds", "subscriptions"):
         collections[name] = database[name]
-        flask_app.config.foca.db.dbs[DB].collections[name].client = database[name]
+        flask_config.foca.db.dbs[DB].collections[name].client = database[name]
     app = SimpleNamespace(app=flask_app, port=8080, run=lambda port: None)
     FakeFoca.config_files = []
     FakeFoca.app = app
@@ -69,7 +71,7 @@ def fixture_collections(monkeypatch: pytest.MonkeyPatch) -> Dict[str, Any]:
     return collections
 
 
-def test_create_app(collections: Dict[str, Any]) -> None:
+def test_create_app(collections: dict[str, Any]) -> None:
     """The factory creates the admin users and repairs stored timestamps."""
     collections["builds"].insert_one(
         {"id": "b", "started_at": "2026-01-02T03:04:05", "finished_at": "NULL"}
@@ -84,17 +86,31 @@ def test_create_app(collections: Dict[str, Any]) -> None:
 
 
 def test_main_runs_on_configured_port(
-    collections: Dict[str, Any], monkeypatch: pytest.MonkeyPatch
+    collections: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The development server runs the app on the configured port."""
-    ports: List[int] = []
-    monkeypatch.setattr(FakeFoca.app, "run", lambda port: ports.append(port))
+    """The development server runs the app on the configured port.
+
+    Args:
+        collections: Fixture with the collections of the database.
+        monkeypatch: Fixture to replace the server.
+    """
+    ports: list[int] = []
+
+    def run(port: int) -> None:
+        """Record the port instead of serving.
+
+        Args:
+            port: Port to serve on.
+        """
+        ports.append(port)
+
+    monkeypatch.setattr(FakeFoca.app, "run", run)
     main()
     assert ports == [8080]
 
 
 def test_create_app_checks_charsets(
-    collections: Dict[str, Any], monkeypatch: pytest.MonkeyPatch
+    collections: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A character set setting that can't be used stops the app at start.
 
@@ -107,7 +123,7 @@ def test_create_app_checks_charsets(
     collections["builds"].insert_one({"id": "b", "finished_at": "NULL"})
     endpoints = FakeFoca.app.app.config.foca.endpoints
     monkeypatch.setitem(endpoints["user"], "uid_charset", "string.foo")
-    with pytest.raises(CharsetError, match="endpoints.user.uid_charset"):
+    with pytest.raises(CharsetError, match=r"endpoints\.user\.uid_charset"):
         create_app()
     assert collections["admin_users"].count_documents({}) == 0
     assert collections["builds"].find_one({"id": "b"})["finished_at"] == "NULL"

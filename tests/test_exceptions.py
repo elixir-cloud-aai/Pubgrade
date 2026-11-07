@@ -1,7 +1,7 @@
 """Tests for the problem details of exceptions (`exceptions.mapping`)."""
 
 import inspect
-from typing import Type
+from typing import Any
 
 from foca import Foca
 from foca.errors.exceptions import build_problem
@@ -23,7 +23,7 @@ OWN_HTTP_EXCEPTIONS = [
 ]
 
 
-def _problem(cls: Type[BaseException]) -> dict:
+def _problem(cls: type[BaseException]) -> dict[str, Any]:
     """Get the problem details FOCA uses for an exception.
 
     Args:
@@ -43,11 +43,11 @@ def test_problem_details_complete() -> None:
     for cls, problem in exceptions.items():
         assert set(problem) == {"title", "status", "detail"}, cls
         assert isinstance(problem["status"], int), cls
-        assert problem["detail"].endswith("."), cls
+        assert str(problem["detail"]).endswith("."), cls
 
 
 @pytest.mark.parametrize("cls", OWN_HTTP_EXCEPTIONS, ids=lambda cls: cls.__name__)
-def test_status_matches_exception(cls: Type[HTTPException]) -> None:
+def test_status_matches_exception(cls: type[HTTPException]) -> None:
     """Responses have the status of the exception that was raised."""
     assert _problem(cls)["status"] == cls.code
 

@@ -16,12 +16,14 @@ build: ## Builds two container images (main-service, build-complete-updater).
 	docker build -t $(IMAGE_NAME_PUBGRADE) .
 	docker build -f build-complete-updater/Dockerfile -t $(IMAGE_NAME_UPDATER) .
 
-test: ## Runs the unit tests with the active Python (3.13, as in the image), shows coverage and writes reports/coverage.xml.
-	python -m pip install --quiet -r requirements.txt --editable '.[test]'
-	mkdir -p reports
-	coverage run -m pytest; status=$$?; \
-		coverage xml -o reports/coverage.xml; \
-		[ $$status -eq 0 ] && coverage report -m
+test: ## Installs the locked dependencies (uv), runs the unit tests with coverage and writes coverage.xml.
+	uv sync --locked
+	uv run --locked pytest --cov --cov-report=term-missing --cov-report=xml
+
+lint: ## Runs the linters, type checks and security checks of pre-commit on all files.
+	uv sync --locked --all-groups
+	uv run --locked pre-commit run --all-files
+	uv run --locked pre-commit run --all-files --hook-stage manual gitleaks-all
 
 install-pubgrade: # build ## Install pubgrade on cluster using helm (values in HELM_ARGS, see the README).
 #	kubectl create namespace $(APP_NAME) --dry-run=client -o yaml | kubectl apply -f -

@@ -14,7 +14,7 @@ still writes during a rolling update.
 import datetime
 import logging
 import re
-from typing import Any, Dict, List
+from typing import Any
 
 from pymongo.collection import Collection
 
@@ -34,7 +34,7 @@ def now() -> str:
         The current time in UTC, in ISO 8601 format with time zone, e.g.,
         `2026-11-06T14:04:04.619000+00:00`.
     """
-    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+    return datetime.datetime.now(datetime.UTC).isoformat()
 
 
 def _repaired(value: Any) -> Any:
@@ -55,7 +55,7 @@ def _repaired(value: Any) -> Any:
     return value
 
 
-def _repaired_fields(document: Dict[str, Any], fields: List[str]) -> Dict[str, Any]:
+def _repaired_fields(document: dict[str, Any], fields: list[str]) -> dict[str, Any]:
     """Get the repaired values of the fields that need repair.
 
     Args:
@@ -74,8 +74,8 @@ def _repaired_fields(document: Dict[str, Any], fields: List[str]) -> Dict[str, A
 
 
 def _repaired_notifications(
-    notifications: List[Dict[str, Any]],
-) -> List[Dict[str, Any]]:
+    notifications: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     """Bring the timestamps of the notifications of a build into the format.
 
     Args:
@@ -89,7 +89,7 @@ def _repaired_notifications(
     ]
 
 
-def repaired_build(build: Dict[str, Any]) -> Dict[str, Any]:
+def repaired_build(build: dict[str, Any]) -> dict[str, Any]:
     """Get a stored build with its timestamps in the format of the API.
 
     Args:
@@ -104,7 +104,7 @@ def repaired_build(build: Dict[str, Any]) -> Dict[str, Any]:
     return repaired
 
 
-def repaired_subscription(subscription: Dict[str, Any]) -> Dict[str, Any]:
+def repaired_subscription(subscription: dict[str, Any]) -> dict[str, Any]:
     """Get a stored subscription with its timestamp in the format of the API.
 
     Args:
@@ -117,8 +117,8 @@ def repaired_subscription(subscription: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def repair_timestamps(
-    builds: "Collection[Dict[str, Any]]",
-    subscriptions: "Collection[Dict[str, Any]]",
+    builds: "Collection[dict[str, Any]]",
+    subscriptions: "Collection[dict[str, Any]]",
 ) -> int:
     """Bring the stored timestamps of builds and subscriptions into the format.
 
@@ -147,7 +147,7 @@ def repair_timestamps(
     }
     for build in builds.find(query, fields):
         update = _repaired_fields(build, ["started_at", "finished_at"])
-        notifications: List[Dict[str, Any]] = build.get("notifications") or []
+        notifications: list[dict[str, Any]] = build.get("notifications") or []
         repaired = _repaired_notifications(notifications)
         if repaired != notifications:
             update["notifications"] = repaired
@@ -163,5 +163,5 @@ def repair_timestamps(
         )
         changed += result.modified_count
     if changed:
-        logger.info(f"Timestamps of {changed} stored objects brought into format.")
+        logger.info("Timestamps of %s stored objects brought into format.", changed)
     return changed

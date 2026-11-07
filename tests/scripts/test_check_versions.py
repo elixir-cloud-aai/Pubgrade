@@ -18,11 +18,14 @@ check_versions = importlib.util.module_from_spec(_spec)
 sys.modules[_spec.name] = check_versions
 _spec.loader.exec_module(check_versions)
 
-INIT = """\
-\"\"\"Pubgrade.\"\"\"
-
+PYPROJECT = """\
+[project]
+name = "pubgrade"
 # Set by the release-prep pull request
-__version__ = "{version}"
+version = "{version}"
+
+[tool.uv]
+package = false
 """
 
 CHART = """\
@@ -39,7 +42,7 @@ def _repo(tmp_path: Path, version: str, chart_version: str, app: str) -> Path:
 
     Args:
         tmp_path: Directory to write the files to.
-        version: Version of the app (`__version__`).
+        version: Version of the app (`[project]` of `pyproject.toml`).
         chart_version: `version` of the chart.
         app: `appVersion` of the chart.
 
@@ -47,8 +50,7 @@ def _repo(tmp_path: Path, version: str, chart_version: str, app: str) -> Path:
         The root of the repository.
     """
     (tmp_path / "helm").mkdir()
-    (tmp_path / "pubgrade").mkdir()
-    (tmp_path / "pubgrade/__init__.py").write_text(INIT.format(version=version))
+    (tmp_path / "pyproject.toml").write_text(PYPROJECT.format(version=version))
     (tmp_path / "helm/Chart.yaml").write_text(
         CHART.format(chart_version=chart_version, version=app)
     )
@@ -61,37 +63,38 @@ def test_repository_has_versions() -> None:
     The chart's `version` matches only after the release-prep pull request
     (see "Versioning and releases" in `docs/development.md`).
     """
-    app = (ROOT / "pubgrade/__init__.py").read_text(encoding="utf-8")
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     chart = (ROOT / "helm/Chart.yaml").read_text(encoding="utf-8")
-    version = check_versions.app_version(app)
+    version = check_versions.project_version(pyproject)
     assert version is not None
     assert check_versions.chart_value(chart, "appVersion") == version
     assert check_versions.chart_value(chart, "version") is not None
 
 
-def test_app_version() -> None:
-    """`__version__` of the package, with either quotes."""
-    assert check_versions.app_version(INIT.format(version="1.2.3")) == "1.2.3"
-    assert check_versions.app_version("__version__ = '1.2.3'\n") == "1.2.3"
-    assert check_versions.app_version('__version__: str = "1.2.3"\n') == "1.2.3"
+def test_project_version() -> None:
+    """`version` in `[project]`, not in other tables."""
+    text = PYPROJECT.format(version="1.2.3")
+    assert check_versions.project_version(text) == "1.2.3"
+    assert check_versions.project_version('[tool.x]\nversion = "9"\n') is None
 
 
 @pytest.mark.parametrize(
     "text",
     [
-        'version = "1.0.0"\n',
-        'if True:\n    __version__ = "1.0.0"\n',
         "",
-        "__version__ = (\n",
-        '__version__ = "1.0.0" + "a"\n',
-        '__version__ = "1.0.0"\n__version__ = "2.0.0"\n',
-        '__version__ = "1.0.0"\n__version__ += "a"\n',
-        "__version__: str\n",
+        "[project]\nname = 'x'\n",
+        "[project]\nversion = 1\n",
+        "project = 1\n",
+        "[project\n",
     ],
 )
-def test_app_version_missing(text: str) -> None:
-    """Only a single top-level assignment of a string literal counts."""
-    assert check_versions.app_version(text) is None
+def test_project_version_missing(text: str) -> None:
+    """Only a string `version` in `[project]` counts.
+
+    Args:
+        text: Content of `pyproject.toml`.
+    """
+    assert check_versions.project_version(text) is None
 
 
 def test_chart_value() -> None:
@@ -114,6 +117,6 @@ def test_main_mismatch(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> No
     root = _repo(tmp_path, "1.2.2", "1.2.3", "1.2.4")
     assert check_versions.main(["1.2.3", "1.2.3"], root) == 1
     err = capsys.readouterr().err
-    assert "::error::pubgrade/__init__.py: __version__ is '1.2.2'" in err
+    assert "::error::pyproject.toml: [project] version is '1.2.2'" in err
     assert "::error::helm/Chart.yaml: appVersion is '1.2.4'" in err
     assert "Chart.yaml: version" not in err

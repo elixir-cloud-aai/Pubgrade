@@ -6,9 +6,16 @@ version: 2
 build:
   os: ubuntu-24.04
   tools:
-    # The documentation's Python version, as in CI's `docs` job (the app's
-    # image uses another one; the build doesn't import the app)
+    # The Python version of the base image in the `Dockerfile`, as in CI's
+    # `docs` job
     python: "3.13"
+  # The dependency group `docs` of `pyproject.toml`, from its ranges, not the
+  # lock (`uv.lock`), which CI's docs job builds with; pip reads dependency
+  # groups from version 25.1
+  jobs:
+    install:
+      - python -m pip install --upgrade "pip>=25.1"
+      - python -m pip install --group docs
 
 # The documentation of Pubgrade-Sidecar is a section of this one, from the
 # submodule `external/pubgrade-sidecar` (see `docs/hooks.py`)
@@ -19,10 +26,3 @@ mkdocs:
   configuration: mkdocs.yml
   # Fail on all warnings to avoid broken links and references
   fail_on_warning: true
-
-python:
-  install:
-    - method: pip
-      path: .
-      extra_requirements:
-        - docs

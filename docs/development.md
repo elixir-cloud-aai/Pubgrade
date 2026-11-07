@@ -7,15 +7,21 @@ conduct](https://github.com/elixir-cloud-aai/.github/blob/main/CODE_OF_CONDUCT.m
 
 ## Tests
 
-`make test` installs the requirements (`requirements.txt`) and the test
-dependencies (`setup.py`) into the active Python environment, which should
-have Python 3.13, the version of the base image, and runs the unit tests with
-coverage (written to `reports/coverage.xml`; 100% coverage is required), e.g.:
+Dependencies are managed with [uv](https://docs.astral.sh/uv/): `pyproject.toml`
+lists them (the runtime dependencies, and the dependency groups `dev` for
+tests, linters and type checks, and `docs` for the documentation), and
+`uv.lock` pins them; the image installs the locked runtime dependencies. After
+changing dependencies, run `uv lock` (CI checks that the lock matches). The
+app runs from its source directory, not as an installed package.
+
+`make test` installs the locked dependencies into `.venv` (`uv sync`, with
+Python 3.13, the version of the base image) and runs the unit tests with
+coverage (written to `coverage.xml`; 100% coverage is required). Without
+make:
 
 ```bash
-python3.13 -m venv .venv
-.venv/bin/python -m pip install --upgrade pip
-PATH="${PWD}/.venv/bin:${PATH}" make test
+uv sync
+uv run pytest --cov
 ```
 
 Some tests clone a public repository, so they need network access.
@@ -24,8 +30,9 @@ The app is built on [FOCA](https://foca.readthedocs.io/) 0.21: its
 configuration is `pubgrade/config.yaml`, and `pubgrade/app.py` creates the app
 (`create_app()`). The image serves it with Gunicorn, with FOCA's settings
 and more threads and shutdown time (`pubgrade/gunicorn_config.py`);
-`python -m pubgrade.app` runs Flask's development server instead. FOCA is bumped by hand: the tag and digest of the base image in
-the `Dockerfile` and `foca` in `requirements.txt` together, following FOCA's
+`python -m pubgrade.app` runs Flask's development server instead. FOCA is
+bumped by hand: the tag and digest of the base image in the `Dockerfile`
+and `foca` in `pyproject.toml` and `uv.lock` together, following FOCA's
 migration guides; `tests/test_image.py` fails if they don't match.
 
 `tests/smoke.sh <base URL>` checks the API of a running Pubgrade with an empty
@@ -40,13 +47,44 @@ built from the branch `dev` of
 [Pubgrade-Sidecar](https://github.com/elixir-cloud-aai/Pubgrade-Sidecar); set
 `SIDECAR_IMAGE` to use a local image instead.
 
+## Lint
+
+Code style, type hints and the absence of secrets are checked with
+[pre-commit](https://pre-commit.com/) (`.pre-commit-config.yaml`):
+
+- [Ruff](https://docs.astral.sh/ruff/) lints and formats the Python code
+  (Black style; rules in `[tool.ruff]` of `pyproject.toml`), including
+  Google-style docstrings for all modules, classes and functions.
+- [mypy](https://mypy.readthedocs.io/) checks the type hints, which must be
+  complete (`[tool.mypy]`).
+- [gitleaks](https://github.com/gitleaks/gitleaks) looks for secrets in the
+  staged changes; CI also scans all files.
+- [actionlint](https://github.com/rhysd/actionlint) checks the GitHub
+  workflows, and further hooks the YAML syntax, whitespace and file endings.
+
+`make lint` runs all hooks on all files, including the scan of all files
+for secrets, as CI does. To run them on each commit, install them once:
+
+```bash
+uv sync --all-groups  # mypy also checks the hook of the docs build
+uv run pre-commit install
+uv run pre-commit run --all-files  # without make
+```
+
+The Sidecar's submodule in `external/` is left out. Formatting changes that
+touch many lines go in a commit of their own, listed in
+`.git-blame-ignore-revs`, so that `git blame` skips them; for GitHub's blame
+view this works as is, locally after
+`git config blame.ignoreRevsFile .git-blame-ignore-revs`.
+
 ## CI
 
 [CI](https://github.com/elixir-cloud-aai/Pubgrade/blob/dev/.github/workflows/ci.yml)
 runs on pull requests and pushes to `dev`: the pull request title
 (Conventional Commits, at most 50 characters, as it becomes the commit message
-of the squash merge), lint (the citation metadata in `CITATION.cff`), the
-tests with coverage to Codecov, the chart, the smoke
+of the squash merge), lint (the pre-commit hooks, see [Lint](#lint), and the
+citation metadata in `CITATION.cff`), the tests with coverage to Codecov,
+the chart, the smoke
 and upgrade tests, the documentation, and a scan of the images. The scan fails
 on critical and high vulnerabilities that have a fix in the app's image; the
 updater's image, which isn't built on FOCA, is only reported for now.
@@ -94,9 +132,7 @@ checked out:
 
 ```bash
 git submodule update --init
-python -m venv .venv
-.venv/bin/pip install -e ".[docs]"
-.venv/bin/mkdocs build --strict  # or `mkdocs serve` to preview
+uv run --only-group docs mkdocs build --strict  # or `mkdocs serve` to preview
 ```
 
 The build fails on warnings, e.g. of broken links.
@@ -106,19 +142,20 @@ The build fails on warnings, e.g. of broken links.
 The project follows [semantic versioning](https://semver.org/). It is in
 beta, so the API may change without notice. The app, its two images and its
 chart are released together, with one version: the tag `vX.Y.Z` (or
-`vX.Y.ZaN`, `vX.Y.ZbN` and `vX.Y.ZrcN` for pre-releases), `__version__` in
-`pubgrade/__init__.py`, the chart's `appVersion` and `version` (the SemVer
-form, e.g., `1.2.3-rc1` for `1.2.3rc1`), and the version in `CITATION.cff`.
+`vX.Y.ZaN`, `vX.Y.ZbN` and `vX.Y.ZrcN` for pre-releases), `version` in
+`[project]` of `pyproject.toml`, the chart's `appVersion` and `version`
+(the SemVer form, e.g., `1.2.3-rc1` for `1.2.3rc1`), and the version in
+`CITATION.cff`.
 Until 1.0.0, all releases are GitHub pre-releases.
 
 For the first release, the chart's `version` (0.2.0, from before the release
 workflow) and the app's version (0.1.0) differ; the release-prep pull request
 sets both, e.g., to 0.2.0.
 
-1. Release-prep pull request to `dev`: set the version in
-   `pubgrade/__init__.py`, `helm/Chart.yaml` (`version` and `appVersion`) and
-   `CITATION.cff` (`python scripts/citation.py set <version>`, which also sets
-   the release date).
+1. Release-prep pull request to `dev`: set the version in `pyproject.toml`
+   (then run `uv lock`), `helm/Chart.yaml` (`version` and `appVersion`)
+   and `CITATION.cff` (`python scripts/citation.py set <version>`, which
+   also sets the release date).
 2. Once CI has passed for its commit on `dev`, bring that commit to `main`.
 3. Tag it on `main` with a signed, annotated tag and push the tag:
    `git tag -s v<version> -m v<version>`, then

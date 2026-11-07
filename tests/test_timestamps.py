@@ -1,7 +1,7 @@
 """Tests for the timestamps of stored objects."""
 
 import datetime
-from typing import Any, Dict, List
+from typing import Any
 
 import mongomock
 
@@ -21,7 +21,7 @@ def test_now_has_time_zone() -> None:
 
 def test_repair_timestamps() -> None:
     """Stored timestamps without time zone get UTC's, and `"NULL"` is null."""
-    client = mongomock.MongoClient()
+    client: Any = mongomock.MongoClient()
     builds = client.db.builds
     subscriptions = client.db.subscriptions
     builds.insert_many(
@@ -58,14 +58,19 @@ def test_repair_timestamps() -> None:
     )
     assert repair_timestamps(builds, subscriptions) == 2
     old = builds.find_one({"id": "old"})
+    assert old is not None
     assert old["started_at"] == "2026-01-02T03:04:05.123456+00:00"
     assert old["finished_at"] is None
     assert old["notifications"] == [
         {"subscription_id": "s", "finished_at": "2026-01-02T03:04:06+00:00"},
         {"subscription_id": "t"},
     ]
-    assert builds.find_one({"id": "new"})["started_at"].endswith("+00:00")
-    assert builds.find_one({"id": "unknown"})["started_at"] == "yesterday"
+    new = builds.find_one({"id": "new"})
+    assert new is not None
+    assert new["started_at"].endswith("+00:00")
+    unknown = builds.find_one({"id": "unknown"})
+    assert unknown is not None
+    assert unknown["started_at"] == "yesterday"
     zoned = builds.find_one({"id": "zoned"}, {"_id": 0})
     assert zoned == {
         "id": "zoned",
@@ -73,11 +78,12 @@ def test_repair_timestamps() -> None:
         "finished_at": "2026-01-02T04:04:05.5+01:00",
         "status": "SUCCEEDED",
     }
-    assert (
-        subscriptions.find_one({"id": "old"})["updated_at"]
-        == "2026-01-02T03:04:05+00:00"
-    )
-    assert "updated_at" not in subscriptions.find_one({"id": "never"})
+    old_subscription = subscriptions.find_one({"id": "old"})
+    assert old_subscription is not None
+    assert old_subscription["updated_at"] == "2026-01-02T03:04:05+00:00"
+    never = subscriptions.find_one({"id": "never"})
+    assert never is not None
+    assert "updated_at" not in never
     # Nothing left to repair on the next start
     assert repair_timestamps(builds, subscriptions) == 0
 
@@ -89,7 +95,7 @@ class _WrittenMeanwhile:
     subscription while the repair runs.
     """
 
-    def __init__(self, collection: Any, change: Dict[str, Any]) -> None:
+    def __init__(self, collection: Any, change: dict[str, Any]) -> None:
         """Wrap a collection.
 
         Args:
@@ -99,7 +105,7 @@ class _WrittenMeanwhile:
         self.collection = collection
         self.change = change
 
-    def find(self, *args: Any) -> List[Dict[str, Any]]:
+    def find(self, *args: Any) -> list[dict[str, Any]]:
         """Read documents, then let them change.
 
         Args:
@@ -126,7 +132,7 @@ class _WrittenMeanwhile:
 
 def test_repair_keeps_concurrent_writes() -> None:
     """Values written after the repair read them are kept."""
-    client = mongomock.MongoClient()
+    client: Any = mongomock.MongoClient()
     builds = client.db.builds
     subscriptions = client.db.subscriptions
     builds.insert_one(
@@ -144,15 +150,15 @@ def test_repair_keeps_concurrent_writes() -> None:
         "finished_at": finished,
         "notifications": [{"finished_at": finished}, {"finished_at": finished}],
     }
-    assert (
-        repair_timestamps(
-            _WrittenMeanwhile(builds, written),
-            _WrittenMeanwhile(subscriptions, {"updated_at": finished}),
-        )
-        == 0
+    wrapped_builds: Any = _WrittenMeanwhile(builds, written)
+    wrapped_subscriptions: Any = _WrittenMeanwhile(
+        subscriptions, {"updated_at": finished}
     )
+    assert repair_timestamps(wrapped_builds, wrapped_subscriptions) == 0
     assert builds.find_one({"id": "b"}, {"_id": 0}) == {"id": "b", **written}
-    assert subscriptions.find_one({"id": "s"})["updated_at"] == finished
+    subscription = subscriptions.find_one({"id": "s"})
+    assert subscription is not None
+    assert subscription["updated_at"] == finished
 
 
 def test_repaired_build_and_subscription() -> None:

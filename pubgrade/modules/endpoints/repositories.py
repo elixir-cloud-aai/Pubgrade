@@ -1,8 +1,10 @@
+"""Registration and management of repositories."""
+
 import logging
 import secrets
 import string
+from typing import Any
 
-from foca import get_config
 from pymongo.errors import DuplicateKeyError
 from werkzeug.exceptions import Unauthorized
 
@@ -13,11 +15,12 @@ from pubgrade.errors.exceptions import (
     RepositoryNotFound,
     URLNotFound,
 )
+from pubgrade.settings import collection, endpoints
 
 logger = logging.getLogger(__name__)
 
 
-def register_repository(data: dict):
+def register_repository(data: dict[str, Any]) -> dict[str, Any]:
     """Register a new repository object.
 
     Args:
@@ -34,26 +37,24 @@ def register_repository(data: dict):
         RegistrationDisabled: Raised when registration is closed by the
         setting `endpoints.repository.registration_enabled`.
     """
-    if not get_config().endpoints["repository"].get("registration_enabled", True):
+    if not endpoints()["repository"].get("registration_enabled", True):
         raise RegistrationDisabled
-    repository_object = {}
+    repository_object: dict[str, Any] = {}
     try:
         repository_object["url"] = data["url"]
         # Needs to verify validity of repository url.
     except KeyError:
-        raise URLNotFound
+        raise URLNotFound from None
 
-    db_collection = (
-        get_config().db.dbs["pubgradeStore"].collections["repositories"].client
-    )
-    retries = get_config().endpoints["repository"]["retries"]
-    id_length: int = get_config().endpoints["repository"]["id_length"]
+    db_collection = collection("repositories")
+    retries = endpoints()["repository"]["retries"]
+    id_length: int = endpoints()["repository"]["id_length"]
     id_charset = get_charset("repository", "id_charset")
-    access_token_length: int = get_config().endpoints["access_token"]["length"]
+    access_token_length: int = endpoints()["access_token"]["length"]
     access_token_charset = get_charset("access_token", "charset")
 
     for i in range(retries):
-        logger.debug(f"Trying to insert/update object: try {i}")
+        logger.debug("Trying to insert/update object: try %s", i)
         repository_object["id"] = generate_id(
             charset=id_charset,
             length=id_length,
@@ -66,25 +67,23 @@ def register_repository(data: dict):
             break
         except DuplicateKeyError:
             logger.error(
-                f"DuplicateKeyError ({repository_object['id']}):  "
-                f"Key generated"
-                f" is already present."
+                "DuplicateKeyError (%s):  Key generated is already present.",
+                repository_object["id"],
             )
             continue
     else:
         logger.error(
-            f"Could not generate unique identifier. Tried {retries + 1} times."
+            "Could not generate unique identifier. Tried %s times.", retries + 1
         )
         raise InternalServerError
 
-    if "_id" in repository_object:
-        del repository_object["_id"]
+    repository_object.pop("_id", None)
     del repository_object["url"]
-    logger.info(f"Added repository {repository_object['id']}.")
+    logger.info("Added repository %s.", repository_object["id"])
     return repository_object
 
 
-def get_repositories():
+def get_repositories() -> list[dict[str, Any]]:
     """Retrieve available repositories.
 
     Returns:
@@ -94,9 +93,7 @@ def get_repositories():
         RepositoryNotFound: Raised when there is no registered repository in
         the pubgrade.
     """
-    db_collection = (
-        get_config().db.dbs["pubgradeStore"].collections["repositories"].client
-    )
+    db_collection = collection("repositories")
 
     cursor = db_collection.find({}, {"access_token": False, "_id": False})
     repos = list(cursor)
@@ -141,7 +138,7 @@ def generate_id(
     return generated_string
 
 
-def get_repository(repo_id: str):
+def get_repository(repo_id: str) -> dict[str, Any]:
     """Retrieve repository info.
 
     Args:
@@ -155,9 +152,7 @@ def get_repository(repo_id: str):
         RepositoryNotFound: Raised when repository is not found with given
         identifier.
     """
-    db_collection = (
-        get_config().db.dbs["pubgradeStore"].collections["repositories"].client
-    )
+    db_collection = collection("repositories")
     try:
         repository_object = (
             db_collection.find({"id": repo_id}, {"access_token": False, "_id": False})
@@ -168,11 +163,13 @@ def get_repository(repo_id: str):
             del repository_object["subscription_list"]
         return repository_object
     except StopIteration:
-        logger.error(f"Could not find repository with given identifier: {repo_id}")
-        raise RepositoryNotFound
+        logger.error("Could not find repository with given identifier: %s", repo_id)
+        raise RepositoryNotFound from None
 
 
-def modify_repository_info(repo_id: str, access_token: str, data: dict):
+def modify_repository_info(
+    repo_id: str, access_token: str, data: dict[str, Any]
+) -> dict[str, Any]:
     """Modify registered repository.
 
     Args:
@@ -192,12 +189,10 @@ def modify_repository_info(repo_id: str, access_token: str, data: dict):
         RepositoryNotFound: Raised when repository is not found with given
         identifier.
     """
-    db_collection_repository = (
-        get_config().db.dbs["pubgradeStore"].collections["repositories"].client
-    )
+    db_collection_repository = collection("repositories")
     data_from_db = db_collection_repository.find_one({"id": repo_id})
     if data_from_db is None:
-        logger.error(f"Could not find repository with given identifier: {repo_id}")
+        logger.error("Could not find repository with given identifier: %s", repo_id)
         raise RepositoryNotFound
     if data_from_db["access_token"] != access_token:
         raise Unauthorized
@@ -208,7 +203,7 @@ def modify_repository_info(repo_id: str, access_token: str, data: dict):
     return data
 
 
-def delete_repository(repo_id: str, access_token: str):
+def delete_repository(repo_id: str, access_token: str) -> int:
     """Delete repository.
 
     Args:
@@ -227,12 +222,10 @@ def delete_repository(repo_id: str, access_token: str):
         RepositoryNotFound: Raised when repository is not found with given
         identifier.
     """
-    db_collection = (
-        get_config().db.dbs["pubgradeStore"].collections["repositories"].client
-    )
+    db_collection = collection("repositories")
     data = db_collection.find_one({"id": repo_id})
     if data is None:
-        logger.error("Not Found any repository with id:" + repo_id)
+        logger.error("Not Found any repository with id: %s", repo_id)
         raise RepositoryNotFound
     if data["access_token"] != access_token:
         raise Unauthorized
