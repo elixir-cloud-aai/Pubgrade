@@ -390,7 +390,7 @@ def start_build(
         build_data (dict): The build, as registered.
         repo_url (str): URL of the repository.
         access_token (str): Access token of the repository.
-        repository_id: Identifier of the repository.
+        repository_id (str): Identifier of the repository.
 
     Raises:
         GitRefNotFound: Raised when the branch, tag or commit isn't in the
@@ -533,7 +533,7 @@ def create_build(
         dockerhub to push image `echo -n USER:PASSWD | base64`
         project_access_token (str): Secret used to verify source, will be used
         by callback_url to inform pubgrade for build completion.
-        repository_id: Identifier of the repository, which the build's pod
+        repository_id (str): Identifier of the repository, which the build's pod
             reports to.
 
     Raises:
@@ -758,8 +758,8 @@ def create_deployment_YAML(
         dockerhub access token.
         project_access_token (str): Secret used to verify source, will be used
         by callback_url to inform pubgrade for build completion.
-        build_id: Identifier of the build, which names the pod.
-        repository_id: Identifier of the build's repository, which the pod
+        build_id (str): Identifier of the build, which names the pod.
+        repository_id (str): Identifier of the build's repository, which the pod
             reports to (`REPOSITORYID`).
 
     Returns:

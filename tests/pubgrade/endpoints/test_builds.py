@@ -740,7 +740,7 @@ class TestBuild:
     def test_git_clone_and_checkout_other_url(
         self, drs_filer: SimpleNamespace, tmp_path: Path
     ) -> None:
-        """URLs of other forms than `https://host/owner/repo` are cloned too.
+        """The clone's directory doesn't depend on the form of the URL.
 
         Args:
             drs_filer: Local copy of the repository.

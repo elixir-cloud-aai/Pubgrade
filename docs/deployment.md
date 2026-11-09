@@ -126,8 +126,9 @@ requests that need them get a 403, as does
 Pubgrade clones the repository and checks out the `branch` (and the
 `commit_sha`, if given) or the `tag` in `head_commit`. The clone's directory
 is named after the last part of the repository's URL, without `.git` (e.g.,
-`tesk-api`), or `repository` if that isn't a plain file name; any URL that
-Git can clone works, e.g., of GitLab's subgroups. Branches and tags must
+`tesk-api`), or `repository` if that isn't a plain file name, so remote URLs
+of other forms than `https://host/owner/repo` work too, e.g., of GitLab's
+subgroups. Branches and tags must
 be given by their exact names, and `commit_sha` as a commit hash (4 to 64
 hexadecimal digits); revision expressions such as `dev~1` aren't accepted.
 If one of them is empty, isn't in the repository or (a short hash) isn't
@@ -214,8 +215,9 @@ removed). A signing that GitHub keeps refusing is thus requested again every
 5 seconds, with an error in the log each time, until the setting is fixed
 or the build is canceled.
 
-A build whose pod was deleted, but whose completion then failed (e.g., Pubgrade stopped), keeps its token and isn't
-reported again; cancel it to remove the token. Once a build is complete,
+A build whose pod was deleted, but whose completion then failed (e.g.,
+Pubgrade stopped), keeps its token and isn't reported again; cancel it to
+remove the token. Once a build is complete,
 reporting it again changes nothing: its image isn't signed again, and no one
 is notified again (the results of the notifications are stored with the
 build, see [Usage](usage.md#notifications)). Builds that earlier versions
