@@ -127,12 +127,13 @@ def mocked_notify_subscriptions(subscription_id: str, image: str, build_id: str)
     return "Notified"
 
 
-def mocked_delete_pod(name: str, namespace: str) -> str:
+def mocked_delete_pod(name: str, namespace: str, missing_ok: bool = False) -> str:
     """Mock `delete_pod`.
 
     Args:
         name: Name to use.
         namespace: Kubernetes namespace.
+        missing_ok: Whether a missing pod counts as deleted.
 
     Returns:
         A fixed string.
@@ -1316,6 +1317,12 @@ class TestBuild:
         remove_files("build123", "pod_name", "namespace")
         assert not os.path.isdir("build123")
 
+    def test_remove_files_gone_already(self) -> None:
+        """Files and a pod that are gone already count as removed."""
+        with patch("pubgrade.modules.endpoints.builds.delete_pod") as delete_pod:
+            remove_files("build-gone", "pod_name", "namespace")
+        delete_pod.assert_called_once_with("pod_name", "namespace", missing_ok=True)
+
     @patch("kubernetes.config.load_kube_config", mocked_load_cluster_config)
     @patch(
         "kubernetes.client.api.core_v1_api.CoreV1Api.create_namespaced_pod",
@@ -2027,7 +2034,163 @@ class TestCancelBuild:
         build = self.stored()
         assert build["status"] == "QUEUED"
         assert build["finished_at"] is None
+        assert build["dockerhub_token"] == MOCK_BUILD_INFO["dockerhub_token"]
         notify.assert_not_called()
+
+    def complete(self) -> Any:
+        """Record the completion of the build, as its pod reports it.
+
+        Returns:
+            The response.
+        """
+        with self.app.app_context():
+            return build_completed(
+                self.repository["id"],
+                self.build_id,
+                self.repository["access_token"],
+            )
+
+    @patch("pubgrade.modules.endpoints.builds.remove_files")
+    @patch("pubgrade.modules.endpoints.builds.notify_all_subscriptions")
+    @patch("pubgrade.modules.endpoints.builds.trigger_signing_image")
+    def test_completion_removes_registry_token(
+        self, trigger: MagicMock, notify: MagicMock, remove_files: MagicMock
+    ) -> None:
+        """Once a build is complete, its record has no registry token.
+
+        The signing gets the token first; the record keeps everything else.
+
+        Args:
+            trigger: Mock of the signing of the image.
+            notify: Mock of the notification of the subscriptions.
+            remove_files: Mock of the removal of the build's pod and files.
+        """
+        assert self.complete() == {"id": self.build_id}
+        assert (
+            trigger.call_args.kwargs["dockerhub_token"]
+            == MOCK_BUILD_INFO["dockerhub_token"]
+        )
+        build = self.stored()
+        assert "dockerhub_token" not in build
+        assert build["status"] == "SUCCEEDED"
+        assert build["images"] == MOCK_BUILD_INFO["images"]
+        assert "dockerhub_token" in self.stored(MOCK_BUILD_INFO_2["id"])
+        notify.assert_called_once()
+
+    @patch("pubgrade.modules.endpoints.builds.remove_files", side_effect=DeletePodError)
+    @patch("pubgrade.modules.endpoints.builds.notify_all_subscriptions")
+    @patch("pubgrade.modules.endpoints.builds.trigger_signing_image")
+    def test_completion_cleanup_fails_keeps_registry_token(
+        self, trigger: MagicMock, notify: MagicMock, remove_files: MagicMock
+    ) -> None:
+        """If the pod can't be removed, the token stays for the next report.
+
+        Args:
+            trigger: Mock of the signing of the image.
+            notify: Mock of the notification of the subscriptions.
+            remove_files: Mock of the removal of the build's pod and files.
+        """
+        with pytest.raises(DeletePodError):
+            self.complete()
+        assert self.stored()["dockerhub_token"] == MOCK_BUILD_INFO["dockerhub_token"]
+        notify.assert_not_called()
+
+    @patch("pubgrade.modules.endpoints.builds.notify_all_subscriptions")
+    @patch("pubgrade.modules.endpoints.builds.trigger_signing_image")
+    def test_completion_after_failed_cleanup(
+        self, trigger: MagicMock, notify: MagicMock
+    ) -> None:
+        """A report after a failed cleanup completes the build.
+
+        The first report removes the build's files, then can't delete its
+        pod; the next one finds the files gone, deletes the pod, removes the
+        token and notifies the subscribers.
+
+        Args:
+            trigger: Mock of the signing of the image.
+            notify: Mock of the notification of the subscriptions.
+        """
+        (self.base_dir / self.build_id).mkdir()
+        self.delete_pod.side_effect = [DeletePodError, None]
+        with pytest.raises(DeletePodError):
+            self.complete()
+        assert self.stored()["dockerhub_token"] == MOCK_BUILD_INFO["dockerhub_token"]
+        assert self.complete() == {"id": self.build_id}
+        assert "dockerhub_token" not in self.stored()
+        assert list(self.base_dir.iterdir()) == []
+        assert self.delete_pod.call_count == 2
+        notify.assert_called_once()
+
+    @patch("pubgrade.modules.endpoints.builds.remove_files")
+    @patch("pubgrade.modules.endpoints.builds.notify_all_subscriptions")
+    @patch("pubgrade.modules.endpoints.builds.trigger_signing_image")
+    def test_repeated_completion_changes_nothing(
+        self, trigger: MagicMock, notify: MagicMock, remove_files: MagicMock
+    ) -> None:
+        """A build reported again after its completion was recorded is left.
+
+        Its image isn't signed again, and no one is notified again.
+
+        Args:
+            trigger: Mock of the signing of the image.
+            notify: Mock of the notification of the subscriptions.
+            remove_files: Mock of the removal of the build's pod and files.
+        """
+        self.complete()
+        finished = self.stored()
+        assert self.complete() == {"id": self.build_id}
+        assert self.stored() == finished
+        trigger.assert_called_once()
+        notify.assert_called_once()
+        remove_files.assert_called_once()
+
+    @patch("pubgrade.modules.endpoints.builds.remove_files")
+    @patch("pubgrade.modules.endpoints.builds.notify_all_subscriptions")
+    @patch("pubgrade.modules.endpoints.builds.trigger_signing_image")
+    def test_repeated_completion_of_earlier_build(
+        self, trigger: MagicMock, notify: MagicMock, remove_files: MagicMock
+    ) -> None:
+        """A build completed by an earlier version, with its token, is redone once.
+
+        Its record has no mark of the earlier completion but its status, so
+        a repeated report signs and notifies again, as before, and removes
+        the token; reports after that change nothing.
+
+        Args:
+            trigger: Mock of the signing of the image.
+            notify: Mock of the notification of the subscriptions.
+            remove_files: Mock of the removal of the build's pod and files.
+        """
+        self.collection("builds").client.update_one(
+            {"id": self.build_id},
+            {"$set": {"status": "SUCCEEDED", "finished_at": "2021-08-04T18:00:00"}},
+        )
+        self.complete()
+        assert "dockerhub_token" not in self.stored()
+        self.complete()
+        trigger.assert_called_once()
+        notify.assert_called_once()
+
+    @pytest.mark.parametrize("status", ["QUEUED", "SUCCEEDED", "FAILED"])
+    def test_cancel_removes_registry_token(self, status: str) -> None:
+        """A canceled build, running or finished, has no registry token.
+
+        Args:
+            status: Status of the build before its cancellation.
+        """
+        self.collection("builds").client.update_one(
+            {"id": self.build_id}, {"$set": {"status": status}}
+        )
+        self.cancel()
+        assert "dockerhub_token" not in self.stored()
+        assert "dockerhub_token" in self.stored(MOCK_BUILD_INFO_2["id"])
+
+    def test_cancel_stop_fails_removes_registry_token(self) -> None:
+        """A build that can't be stopped is canceled without its token."""
+        self.delete_pod.side_effect = DeletePodError
+        with pytest.raises(DeletePodError):
+            self.cancel()
+        assert "dockerhub_token" not in self.stored()
 
     @patch("pubgrade.modules.endpoints.builds.create_build")
     def test_cancel_while_starting(self, create_build: MagicMock) -> None:

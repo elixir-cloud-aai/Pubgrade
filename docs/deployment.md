@@ -44,7 +44,9 @@ from the Secret given by `pubgrade.configSecret`. The environment variable
 
 - `subscriptions.admin_users`: the users that can verify other users, each with
   `name`, `uid` and `user_access_token`. At each start, the database is made to
-  match this list: after changing the Secret, restart Pubgrade.
+  match this list: after changing the Secret, restart Pubgrade. Quote tokens
+  that YAML would read as numbers (e.g., `"123456"`): tokens that aren't
+  strings match no request.
 - `repository.registration_enabled`, `user.registration_enabled` and
   `subscriptions.registration_enabled` (default: on): switch these off once
   repositories, users and subscriptions are set up. Further registrations then
@@ -80,6 +82,9 @@ from the Secret given by `pubgrade.configSecret`. The environment variable
     least one other character. Pubgrade checks these settings
     at start and stops with an error naming the setting if one can't be used.
 
+Pubgrade compares the access tokens of requests with the stored ones in
+constant time (`hmac.compare_digest`); a missing or empty token matches none.
+
 Log messages name repositories, users, subscriptions, builds and pods by
 their identifiers; they contain no access tokens or other credentials.
 Failed calls to the Kubernetes API are logged with status and reason, and
@@ -102,6 +107,18 @@ others. The volume needs a storage class with `ReadWriteMany`
 builds don't work under OpenShift's default restrictions. With builds off,
 requests that need them get a 403, as does
 `PUT /repositories/{id}/builds/{build_id}`.
+
+!!! warning "Builds are for trusted repositories only"
+
+    With builds on, Pubgrade clones the repositories it is given and builds
+    their Dockerfiles in its own namespace, in pods that run as root and get
+    the credentials of the intermediate registry and the repository's access
+    token. Whatever a repository's Dockerfile does runs there. Register only
+    repositories whose code and maintainers you trust, run Pubgrade in a
+    namespace of its own, and switch off the registration of repositories
+    once they are set up (`repository.registration_enabled`). Where you can,
+    leave builds off and let each repository's own CI build, sign and push
+    its images, then publish them to Pubgrade.
 
 Pubgrade clones the repository and checks out the `branch` (and the
 `commit_sha`, if given) or the `tag` in `head_commit`. Branches and tags must
@@ -175,6 +192,24 @@ with builds on, images are still published to Docker Hub, so the names of
 the images to build must be Docker Hub names (e.g., `org/app:1.0`, not
 `harbor.example.org/project/app:1.0`), and the intermediate registry must
 be one that the workflow can pull from.
+
+The build's record keeps the `dockerhub_token` only as long as the build
+needs it: it is removed once the build's completion is recorded (after the
+signing is triggered and its pod and files are removed), and when the build
+is canceled. `GET` never returns it. If GitHub can't be reached for the
+signing (its responses aren't checked, see above), or the pod can't be
+deleted, the request gets a 500 and the token stays: the pod's next report
+signs the image again and completes the build (files and pods that are gone
+already count as removed). A build whose pod was deleted, but whose
+completion then failed (e.g., Pubgrade stopped), keeps its token and isn't
+reported again; cancel it to remove the token. Once a build is complete,
+reporting it again changes nothing: its image isn't signed again, and no one
+is notified again (the results of the notifications are stored with the
+build, see [Usage](usage.md#notifications)). Builds that earlier versions
+recorded: canceled ones lose their token at Pubgrade's start; others keep it
+until they are canceled or their repository is deleted, or, if earlier
+versions recorded them as `SUCCEEDED`, until their pod reports them again:
+they are then signed and their subscribers notified once more, as before.
 
 ## Upgrading to API 2.1.0
 

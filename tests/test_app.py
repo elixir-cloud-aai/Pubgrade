@@ -85,6 +85,31 @@ def test_create_app(collections: dict[str, Any]) -> None:
     assert build["finished_at"] is None
 
 
+def test_create_app_removes_tokens_of_canceled_builds(
+    collections: dict[str, Any],
+) -> None:
+    """Canceled builds (e.g., of earlier versions) lose their registry token.
+
+    Other builds keep theirs: a running build needs it for its signing, and
+    one that earlier versions recorded as `SUCCEEDED` may be reported again.
+
+    Args:
+        collections: Collections of the database, by name.
+    """
+    collections["builds"].insert_many(
+        [
+            {"id": status, "status": status, "dockerhub_token": "token"}
+            for status in ("CANCELED", "QUEUED", "SUCCEEDED")
+        ]
+    )
+    create_app()
+    tokens = {
+        build["id"]: "dockerhub_token" in build
+        for build in collections["builds"].find()
+    }
+    assert tokens == {"CANCELED": False, "QUEUED": True, "SUCCEEDED": True}
+
+
 def test_main_runs_on_configured_port(
     collections: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
