@@ -1317,6 +1317,12 @@ class TestBuild:
         remove_files("build123", "pod_name", "namespace")
         assert not os.path.isdir("build123")
 
+    def test_remove_files_gone_already(self) -> None:
+        """Files and a pod that are gone already count as removed."""
+        with patch("pubgrade.modules.endpoints.builds.delete_pod") as delete_pod:
+            remove_files("build-gone", "pod_name", "namespace")
+        delete_pod.assert_called_once_with("pod_name", "namespace", missing_ok=True)
+
     @patch("kubernetes.config.load_kube_config", mocked_load_cluster_config)
     @patch(
         "kubernetes.client.api.core_v1_api.CoreV1Api.create_namespaced_pod",
