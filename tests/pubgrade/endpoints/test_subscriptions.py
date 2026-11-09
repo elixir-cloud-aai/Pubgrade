@@ -929,6 +929,13 @@ class TestSubscriptions:
         """A subscription listed for its user, but deleted, isn't found."""
         self.setup()
         self.insert_subscription()
+        repositories = (
+            self.app.config.foca.db.dbs["pubgradeStore"].collections["repositories"]
+        ).client
+        repositories.update_one(
+            {"id": MOCK_SUBSCRIPTION_INFO["repository_id"]},
+            {"$push": {"subscription_list": MOCK_SUBSCRIPTION_INFO["id"]}},
+        )
         self.app.config.foca.db.dbs["pubgradeStore"].collections[
             "subscriptions"
         ].client.delete_many({})
@@ -952,6 +959,13 @@ class TestSubscriptions:
             .client.find_one({"uid": MOCK_USER["uid"]})
         )
         assert MOCK_SUBSCRIPTION_INFO["id"] not in user.get("subscription_list", [])
+        # Nor for any repository
+        assert (
+            repositories.count_documents(
+                {"subscription_list": MOCK_SUBSCRIPTION_INFO["id"]}
+            )
+            == 0
+        )
 
     @patch("requests.request", mocked_request_api)
     def test_notify_subscriptions_any_value(self) -> None:
@@ -1016,3 +1030,16 @@ def test_matches_type_and_value(subscription: dict[str, Any]) -> None:
     """The build types don't widen the match of type and value."""
     build = {"head_commit": {"tag": "1.0"}, "build_type": "production"}
     assert not matches({**subscription, "build_types": ["production"]}, build)
+
+
+@pytest.mark.parametrize(
+    "subscription",
+    [{"value": "*"}, {"type": "tag"}, {}],
+)
+def test_matches_incomplete(subscription: dict[str, Any]) -> None:
+    """Subscriptions without type or value, stored before 2.1.0, don't match.
+
+    Args:
+        subscription: A subscription without `type`, `value` or both.
+    """
+    assert not matches(subscription, {"head_commit": {"tag": "1.0"}})

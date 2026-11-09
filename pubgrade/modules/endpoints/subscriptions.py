@@ -261,17 +261,18 @@ def delete_subscription(uid: str, user_access_token: str, subscription_id: str) 
     if subscription_id not in data_from_db_user.get("subscription_list", []):
         raise SubscriptionNotFound
     deleted = db_collection_subscriptions.find_one_and_delete({"id": subscription_id})
-    # No longer listed for the user, also if the subscription was gone already
-    # (e.g., removed with its repository), then for its repository
+    # No longer listed for any repository, then for the user, also if the
+    # subscription was gone already (e.g., removed with its repository, or by
+    # an interrupted request, which the user's list lets a retry finish)
+    collection("repositories").update_many(
+        {"subscription_list": subscription_id},
+        {"$pull": {"subscription_list": subscription_id}},
+    )
     db_collection_user.update_one(
         {"uid": uid}, {"$pull": {"subscription_list": subscription_id}}
     )
     if deleted is None:
         raise SubscriptionNotFound
-    collection("repositories").update_one(
-        {"id": deleted["repository_id"]},
-        {"$pull": {"subscription_list": subscription_id}},
-    )
     return 1
 
 
@@ -366,8 +367,9 @@ def matches(subscription: dict[str, Any], build: dict[str, Any]) -> bool:
         don't match.
     """
     head_commit = build["head_commit"]
-    subscription_type = subscription["type"]
-    if subscription_type not in head_commit or subscription["value"] not in (
+    # Subscriptions stored before API 2.1.0 may lack `type` or `value`
+    subscription_type = subscription.get("type")
+    if subscription_type not in head_commit or subscription.get("value") not in (
         "*",
         head_commit[subscription_type],
     ):
