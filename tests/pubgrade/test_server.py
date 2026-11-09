@@ -54,7 +54,7 @@ uid = "9fe2c4e93f654fdbb24c02b15259716c"
 def mocked_request_api(
     method: str, url: str, data: Any, headers: Any, **kwargs: Any
 ) -> MagicMock:
-    """Answer a request with status 200.
+    """Answer a request with status 200, or 204 for GitHub's dispatches.
 
     Args:
         method: HTTP method.
@@ -66,7 +66,7 @@ def mocked_request_api(
     Returns:
         A mocked response.
     """
-    return MagicMock(status_code=200)
+    return MagicMock(status_code=204 if "api.github.com" in url else 200)
 
 
 def test_getRepositories() -> None:
@@ -199,6 +199,7 @@ def mocked_create_build(
     intermediate_registry_path: Any,
     dockerhub_token: Any,
     project_access_token: Any,
+    repository_id: Any,
 ) -> str:
     """Stand in for the creation of a build, which needs Kubernetes.
 
@@ -212,6 +213,7 @@ def mocked_create_build(
         intermediate_registry_path: Path in the intermediate registry.
         dockerhub_token: Token of the registry.
         project_access_token: Access token of the repository.
+        repository_id: Identifier of the repository.
 
     Returns:
         A fixed message.
