@@ -64,6 +64,10 @@ NOT_CANCELED: dict[str, Any] = {"status": {"$ne": CANCELED}}
 # stopping them failed; responses leave it out
 STOPPING = "stopping"
 
+# The fields of a request for a build (`BuildRegister` and `dockerhub_token`
+# in the API); others aren't stored
+BUILD_FIELDS = frozenset({"images", "head_commit", "build_type", "dockerhub_token"})
+
 # An abbreviated or full commit hash (SHA-1 or SHA-256)
 COMMIT_HASH = re.compile(r"[0-9a-fA-F]{4,64}")
 
@@ -252,6 +256,10 @@ def register_builds(
         UndeclaredBuildType: Raised when the repository doesn't declare the
         build's `build_type`.
     """
+    # Only the fields that the API defines are stored
+    build_data = {
+        key: value for key, value in build_data.items() if key in BUILD_FIELDS
+    }
     db_collection_builds = collection("builds")
     db_collection_repositories = collection("repositories")
     retries = endpoints()["repository"]["retries"]
@@ -446,12 +454,14 @@ def get_builds(repository_id: str) -> list[dict[str, Any]]:
     return build_object_list
 
 
-def get_build_info(build_id: str) -> dict[str, Any]:
+def get_build_info(build_id: str, repository_id: str | None = None) -> dict[str, Any]:
     """Retrieve build information.
 
     Args:
         build_id (str): Build identifier. ( build_id = repository_id + random
         characters, len(build_id)=12 )
+        repository_id: Identifier of the repository that the build must
+            belong to (be listed for); any repository if not given.
 
     Returns:
         build_object (dict): Dictionary element of Build without DockerHub
@@ -459,8 +469,16 @@ def get_build_info(build_id: str) -> dict[str, Any]:
 
     Raises:
         BuildNotFound: Raised when object with given build identifier was
-        not found.
+        not found, or doesn't belong to the given repository.
     """
+    if (
+        repository_id is not None
+        and collection("repositories").count_documents(
+            {"id": repository_id, "build_list": build_id}, limit=1
+        )
+        == 0
+    ):
+        raise BuildNotFound
     db_collection_builds = collection("builds")
     try:
         build_object = (

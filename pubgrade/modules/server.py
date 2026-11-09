@@ -131,13 +131,13 @@ def getBuildInfo(id: str, build_id: str) -> dict[str, Any]:
     """Get build information.
 
     Args:
-        id: Identifier of Repository  # Not used only build_id is sufficient.
+        id: Identifier of the repository that the build belongs to.
         build_id: Identifier of Build to be retrieved.
 
     Returns:
         Build information (JSON object).
     """
-    return get_build_info(build_id)
+    return get_build_info(build_id, repository_id=id)
 
 
 @log_traffic

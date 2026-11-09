@@ -176,6 +176,26 @@ the images to build must be Docker Hub names (e.g., `org/app:1.0`, not
 `harbor.example.org/project/app:1.0`), and the intermediate registry must
 be one that the workflow can pull from.
 
+## Upgrading to API 2.1.0
+
+Version 2.1.0 of the API completes the subscriptions API:
+
+- `POST /subscriptions` needs `type` and `value`; without them, it gets a
+  400. Before, such subscriptions were stored, and every build of their
+  repository then failed to notify them. Delete subscriptions without
+  `type` or `value` that are stored already and subscribe again.
+- `POST /subscriptions` and `POST /repositories/{id}/builds` store only the
+  fields that the API defines; others are ignored instead of stored (and
+  returned by `GET`).
+- `GET /subscriptions` gives an empty list to a user without subscriptions,
+  instead of a 404.
+- `DELETE /subscriptions/{subscription_id}` also removes the subscription
+  from the lists of its user and its repository, so `GET /subscriptions`
+  no longer lists it.
+- `GET /repositories/{id}/builds/{build_id}` gets a 404 for a build of
+  another repository than `{id}`. The spec declares the 404 of the calls
+  that can answer it.
+
 ## Upgrading to FOCA 0.21 (API 2.0.0)
 
 From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA

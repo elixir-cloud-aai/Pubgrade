@@ -333,14 +333,17 @@ class TestSubscriptions:
             assert isinstance(res, list)
             assert res[0]["subscription_id"] == MOCK_USER_DB["subscription_list"][0]
 
-    def test_get_subscriptions_subscription_not_found(self) -> None:
-        """Test get subscriptions subscription not found."""
+    def test_get_subscriptions_none(self) -> None:
+        """Test that a user without subscriptions gets an empty list."""
         self.setup()
         self.app.config.foca.db.dbs["pubgradeStore"].collections[
             "users"
         ].client.insert_one(MOCK_USER_DB)
-        with self.app.app_context(), pytest.raises(SubscriptionNotFound):
-            get_subscriptions(MOCK_USER["uid"], MOCK_USER["user_access_token"])
+        with self.app.app_context():
+            assert (
+                get_subscriptions(MOCK_USER["uid"], MOCK_USER["user_access_token"])
+                == []
+            )
 
     def test_get_subscriptions_unauthorized(self) -> None:
         """Test get subscriptions unauthorized."""

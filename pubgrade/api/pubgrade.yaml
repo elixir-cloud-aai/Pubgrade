@@ -1,7 +1,7 @@
 openapi: 3.0.2
 info:
   title: 'ELIXIR Pubgrade Registry API Specification'
-  version: 2.0.0
+  version: 2.1.0
   description: |
     Pubgrade leverages the publish-subscribe (pub/sub) pattern to effectively
     decouple continuous integration (CI) from continuous deilivery (CD):
@@ -128,6 +128,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
         default:
@@ -348,6 +350,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
         default:
@@ -389,6 +393,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
         default:
@@ -574,6 +580,8 @@ paths:
                   required:
                     - repository_id
                     - callback_url
+                    - type
+                    - value
                     - access_token
               #additionalProperties: false    #shows error bad request on using
       callbacks:
@@ -759,6 +767,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
         default:
@@ -812,6 +822,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
         default:
