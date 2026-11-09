@@ -2,4 +2,13 @@
 # CI ignores: each with the reason (`statement`) and an expiry date
 # (`expired_at`). See
 # https://trivy.dev/latest/docs/configuration/filtering/#trivyignoreyaml
-vulnerabilities: []
+vulnerabilities:
+  # zlib1g in the FOCA 0.21.0 base image; fixed by the next FOCA base image
+  # (0.22.0), then bump the base and remove these entries (as in
+  # Pubgrade-Sidecar)
+  - id: CVE-2026-76844
+    statement: zlib1g in the FOCA 0.21.0 base image, fixed by FOCA 0.22.0
+    expired_at: 2026-11-30
+  - id: CVE-2026-85091
+    statement: zlib1g in the FOCA 0.21.0 base image, fixed by FOCA 0.22.0
+    expired_at: 2026-11-30
