@@ -89,6 +89,10 @@ Requests that don't match the API's schemas (e.g., a subscription without
   [invalid request](https://foca.readthedocs.io/en/latest/problems/invalid-request/)).
 - Values of the request are left out, but names of unknown parameters and
   body fields are echoed.
+- Unknown query parameters are always invalid fields. Unknown body fields
+  are invalid fields only where the schema forbids them (e.g.,
+  `POST /repositories`); elsewhere (e.g., `POST /subscriptions`) they are
+  accepted and dropped, neither stored nor returned.
 - `detail` names the invalid fields.
 - Other invalid requests get no `errors`: bodies that aren't JSON or are
   `null` get `"detail": "The request is malformed."`, and Pubgrade's own

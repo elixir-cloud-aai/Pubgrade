@@ -748,6 +748,24 @@ def test_body_without_fields_rejected(api: FlaskClient, data: str) -> None:
     assert subscriptions(api) == 0
 
 
+def test_unknown_parameter_and_field_rejected(api: FlaskClient) -> None:
+    """Unknown query parameters, and body fields the schema forbids, are named.
+
+    Args:
+        api: Test client of the app.
+    """
+    error = check(api.get("/subscriptions?foo=1", headers=register_user(api)), 400)
+    assert error["detail"] == "Invalid fields: foo (unknown-parameter)"
+    assert error["errors"] == [
+        {"detail": "Is not allowed.", "parameter": "foo", "code": "unknown-parameter"}
+    ]
+    body = {"url": "https://github.com/elixir-cloud-aai/Pubgrade", "zz": 1}
+    error = check(api.post("/repositories", json=body), 400)
+    assert error["errors"] == [
+        {"detail": "Is not allowed.", "pointer": "#/zz", "code": "unknown-property"}
+    ]
+
+
 def test_unknown_fields_not_stored(api: FlaskClient, subscriber: Subscriber) -> None:
     """Fields that the API doesn't define are neither stored nor returned."""
     user = register_user(api)
