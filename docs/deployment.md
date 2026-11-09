@@ -206,10 +206,10 @@ reported again; cancel it to remove the token. Once a build is complete,
 reporting it again changes nothing: its image isn't signed again, and no one
 is notified again (the results of the notifications are stored with the
 build, see [Usage](usage.md#notifications)). Builds that earlier versions
-recorded keep their token until they are canceled or their repository is
-deleted, or, if earlier versions recorded them as `SUCCEEDED`, until their
-pod reports them again: they are then signed and their subscribers notified
-once more, as before.
+recorded: canceled ones lose their token at Pubgrade's start; others keep it
+until they are canceled or their repository is deleted, or, if earlier
+versions recorded them as `SUCCEEDED`, until their pod reports them again:
+they are then signed and their subscribers notified once more, as before.
 
 ## Upgrading to API 2.1.0
 
