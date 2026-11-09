@@ -7,6 +7,7 @@ updates:
   # together; the image build installs the locked ones (`Dockerfile`)
   - package-ecosystem: uv
     directory: /
+    labels: ["type: dependencies"]
     schedule:
       interval: monthly
     target-branch: dev
@@ -31,6 +32,7 @@ updates:
   # Dependencies of the updater's image (`build-complete-updater/`)
   - package-ecosystem: pip
     directory: /build-complete-updater
+    labels: ["type: dependencies"]
     schedule:
       interval: monthly
     target-branch: dev
@@ -42,6 +44,7 @@ updates:
   # `@<commit> # vX.Y.Z`)
   - package-ecosystem: github-actions
     directory: /
+    labels: ["type: dependencies"]
     schedule:
       interval: monthly
     target-branch: dev
@@ -51,6 +54,7 @@ updates:
   # Base images in the `Dockerfile`s
   - package-ecosystem: docker
     directories: [/, /build-complete-updater]
+    labels: ["type: dependencies"]
     schedule:
       interval: monthly
     target-branch: dev
@@ -69,6 +73,7 @@ updates:
   # Hook revisions in `.pre-commit-config.yaml`
   - package-ecosystem: pre-commit
     directory: /
+    labels: ["type: dependencies"]
     schedule:
       interval: monthly
     target-branch: dev
@@ -80,6 +85,7 @@ updates:
   # (`.gitmodules`)
   - package-ecosystem: gitsubmodule
     directory: /
+    labels: ["type: dependencies"]
     schedule:
       interval: monthly
     target-branch: dev
