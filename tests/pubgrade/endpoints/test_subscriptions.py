@@ -333,14 +333,17 @@ class TestSubscriptions:
             assert isinstance(res, list)
             assert res[0]["subscription_id"] == MOCK_USER_DB["subscription_list"][0]
 
-    def test_get_subscriptions_subscription_not_found(self) -> None:
-        """Test get subscriptions subscription not found."""
+    def test_get_subscriptions_none(self) -> None:
+        """Test that a user without subscriptions gets an empty list."""
         self.setup()
         self.app.config.foca.db.dbs["pubgradeStore"].collections[
             "users"
         ].client.insert_one(MOCK_USER_DB)
-        with self.app.app_context(), pytest.raises(SubscriptionNotFound):
-            get_subscriptions(MOCK_USER["uid"], MOCK_USER["user_access_token"])
+        with self.app.app_context():
+            assert (
+                get_subscriptions(MOCK_USER["uid"], MOCK_USER["user_access_token"])
+                == []
+            )
 
     def test_get_subscriptions_unauthorized(self) -> None:
         """Test get subscriptions unauthorized."""
@@ -926,6 +929,13 @@ class TestSubscriptions:
         """A subscription listed for its user, but deleted, isn't found."""
         self.setup()
         self.insert_subscription()
+        repositories = (
+            self.app.config.foca.db.dbs["pubgradeStore"].collections["repositories"]
+        ).client
+        repositories.update_one(
+            {"id": MOCK_SUBSCRIPTION_INFO["repository_id"]},
+            {"$push": {"subscription_list": MOCK_SUBSCRIPTION_INFO["id"]}},
+        )
         self.app.config.foca.db.dbs["pubgradeStore"].collections[
             "subscriptions"
         ].client.delete_many({})
@@ -942,6 +952,20 @@ class TestSubscriptions:
                     MOCK_USER["user_access_token"],
                     MOCK_SUBSCRIPTION_INFO["id"],
                 )
+        # No longer listed for the user
+        user = (
+            self.app.config.foca.db.dbs["pubgradeStore"]
+            .collections["users"]
+            .client.find_one({"uid": MOCK_USER["uid"]})
+        )
+        assert MOCK_SUBSCRIPTION_INFO["id"] not in user.get("subscription_list", [])
+        # Nor for any repository
+        assert (
+            repositories.count_documents(
+                {"subscription_list": MOCK_SUBSCRIPTION_INFO["id"]}
+            )
+            == 0
+        )
 
     @patch("requests.request", mocked_request_api)
     def test_notify_subscriptions_any_value(self) -> None:
@@ -1006,3 +1030,16 @@ def test_matches_type_and_value(subscription: dict[str, Any]) -> None:
     """The build types don't widen the match of type and value."""
     build = {"head_commit": {"tag": "1.0"}, "build_type": "production"}
     assert not matches({**subscription, "build_types": ["production"]}, build)
+
+
+@pytest.mark.parametrize(
+    "subscription",
+    [{"value": "*"}, {"type": "tag"}, {}],
+)
+def test_matches_incomplete(subscription: dict[str, Any]) -> None:
+    """Subscriptions without type or value, stored before 2.1.0, don't match.
+
+    Args:
+        subscription: A subscription without `type`, `value` or both.
+    """
+    assert not matches(subscription, {"head_commit": {"tag": "1.0"}})

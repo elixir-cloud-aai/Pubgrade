@@ -483,6 +483,9 @@ def test_deleteSubscription() -> None:
     foca_config(app).db.dbs["pubgradeStore"].collections[
         "subscriptions"
     ].client.insert_one(MOCK_SUBSCRIPTION_INFO)
+    foca_config(app).db.dbs["pubgradeStore"].collections[
+        "repositories"
+    ].client = mongomock.MongoClient().db.collection
     with app.test_request_context(
         headers={
             "X-User-Access-Token": user_access_token,
