@@ -1421,3 +1421,9 @@ components:
       required:
         - detail
         - code
+      # Located either in the body or by a parameter
+      oneOf:
+        - required:
+            - pointer
+        - required:
+            - parameter

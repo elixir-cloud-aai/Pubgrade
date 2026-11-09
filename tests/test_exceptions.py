@@ -8,6 +8,7 @@ from foca.errors.exceptions import build_problem
 import pytest
 from werkzeug.exceptions import (
     BadRequest,
+    Forbidden,
     HTTPException,
     MethodNotAllowed,
     NotFound,
@@ -85,6 +86,11 @@ def test_response_status(exc: BaseException, status: int) -> None:
         (NotFound(), 404, "The requested resource wasn't found."),
         (Unauthorized(), 401, "The request is unauthorized."),
         (BadRequest(), 400, "The request is malformed."),
+        (
+            Forbidden(),
+            403,
+            "The requester is not authorized to perform this action.",
+        ),
     ],
 )
 def test_werkzeug_exceptions_mapped(
