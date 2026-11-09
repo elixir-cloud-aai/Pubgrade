@@ -50,6 +50,9 @@ the subscription's `callback_url`, is described as the callback
 `notification` of `POST /subscriptions`, with the body `NotificationRequest`
 (see [Usage](usage.md#receiving-notifications-without-the-sidecar)).
 
+Version 2.1.0 of the API completes the subscriptions API; see
+[Upgrading to API 2.1.0](deployment.md#upgrading-to-api-210).
+
 Since version 2.0.0 of the API, errors are
 [problem details](https://www.rfc-editor.org/rfc/rfc9457)
 (`application/problem+json`), with `title`, `status` (an integer) and

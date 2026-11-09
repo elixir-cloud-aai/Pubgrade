@@ -43,6 +43,11 @@ DEFAULT_MAX_SUBSCRIPTIONS = 100
 # Seconds that all calls of a notification may take beyond connecting and
 # waiting for the response
 NOTIFICATION_MARGIN = 5
+# The fields of a request for a subscription (`Subscription` and
+# `access_token` in the API); others aren't stored
+SUBSCRIPTION_FIELDS = frozenset(
+    {"repository_id", "callback_url", "type", "value", "build_types", "access_token"}
+)
 
 
 def register_subscription(
@@ -74,6 +79,7 @@ def register_subscription(
     """
     if not endpoints()["subscriptions"].get("registration_enabled", True):
         raise RegistrationDisabled
+    data = {key: value for key, value in data.items() if key in SUBSCRIPTION_FIELDS}
     db_collection_subscriptions = collection("subscriptions")
     db_collection_user = collection("users")
     db_collection_repositories = collection("repositories")
@@ -163,11 +169,10 @@ def get_subscriptions(uid: str, user_access_token: str) -> list[dict[str, str]]:
         user_access_token (str): Secret to verify user.
 
     Returns:
-        subscription_list (list): list of subscriptions registered by the user.
+        subscription_list (list): list of subscriptions registered by the
+        user; empty if there are none.
 
     Raises:
-        SubscriptionNotFound: Raised when no subscription is available for
-        the user.
         Unauthorized: Raised when access_token is invalid or not specified
         in request.
         UserNotFound: Raised when there is no user with specified uid.
@@ -180,13 +185,10 @@ def get_subscriptions(uid: str, user_access_token: str) -> list[dict[str, str]]:
         raise UserNotVerified
     if data_from_db_user["user_access_token"] != user_access_token:
         raise Unauthorized
-    try:
-        subscription_list = []
-        for subscription_id in data_from_db_user["subscription_list"]:
-            subscription_list.append({"subscription_id": subscription_id})
-        return subscription_list
-    except KeyError:
-        raise SubscriptionNotFound from None
+    return [
+        {"subscription_id": subscription_id}
+        for subscription_id in data_from_db_user.get("subscription_list", [])
+    ]
 
 
 def get_subscription_info(
@@ -237,8 +239,8 @@ def delete_subscription(uid: str, user_access_token: str, subscription_id: str) 
         subscription_id (str): Identifier for subscriptions.
 
     Returns:
-        Delete count. (1 if subscription is deleted, 0 if not
-        deleted.)
+        Delete count, 1. The subscription is no longer listed for the user
+        or its repository.
 
     Raises:
         SubscriptionNotFound: Raised when no subscription is available for
@@ -258,11 +260,20 @@ def delete_subscription(uid: str, user_access_token: str, subscription_id: str) 
         raise Unauthorized
     if subscription_id not in data_from_db_user.get("subscription_list", []):
         raise SubscriptionNotFound
-    data = db_collection_subscriptions.delete_one({"id": subscription_id})
-    if data.deleted_count > 0:
-        return data.deleted_count
-    else:
+    deleted = db_collection_subscriptions.find_one_and_delete({"id": subscription_id})
+    # No longer listed for any repository, then for the user, also if the
+    # subscription was gone already (e.g., removed with its repository, or by
+    # an interrupted request, which the user's list lets a retry finish)
+    collection("repositories").update_many(
+        {"subscription_list": subscription_id},
+        {"$pull": {"subscription_list": subscription_id}},
+    )
+    db_collection_user.update_one(
+        {"uid": uid}, {"$pull": {"subscription_list": subscription_id}}
+    )
+    if deleted is None:
         raise SubscriptionNotFound
+    return 1
 
 
 def notify_subscriptions(
@@ -356,8 +367,9 @@ def matches(subscription: dict[str, Any], build: dict[str, Any]) -> bool:
         don't match.
     """
     head_commit = build["head_commit"]
-    subscription_type = subscription["type"]
-    if subscription_type not in head_commit or subscription["value"] not in (
+    # Subscriptions stored before API 2.1.0 may lack `type` or `value`
+    subscription_type = subscription.get("type")
+    if subscription_type not in head_commit or subscription.get("value") not in (
         "*",
         head_commit[subscription_type],
     ):
@@ -404,7 +416,8 @@ def notify_all_subscriptions(
             try:
                 return notify_subscriptions(subscription_id, image, build_id)
             except SubscriptionNotFound:
-                # Deleting a subscription leaves its ID at the repository
+                # Deleting a user (or a subscription before API 2.1.0) leaves
+                # its ID at the repository
                 return _notification_result(subscription_id, "skipped")
             except Exception:
                 logger.exception("Notifying subscription %s failed.", subscription_id)

@@ -235,10 +235,31 @@ class TestUsers:
         with self.app.app_context():
             admin_uid = MOCK_ADMIN_USER_1["uid"]
             user_access_token = MOCK_ADMIN_USER_1["user_access_token"]
+            users = (
+                foca_config(self.app)
+                .db.dbs["pubgradeStore"]
+                .collections["users"]
+                .client
+            )
+            before = users.find_one({"uid": MOCK_USER_DB["uid"]}, {"_id": False})
+            # A change made meanwhile, which the update must keep
+            users.update_one(
+                {"uid": MOCK_USER_DB["uid"]},
+                {"$push": {"subscription_list": "meanwhile"}},
+            )
             response = toggle_user_status(
                 admin_uid, user_access_token, MOCK_USER_DB["uid"], True
             )
             assert response == "User verified successfully."
+            after = users.find_one({"uid": MOCK_USER_DB["uid"]}, {"_id": False})
+            assert after == {
+                **before,
+                "isVerified": True,
+                "subscription_list": [
+                    *before.get("subscription_list", []),
+                    "meanwhile",
+                ],
+            }
 
     def test_toggle_user_status_superuser_not_found(self) -> None:
         """Changing a status as an unknown admin user fails."""

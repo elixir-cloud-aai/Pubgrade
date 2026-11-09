@@ -63,7 +63,10 @@ curl --request POST '<base URL>/subscriptions' \
   }'
 ```
 
-Pubgrade sends `access_token` to `callback_url` with each notification, so use
+`repository_id`, `callback_url`, `access_token`, `type` and `value` are
+required, `build_types` (below) is optional, and other fields are ignored.
+Pubgrade sends `access_token` to `callback_url` with each
+notification, so use
 `https` for anything outside the cluster. A subscription's `value` must equal
 the `tag` or `branch` of a published image; the value `*` matches any of them,
 e.g. every new tag. A repository takes at most 100 subscriptions by default
@@ -239,6 +242,13 @@ curl '<base URL>/repositories/<repository ID>/builds'
 curl '<base URL>/subscriptions' \
   --header 'X-User-Id: <user ID>' \
   --header 'X-User-Access-Token: <user access token>'
+# Delete a subscription of the user
+curl --request DELETE '<base URL>/subscriptions/<subscription ID>' \
+  --header 'X-User-Id: <user ID>' \
+  --header 'X-User-Access-Token: <user access token>'
 ```
+
+A user without subscriptions gets an empty list; a deleted subscription is
+no longer listed, neither for its user nor for its repository.
 
 See [API](api.md) for all endpoints.

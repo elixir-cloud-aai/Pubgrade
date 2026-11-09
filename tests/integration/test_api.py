@@ -701,3 +701,97 @@ def test_publish_image_of_any_registry(
     assert [item["body"] for item in subscriber.received] == [
         {"image_name": image_name, "tag": "1"}
     ]
+
+
+@pytest.mark.parametrize("missing", ["type", "value"])
+def test_subscription_needs_type_and_value(
+    api: FlaskClient, subscriber: Subscriber, missing: str
+) -> None:
+    """Subscriptions without `type` or `value` are rejected."""
+    repository = register_repository(api)
+    body = {
+        "repository_id": repository["id"],
+        "callback_url": subscriber.url,
+        "access_token": "subscriber-token",
+        "type": "tag",
+        "value": "1",
+    }
+    del body[missing]
+    check(api.post("/subscriptions", headers=register_user(api), json=body), 400)
+    assert subscriptions(api) == 0
+
+
+def test_unknown_fields_not_stored(api: FlaskClient, subscriber: Subscriber) -> None:
+    """Fields that the API doesn't define are neither stored nor returned."""
+    user = register_user(api)
+    repository = register_repository(api)
+    extra = {"_id": "chosen", "unknown": "value"}
+    subscription = check(
+        api.post(
+            "/subscriptions",
+            headers=user,
+            json={
+                "repository_id": repository["id"],
+                "callback_url": subscriber.url,
+                "access_token": "subscriber-token",
+                "type": "tag",
+                "value": "1",
+                **extra,
+            },
+        )
+    )["subscription_id"]
+    stored = check(api.get(f"/subscriptions/{subscription}", headers=user))
+    assert "unknown" not in stored
+    build = check(
+        api.post(
+            f"/repositories/{repository['id']}/builds",
+            headers={"X-Project-Access-Token": repository["access_token"]},
+            json={
+                "images": [{"name": "org/image:1"}],
+                "head_commit": {"tag": "1"},
+                **extra,
+            },
+        )
+    )
+    stored = check(api.get(f"/repositories/{repository['id']}/builds/{build['id']}"))
+    assert "unknown" not in stored
+    with api.application.app_context():
+        for name in ("subscriptions", "builds"):
+            assert collection(name).count_documents({"_id": "chosen"}) == 0
+            assert collection(name).count_documents({"unknown": "value"}) == 0
+
+
+def test_delete_subscription_unlists_it(
+    api: FlaskClient, subscriber: Subscriber
+) -> None:
+    """A deleted subscription is no longer listed for its user or repository."""
+    user = register_user(api)
+    repository = register_repository(api)
+    subscription = subscribe(api, user, repository["id"], subscriber.url)
+    assert check(api.get("/subscriptions", headers=user)) == [
+        {"subscription_id": subscription}
+    ]
+    check(api.delete(f"/subscriptions/{subscription}", headers=user))
+    assert check(api.get("/subscriptions", headers=user)) == []
+    check(api.get(f"/subscriptions/{subscription}", headers=user), 404)
+    with api.application.app_context():
+        stored = collection("repositories").find_one({"id": repository["id"]})
+    assert stored is not None
+    assert subscription not in stored.get("subscription_list", [])
+
+
+def test_no_subscriptions_listed_as_empty(api: FlaskClient) -> None:
+    """A user without subscriptions gets an empty list."""
+    assert check(api.get("/subscriptions", headers=register_user(api))) == []
+
+
+def test_build_of_other_repository_not_found(api: FlaskClient) -> None:
+    """A build is only found under its own repository."""
+    repository = register_repository(api)
+    publish(api, repository, "1")
+    other = register_repository(api)
+    with api.application.app_context():
+        stored = collection("builds").find_one({})
+    assert stored is not None
+    check(api.get(f"/repositories/{repository['id']}/builds/{stored['id']}"))
+    check(api.get(f"/repositories/{other['id']}/builds/{stored['id']}"), 404)
