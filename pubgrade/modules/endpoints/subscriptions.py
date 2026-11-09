@@ -31,6 +31,7 @@ from pubgrade.modules.endpoints.repositories import (
 )
 from pubgrade.settings import collection, endpoints
 from pubgrade.timestamps import now, repaired_subscription
+from pubgrade.tokens import tokens_match
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +95,7 @@ def register_subscription(
         raise UserNotFound
     if not data_from_db_user["isVerified"]:
         raise UserNotVerified
-    if data_from_db_user["user_access_token"] != user_access_token:
+    if not tokens_match(user_access_token, data_from_db_user["user_access_token"]):
         raise Unauthorized
     if data_from_db_repository is None or "deleting" in data_from_db_repository:
         raise RepositoryNotFound
@@ -183,7 +184,7 @@ def get_subscriptions(uid: str, user_access_token: str) -> list[dict[str, str]]:
         raise UserNotFound
     if not data_from_db_user["isVerified"]:
         raise UserNotVerified
-    if data_from_db_user["user_access_token"] != user_access_token:
+    if not tokens_match(user_access_token, data_from_db_user["user_access_token"]):
         raise Unauthorized
     return [
         {"subscription_id": subscription_id}
@@ -218,7 +219,7 @@ def get_subscription_info(
         raise UserNotFound
     if not data_from_db_user["isVerified"]:
         raise UserNotVerified
-    if data_from_db_user["user_access_token"] != user_access_token:
+    if not tokens_match(user_access_token, data_from_db_user["user_access_token"]):
         raise Unauthorized
     if subscription_id not in data_from_db_user.get("subscription_list", []):
         raise SubscriptionNotFound
@@ -256,7 +257,7 @@ def delete_subscription(uid: str, user_access_token: str, subscription_id: str) 
         raise UserNotFound
     if not data_from_db_user["isVerified"]:
         raise UserNotVerified
-    if data_from_db_user["user_access_token"] != user_access_token:
+    if not tokens_match(user_access_token, data_from_db_user["user_access_token"]):
         raise Unauthorized
     if subscription_id not in data_from_db_user.get("subscription_list", []):
         raise SubscriptionNotFound

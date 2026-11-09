@@ -55,8 +55,10 @@ def create_app() -> App:
 
     Gunicorn calls this in each worker, after forking (MongoDB clients must
     not be shared across forks). Also brings stored timestamps into the
-    format of the API (cf. `repair_timestamps()`). Stops with an error if a
-    character set setting can't be used (cf. `check_charsets()`).
+    format of the API (cf. `repair_timestamps()`), and removes the registry
+    tokens that canceled builds (e.g., of earlier versions) still have, as
+    they don't need them any more. Stops with an error if a character set
+    setting can't be used (cf. `check_charsets()`).
 
     Returns:
         Connexion app.
@@ -67,6 +69,10 @@ def create_app() -> App:
     create_admin_user(app)
     with app.app.app_context():
         repair_timestamps(collection("builds"), collection("subscriptions"))
+        collection("builds").update_many(
+            {"status": "CANCELED", "dockerhub_token": {"$exists": True}},
+            {"$unset": {"dockerhub_token": ""}},
+        )
     return app
 
 
