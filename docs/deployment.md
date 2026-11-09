@@ -34,7 +34,8 @@ The images are `elixircloud/pubgrade` and `elixircloud/pubgrade-updater` on
 Docker Hub. The chart of a release (attached to the GitHub release) uses the
 images of that release (`X.Y.Z`); the chart in the repository uses `dev`,
 which follows the branch `dev`. Pin `X.Y.Z` or `sha-<commit>` to control
-upgrades. Until the first release, `latest` is outdated.
+upgrades. `latest` is the highest stable release (from 0.2.0 on; before, it
+was an outdated image).
 
 ## Configuration
 
