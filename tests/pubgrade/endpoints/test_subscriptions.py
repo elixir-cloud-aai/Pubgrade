@@ -945,6 +945,13 @@ class TestSubscriptions:
                     MOCK_USER["user_access_token"],
                     MOCK_SUBSCRIPTION_INFO["id"],
                 )
+        # No longer listed for the user
+        user = (
+            self.app.config.foca.db.dbs["pubgradeStore"]
+            .collections["users"]
+            .client.find_one({"uid": MOCK_USER["uid"]})
+        )
+        assert MOCK_SUBSCRIPTION_INFO["id"] not in user.get("subscription_list", [])
 
     @patch("requests.request", mocked_request_api)
     def test_notify_subscriptions_any_value(self) -> None:
