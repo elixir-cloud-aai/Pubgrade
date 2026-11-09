@@ -717,8 +717,53 @@ def test_subscription_needs_type_and_value(
         "value": "1",
     }
     del body[missing]
-    check(api.post("/subscriptions", headers=register_user(api), json=body), 400)
+    error = check(
+        api.post("/subscriptions", headers=register_user(api), json=body), 400
+    )
+    # The invalid field, by location and code, without the request's values
+    assert error["detail"] == f"Invalid fields: #/{missing} (required)"
+    assert error["errors"] == [
+        {"detail": "Is required.", "pointer": f"#/{missing}", "code": "required"}
+    ]
     assert subscriptions(api) == 0
+
+
+@pytest.mark.parametrize("data", ["{", "null"])
+def test_body_without_fields_rejected(api: FlaskClient, data: str) -> None:
+    """Bodies that aren't JSON or are `null` get the mapped detail only.
+
+    Args:
+        api: Test client of the app.
+        data: Request body.
+    """
+    response = api.post(
+        "/subscriptions",
+        headers=register_user(api),
+        data=data,
+        content_type="application/json",
+    )
+    error = check(response, 400)
+    assert error["detail"] == "The request is malformed."
+    assert "errors" not in error
+    assert subscriptions(api) == 0
+
+
+def test_unknown_parameter_and_field_rejected(api: FlaskClient) -> None:
+    """Unknown query parameters, and body fields the schema forbids, are named.
+
+    Args:
+        api: Test client of the app.
+    """
+    error = check(api.get("/subscriptions?foo=1", headers=register_user(api)), 400)
+    assert error["detail"] == "Invalid fields: foo (unknown-parameter)"
+    assert error["errors"] == [
+        {"detail": "Is not allowed.", "parameter": "foo", "code": "unknown-parameter"}
+    ]
+    body = {"url": "https://github.com/elixir-cloud-aai/Pubgrade", "zz": 1}
+    error = check(api.post("/repositories", json=body), 400)
+    assert error["errors"] == [
+        {"detail": "Is not allowed.", "pointer": "#/zz", "code": "unknown-property"}
+    ]
 
 
 def test_unknown_fields_not_stored(api: FlaskClient, subscriber: Subscriber) -> None:

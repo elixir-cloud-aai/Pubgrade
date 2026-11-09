@@ -9,13 +9,13 @@ import re
 import shutil
 from typing import Any
 
+from foca.errors import Unauthorized
 from git import GitCommandError, Repo
 from kubernetes import client, config
 from kubernetes.client import ApiException
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 import requests
-from werkzeug.exceptions import Unauthorized
 import yaml
 
 from pubgrade.charsets import get_charset

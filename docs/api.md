@@ -66,9 +66,39 @@ Since version 2.0.0 of the API, errors are
 }
 ```
 
-For invalid requests, `detail` tells what is wrong. Before, errors had `msg`
-and `status_code` (a string) instead. Request bodies larger than 1 MiB are
-rejected with `413`. Timestamps (`started_at`, `finished_at` and
-`updated_at`) are in UTC with time zone (e.g.,
-`2026-11-06T14:04:04.619000+00:00`), and `finished_at` of a build is `null`
-until it has finished (before: `"NULL"`).
+Before, errors had `msg` and `status_code` (a string) instead.
+
+Requests that don't match the API's schemas (e.g., a subscription without
+`type`) also get `type`, `code` and `errors`, e.g.:
+
+```json
+{
+  "type": "https://foca.readthedocs.io/en/latest/problems/invalid-request/",
+  "title": "Bad Request",
+  "status": 400,
+  "detail": "Invalid fields: #/type (required)",
+  "code": "invalid-request",
+  "errors": [
+    {"detail": "Is required.", "pointer": "#/type", "code": "required"}
+  ]
+}
+```
+
+- `errors` lists the invalid fields: each by its location (`pointer` in the
+  body or `parameter`) and a stable `code` (see FOCA's
+  [invalid request](https://foca.readthedocs.io/en/latest/problems/invalid-request/)).
+- Values of the request are left out, but names of unknown parameters and
+  body fields are echoed.
+- Unknown query parameters are always invalid fields. Unknown body fields
+  are invalid fields only where the schema forbids them (e.g.,
+  `POST /repositories`); elsewhere (e.g., `POST /subscriptions`) they are
+  accepted and dropped, neither stored nor returned.
+- `detail` names the invalid fields.
+- Other invalid requests get no `errors`: bodies that aren't JSON or are
+  `null` get `"detail": "The request is malformed."`, and Pubgrade's own
+  checks (e.g., an unknown branch in `head_commit`) their own `detail`.
+
+Request bodies larger than 1 MiB are rejected with `413`. Timestamps
+(`started_at`, `finished_at` and `updated_at`) are in UTC with time zone
+(e.g., `2026-11-06T14:04:04.619000+00:00`), and `finished_at` of a build is
+`null` until it has finished (before: `"NULL"`).

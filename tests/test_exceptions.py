@@ -7,9 +7,13 @@ from foca import Foca
 from foca.errors.exceptions import build_problem
 import pytest
 from werkzeug.exceptions import (
+    BadRequest,
+    Forbidden,
     HTTPException,
     MethodNotAllowed,
+    NotFound,
     RequestEntityTooLarge,
+    Unauthorized,
 )
 
 from pubgrade.app import CONFIG_FILE
@@ -74,3 +78,40 @@ def test_response_status(exc: BaseException, status: int) -> None:
     conf = Foca(config_file=CONFIG_FILE).conf.exceptions
     problem, code = build_problem(exc, conf)
     assert code == problem["status"] == status
+
+
+@pytest.mark.parametrize(
+    "exc, status, detail",
+    [
+        (NotFound(), 404, "The requested resource wasn't found."),
+        (Unauthorized(), 401, "The request is unauthorized."),
+        (BadRequest(), 400, "The request is malformed."),
+        (
+            Forbidden(),
+            403,
+            "The requester is not authorized to perform this action.",
+        ),
+    ],
+)
+def test_werkzeug_exceptions_mapped(
+    exc: BaseException, status: int, detail: str
+) -> None:
+    """Werkzeug's exceptions get the entries of their `foca.errors` classes.
+
+    Flask raises them, e.g., `NotFound` for unknown paths.
+
+    Args:
+        exc: Exception raised.
+        status: Expected status of the response.
+        detail: Expected detail of the response.
+    """
+    conf = Foca(config_file=CONFIG_FILE).conf.exceptions
+    problem, code = build_problem(exc, conf)
+    assert code == status
+    assert problem["detail"] == detail
+
+
+def test_no_werkzeug_classes_mapped() -> None:
+    """The map has no classes of Werkzeug, which FOCA logs as deprecated."""
+    modules = {cls.__module__ for cls in exceptions}
+    assert not any(module.startswith("werkzeug") for module in modules)

@@ -6,9 +6,9 @@ import string
 from typing import Any
 import uuid
 
+from foca.errors import Unauthorized
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
-from werkzeug.exceptions import Unauthorized
 
 from pubgrade.charsets import EXCLUDED, NOT_AT_ENDS, get_charset, usable
 from pubgrade.errors.exceptions import (

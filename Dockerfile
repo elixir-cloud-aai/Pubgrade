@@ -10,7 +10,7 @@ FROM ghcr.io/astral-sh/uv:0.13.7@sha256:96f40d3904aad8d0bd010539001d36c8e2188b98
 ## by hand, the base image and `foca` in `pyproject.toml` and `uv.lock`
 ## together (`.github/dependabot.yml`; `tests/test_image.py` checks that they
 ## match, and that the Python version is the one `pyproject.toml` requires)
-FROM elixircloud/foca:0.21.0-py3.13@sha256:ba79033cab60dd79419c2c44f90000f4fb9aa8d495ea09c2798a7348516bd84f
+FROM elixircloud/foca:0.22.0-py3.13@sha256:bf02db1195d60940dd3b29e53ce4757854155e258f35199e28d778cbf6128f9a
 
 ##### METADATA #####
 ## OCI annotations; CI's `docker/metadata-action` sets the version, revision

@@ -8,11 +8,11 @@ from typing import Any
 from unittest.mock import MagicMock, call
 
 from flask import Flask
+from foca.errors import InternalServerError, Unauthorized
 from foca.models.config import MongoConfig
 import mongomock
 from pymongo.errors import DuplicateKeyError
 import pytest
-from werkzeug.exceptions import InternalServerError, Unauthorized
 
 from pubgrade.errors.exceptions import (
     CreatePodError,

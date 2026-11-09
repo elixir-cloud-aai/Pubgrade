@@ -6,9 +6,9 @@ import logging
 from typing import Any
 
 from flask import current_app
+from foca.errors import Unauthorized
 from pymongo.errors import DuplicateKeyError
 import requests
-from werkzeug.exceptions import Unauthorized
 
 from pubgrade.charsets import get_charset
 from pubgrade.errors.exceptions import (
@@ -443,7 +443,7 @@ def notify_all_subscriptions(
             else _notification_result(subscription_id, "failed")
             for future, subscription_id in futures.items()
         ]
-    app.config.foca.db.dbs["pubgradeStore"].collections["builds"].client.update_one(
+    collection("builds").update_one(
         {"id": build_id}, {"$set": {"notifications": results}}
     )
     return results
