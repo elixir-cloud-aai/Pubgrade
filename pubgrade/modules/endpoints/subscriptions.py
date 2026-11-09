@@ -261,7 +261,8 @@ def delete_subscription(uid: str, user_access_token: str, subscription_id: str) 
     if subscription_id not in data_from_db_user.get("subscription_list", []):
         raise SubscriptionNotFound
     deleted = db_collection_subscriptions.find_one_and_delete({"id": subscription_id})
-    # No longer listed for the user, nor for its repository
+    # No longer listed for the user, also if the subscription was gone already
+    # (e.g., removed with its repository), then for its repository
     db_collection_user.update_one(
         {"uid": uid}, {"$pull": {"subscription_list": subscription_id}}
     )
@@ -413,7 +414,8 @@ def notify_all_subscriptions(
             try:
                 return notify_subscriptions(subscription_id, image, build_id)
             except SubscriptionNotFound:
-                # Deleting a subscription leaves its ID at the repository
+                # Deleting a user (or a subscription before API 2.1.0) leaves
+                # its ID at the repository
                 return _notification_result(subscription_id, "skipped")
             except Exception:
                 logger.exception("Notifying subscription %s failed.", subscription_id)

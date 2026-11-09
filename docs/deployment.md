@@ -185,13 +185,18 @@ Version 2.1.0 of the API completes the subscriptions API:
   repository then failed to notify them. Delete subscriptions without
   `type` or `value` that are stored already and subscribe again.
 - `POST /subscriptions` and `POST /repositories/{id}/builds` store only the
-  fields that the API defines; others are ignored instead of stored (and
-  returned by `GET`).
+  top-level fields that the API defines; others are ignored instead of
+  stored (and returned by `GET`). Fields within `images` and `head_commit`
+  are stored as given.
 - `GET /subscriptions` gives an empty list to a user without subscriptions,
   instead of a 404.
 - `DELETE /subscriptions/{subscription_id}` also removes the subscription
   from the lists of its user and its repository, so `GET /subscriptions`
-  no longer lists it.
+  no longer lists it. Subscriptions deleted before stay listed for their
+  user: deleting them again removes them from the list (the request gets a
+  404, as they are gone).
+- Verifying or unverifying a user changes only that flag, so it no longer
+  undoes a subscription that the user registers or deletes meanwhile.
 - `GET /repositories/{id}/builds/{build_id}` gets a 404 for a build of
   another repository than `{id}`. The spec declares the 404 of the calls
   that can answer it.

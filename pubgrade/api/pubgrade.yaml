@@ -698,6 +698,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
         default:
@@ -881,6 +883,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
         default:
@@ -956,6 +960,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
         default:
@@ -995,6 +1001,14 @@ paths:
                schema:
                  type: string
                  example: User verified successfully
+         '401':
+           $ref: '#/components/responses/Unauthorized'
+         '404':
+           $ref: '#/components/responses/NotFound'
+         '500':
+           $ref: '#/components/responses/InternalServerError'
+         default:
+           $ref: '#/components/responses/Error'
   /users/{uid}/unverify:
      put:
        summary: Verify registered administrator.
@@ -1030,6 +1044,14 @@ paths:
                schema:
                  type: string
                  example: User unverified successfully
+         '401':
+           $ref: '#/components/responses/Unauthorized'
+         '404':
+           $ref: '#/components/responses/NotFound'
+         '500':
+           $ref: '#/components/responses/InternalServerError'
+         default:
+           $ref: '#/components/responses/Error'
 components:
   responses:
     BadRequest:

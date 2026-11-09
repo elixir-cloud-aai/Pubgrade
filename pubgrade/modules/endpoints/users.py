@@ -176,12 +176,14 @@ def toggle_user_status(
         raise Unauthorized
 
     db_collection_user = collection("users")
-    data_from_db = db_collection_user.find_one({"uid": uid})
-    if data_from_db is None:
-        logger.error("Could not find repository with given identifier: %s", uid)
+    # Sets only the flag, so that concurrent changes of the user's
+    # subscriptions are kept
+    updated = db_collection_user.update_one(
+        {"uid": uid}, {"$set": {"isVerified": is_verify}}
+    )
+    if updated.matched_count == 0:
+        logger.error("Could not find user with given identifier: %s", uid)
         raise UserNotFound
-    data_from_db["isVerified"] = is_verify
-    db_collection_user.replace_one(filter={"uid": uid}, replacement=data_from_db)
     if is_verify:
         return "User verified successfully."
     else:

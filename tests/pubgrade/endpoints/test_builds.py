@@ -678,6 +678,18 @@ class TestBuild:
             assert "started_at" in res
             assert "branch" in res["head_commit"]
 
+    def test_get_build_info_of_repository(self) -> None:
+        """A build is found only under the repository that lists it."""
+        self.setup_with_build()
+        with self.app.app_context():
+            assert get_build_info(
+                MOCK_BUILD_INFO["id"], repository_id=MOCK_REPOSITORIES[1]["id"]
+            )
+            with pytest.raises(BuildNotFound):
+                get_build_info(
+                    MOCK_BUILD_INFO["id"], repository_id=MOCK_REPOSITORIES[0]["id"]
+                )
+
     def test_get_build_info_old_format(self) -> None:
         """Builds written by the previous version get timestamps with zone."""
         self.setup()

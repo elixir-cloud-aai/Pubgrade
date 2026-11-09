@@ -63,8 +63,9 @@ curl --request POST '<base URL>/subscriptions' \
   }'
 ```
 
-All five fields are required; other fields than these and `build_types`
-(below) are ignored. Pubgrade sends `access_token` to `callback_url` with each
+`repository_id`, `callback_url`, `access_token`, `type` and `value` are
+required, `build_types` (below) is optional, and other fields are ignored.
+Pubgrade sends `access_token` to `callback_url` with each
 notification, so use
 `https` for anything outside the cluster. A subscription's `value` must equal
 the `tag` or `branch` of a published image; the value `*` matches any of them,
