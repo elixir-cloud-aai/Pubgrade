@@ -163,9 +163,8 @@ chart are released together, with one version: the tag `vX.Y.Z` (or
 `CITATION.cff`.
 Until 1.0.0, all releases are GitHub pre-releases.
 
-For the first release, the chart's `version` (0.2.0, from before the release
-workflow) and the app's version (0.1.0) differ; the release-prep pull request
-sets both, e.g., to 0.2.0.
+The first release, 0.2.0, took the chart's earlier `version` (0.2.0, from
+before the release workflow) for the app, which was 0.1.0 before.
 
 1. Release-prep pull request to `dev`: set the version in `pyproject.toml`
    (then run `uv lock`), `helm/Chart.yaml` (`version` and `appVersion`)

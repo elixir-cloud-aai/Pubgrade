@@ -9,4 +9,4 @@ type: application
 # `docs/development.md`). The packaged chart of a release defaults to the
 # images of the release
 version: 0.2.0
-appVersion: 0.1.0
+appVersion: 0.2.0
