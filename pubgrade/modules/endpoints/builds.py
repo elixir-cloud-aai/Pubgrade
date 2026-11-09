@@ -623,7 +623,8 @@ def clone_directory(repo_url: str) -> str:
     The name is the last part of the URL's path (or of an scp-like address,
     e.g., `git@github.com:org/repo.git`), without `.git`. Names that could
     leave the build's directory or be taken for an option (e.g., `..`,
-    `-repo`), and URLs without a path, get `CLONE_DIRECTORY` instead.
+    `-repo`), names of the build's own files (`config.json`, `*.yaml`), and
+    URLs without a path, get `CLONE_DIRECTORY` instead.
 
     Args:
         repo_url: URL of the repository.
@@ -634,7 +635,11 @@ def clone_directory(repo_url: str) -> str:
     path = urlsplit(repo_url).path if "://" in repo_url else repo_url
     name = path.rstrip("/").rsplit("/", 1)[-1].rsplit(":", 1)[-1]
     name = name.removesuffix(".git")
-    if name in {".", ".."} or not SAFE_CLONE_NAME.fullmatch(name):
+    if (
+        not SAFE_CLONE_NAME.fullmatch(name)
+        or name == "config.json"
+        or name.endswith(".yaml")
+    ):
         return CLONE_DIRECTORY
     return name
 

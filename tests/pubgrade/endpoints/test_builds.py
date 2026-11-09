@@ -571,6 +571,7 @@ class TestBuild:
         create.assert_called_once()
         assert create.call_args.kwargs["branch"] == branch
         assert create.call_args.kwargs["commit"] == commit
+        assert create.call_args.kwargs["repository_id"] == "repo12"
         path = create.call_args.kwargs["intermediate_registry_path"]
         assert path.startswith("ttl.sh/test-updater-")
         assert path.endswith(":1h")
@@ -735,6 +736,25 @@ class TestBuild:
         assert clone_path == "./build123/drs-filer"
         assert Repo(clone_path).head.commit.hexsha.startswith(drs_filer.commit)
         shutil.rmtree("./build123")
+
+    def test_git_clone_and_checkout_other_url(
+        self, drs_filer: SimpleNamespace, tmp_path: Path
+    ) -> None:
+        """URLs of other forms than `https://host/owner/repo` are cloned too.
+
+        Args:
+            drs_filer: Local copy of the repository.
+            tmp_path: Temporary base directory.
+        """
+        clone_path = git_clone_and_checkout(
+            repo_url=str(drs_filer.root / "drs-filer"),
+            branch="dev",
+            commit="",
+            base_dir=str(tmp_path),
+            build_id="build123",
+        )
+        assert clone_path == f"{tmp_path}/build123/drs-filer"
+        assert Repo(clone_path).head.commit.hexsha
 
     def test_git_clone_and_checkout_without_branch(
         self, drs_filer: SimpleNamespace
@@ -1058,6 +1078,8 @@ class TestBuild:
             repository_id="repo12",
         )
         clone.assert_called_once()
+        assert deployment.call_args.kwargs["build_id"] == "build123"
+        assert deployment.call_args.kwargs["repository_id"] == "repo12"
         config_file_writer.assert_called_once_with(
             dockerhub_token="token", config_file_location=config_file
         )
@@ -1634,6 +1656,9 @@ class TestBuild:
             ("https://github.com/org/..", "repository"),
             ("https://github.com/org/.git", "repository"),
             ("https://github.com/org/-repo", "repository"),
+            # Names of the build's own files
+            ("https://github.com/org/config.json", "repository"),
+            ("https://github.com/org/build.yaml", "repository"),
         ],
     )
     def test_clone_directory(self, url: str, name: str) -> None:
