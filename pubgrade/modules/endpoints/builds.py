@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 from typing import Any
+from urllib.parse import urlsplit
 
 from foca.errors import Unauthorized
 from git import GitCommandError, Repo
@@ -54,6 +55,10 @@ REQUEST_TIMEOUT = 30
 # Seconds to connect to the Kubernetes API and for its response, when
 # deleting a pod
 KUBERNETES_TIMEOUT = 10
+# Names of clones that are taken from the repository's URL; others are
+# replaced by `CLONE_DIRECTORY`
+SAFE_CLONE_NAME = re.compile(r"[A-Za-z0-9_][A-Za-z0-9._-]*")
+CLONE_DIRECTORY = "repository"
 
 # States of builds that have finished
 FINISHED = ["SUCCEEDED", "FAILED"]
@@ -331,7 +336,7 @@ def register_builds(
         )
         return {"id": build_data["id"]}
     try:
-        start_build(build_data, data_from_db["url"], access_token)
+        start_build(build_data, data_from_db["url"], access_token, repository_id)
     except CreatePodError:
         # The pod may have been created nonetheless, and reports to the build
         ensure_accepting(repository_id, build_data["id"])
@@ -376,13 +381,16 @@ def register_builds(
     return {"id": build_data["id"]}
 
 
-def start_build(build_data: dict[str, Any], repo_url: str, access_token: str) -> None:
+def start_build(
+    build_data: dict[str, Any], repo_url: str, access_token: str, repository_id: str
+) -> None:
     """Start a registered build.
 
     Args:
         build_data (dict): The build, as registered.
         repo_url (str): URL of the repository.
         access_token (str): Access token of the repository.
+        repository_id (str): Identifier of the repository.
 
     Raises:
         GitRefNotFound: Raised when the branch, tag or commit isn't in the
@@ -415,6 +423,7 @@ def start_build(build_data: dict[str, Any], repo_url: str, access_token: str) ->
         commit=commit_sha,
         base_dir=BASE_DIR,
         build_id=build_data["id"],
+        repository_id=repository_id,
         dockerfile_location=build_data["images"][0]["location"],
         intermediate_registry_path=intermediate_registry_path,
         dockerhub_token=build_data["dockerhub_token"],
@@ -503,6 +512,7 @@ def create_build(
     intermediate_registry_path: str,
     dockerhub_token: str,
     project_access_token: str,
+    repository_id: str,
 ) -> None:
     """Create build and push to DockerHub.
 
@@ -523,6 +533,8 @@ def create_build(
         dockerhub to push image `echo -n USER:PASSWD | base64`
         project_access_token (str): Secret used to verify source, will be used
         by callback_url to inform pubgrade for build completion.
+        repository_id (str): Identifier of the repository, which the build's pod
+            reports to.
 
     Raises:
         InternalServerError: If the build's directory would be outside
@@ -560,6 +572,8 @@ def create_build(
             deployment_file_location,
             f"{build_id}/config.json",
             project_access_token,
+            build_id=build_id,
+            repository_id=repository_id,
         )
 
         # Create dockerhub config file
@@ -603,6 +617,33 @@ def remove_build_dir(build_dir: str, build_id: str) -> None:
         )
 
 
+def clone_directory(repo_url: str) -> str:
+    """Name the directory of a repository's clone.
+
+    The name is the last part of the URL's path (or of an scp-like address,
+    e.g., `git@github.com:org/repo.git`), without `.git`. Names that could
+    leave the build's directory or be taken for an option (e.g., `..`,
+    `-repo`), names of the build's own files (`config.json`, `*.yaml`), and
+    URLs without a path, get `CLONE_DIRECTORY` instead.
+
+    Args:
+        repo_url: URL of the repository.
+
+    Returns:
+        The name of the directory.
+    """
+    path = urlsplit(repo_url).path if "://" in repo_url else repo_url
+    name = path.rstrip("/").rsplit("/", 1)[-1].rsplit(":", 1)[-1]
+    name = name.removesuffix(".git")
+    if (
+        not SAFE_CLONE_NAME.fullmatch(name)
+        or name == "config.json"
+        or name.endswith(".yaml")
+    ):
+        return CLONE_DIRECTORY
+    return name
+
+
 def git_clone_and_checkout(
     repo_url: str, branch: str, commit: str, base_dir: str, build_id: str
 ) -> str:
@@ -624,8 +665,7 @@ def git_clone_and_checkout(
         GitRefNotFound: Raised when the branch, or the tag or commit, isn't in
             the repository.
     """
-    repo_name = repo_url.split("/")[4].split(".", maxsplit=1)[0]
-    clone_path = f"{base_dir}/{build_id}/{repo_name}"
+    clone_path = f"{base_dir}/{build_id}/{clone_directory(repo_url)}"
     try:
         repo = Repo.clone_from(repo_url, clone_path)
     except GitCommandError:
@@ -700,6 +740,8 @@ def create_deployment_YAML(
     deployment_file_location: str,
     config_file_location: str,
     project_access_token: str,
+    build_id: str,
+    repository_id: str,
 ) -> str:
     """Create kaniko deployment file.
 
@@ -716,6 +758,9 @@ def create_deployment_YAML(
         dockerhub access token.
         project_access_token (str): Secret used to verify source, will be used
         by callback_url to inform pubgrade for build completion.
+        build_id (str): Identifier of the build, which names the pod.
+        repository_id (str): Identifier of the build's repository, which the pod
+            reports to (`REPOSITORYID`).
 
     Returns:
         deployment_file_location (str): Location of kaniko deployment file
@@ -726,7 +771,6 @@ def create_deployment_YAML(
         deployment file.
     """
     try:
-        build_id = deployment_file_location.split("/")[2]
         with open(template_file) as file_stream:
             data = yaml.safe_load(file_stream)
         data["metadata"]["name"] = build_id
@@ -757,6 +801,9 @@ def create_deployment_YAML(
             data["spec"]["containers"][0]["env"][2]["value"] = "default"
         data["spec"]["containers"][0]["env"][3]["value"] = os.getenv("PUBGRADE_URL")
         data["spec"]["containers"][0]["env"][4]["value"] = "8080"  # PORT
+        data["spec"]["containers"][0]["env"].append(
+            {"name": "REPOSITORYID", "value": repository_id}
+        )
         with open(deployment_file_location, "w") as yaml_file:
             yaml_file.write(yaml.dump(data, default_flow_style=False))
         return deployment_file_location
@@ -1238,9 +1285,11 @@ def trigger_signing_image(
         push_tag: Image to publish.
 
     Raises:
-        InternalServerError: If GitHub can't be reached.
+        InternalServerError: If GitHub can't be reached, or doesn't accept
+            the dispatch (any response but 204).
     """
-    username, password = base64.b64decode(dockerhub_token).decode("utf-8").split(":")
+    # Passwords may contain colons, user names don't
+    username, password = base64.b64decode(dockerhub_token).decode("utf-8").split(":", 1)
     url = "https://api.github.com/repos/{}/dispatches".format(
         endpoints()["builds"]["gh_action_path"]
     )
@@ -1267,7 +1316,7 @@ def trigger_signing_image(
         "Content-Type": "application/json",
     }
     try:
-        requests.request(
+        response = requests.request(
             "POST", url, headers=headers, data=payload, timeout=REQUEST_TIMEOUT
         )
     except requests.exceptions.RequestException as error:
@@ -1277,3 +1326,12 @@ def trigger_signing_image(
             "Triggering the signing of %s failed: %s", push_tag, type(error).__name__
         )
         raise InternalServerError from None
+    # GitHub accepts a dispatch with 204; anything else (e.g., a 401 for a
+    # wrong token, a 404 for a wrong `gh_action_path`) triggers no workflow
+    if response.status_code != 204:
+        logger.error(
+            "Triggering the signing of %s failed: GitHub answered %s",
+            push_tag,
+            response.status_code,
+        )
+        raise InternalServerError

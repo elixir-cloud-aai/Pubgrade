@@ -89,7 +89,7 @@ Log messages name repositories, users, subscriptions, builds and pods by
 their identifiers; they contain no access tokens or other credentials.
 Failed calls to the Kubernetes API are logged with status and reason, and
 requests to GitHub that fail (e.g., no connection) with the type of the
-error; responses of GitHub are not checked.
+error, and those that GitHub doesn't accept with the status of its response.
 
 ## Builds
 
@@ -102,7 +102,10 @@ image and a `dockerhub_token`. This adds an updater, a shared volume and rights
 to manage pods in the namespace. Every 5 seconds, the updater reports build
 pods that succeeded to Pubgrade, waiting up to 30 seconds to connect and
 again for the response; a report that fails is logged and doesn't stop the
-others. The volume needs a storage class with `ReadWriteMany`
+others. Each build pod names its repository (`REPOSITORYID`), so any
+`repository.id_length` works; pods of earlier versions, without it, are
+reported to the repository named by the first 6 characters of the build's
+identifier. The volume needs a storage class with `ReadWriteMany`
 (`builds.volume.storageClass`). Build pods run as root, so
 builds don't work under OpenShift's default restrictions. With builds off,
 requests that need them get a 403, as does
@@ -121,7 +124,11 @@ requests that need them get a 403, as does
     its images, then publish them to Pubgrade.
 
 Pubgrade clones the repository and checks out the `branch` (and the
-`commit_sha`, if given) or the `tag` in `head_commit`. Branches and tags must
+`commit_sha`, if given) or the `tag` in `head_commit`. The clone's directory
+is named after the last part of the repository's URL, without `.git` (e.g.,
+`tesk-api`), or `repository` if that isn't a plain file name, so remote URLs
+of other forms than `https://host/owner/repo` work too, e.g., of GitLab's
+subgroups. Branches and tags must
 be given by their exact names, and `commit_sha` as a commit hash (4 to 64
 hexadecimal digits); revision expressions such as `dev~1` aren't accepted.
 If one of them is empty, isn't in the repository or (a short hash) isn't
@@ -196,13 +203,21 @@ be one that the workflow can pull from.
 The build's record keeps the `dockerhub_token` only as long as the build
 needs it: it is removed once the build's completion is recorded (after the
 signing is triggered and its pod and files are removed), and when the build
-is canceled. `GET` never returns it. If GitHub can't be reached for the
-signing (its responses aren't checked, see above), or the pod can't be
-deleted, the request gets a 500 and the token stays: the pod's next report
-signs the image again and completes the build (files and pods that are gone
-already count as removed). A build whose pod was deleted, but whose
-completion then failed (e.g., Pubgrade stopped), keeps its token and isn't
-reported again; cancel it to remove the token. Once a build is complete,
+is canceled. `GET` never returns it.
+
+If GitHub can't be reached for the signing or doesn't accept it (any
+response but `204`, e.g., a `401` for a wrong `GH_ACCESS_TOKEN` or a `404`
+for a wrong `gh_action_path`), the build goes back to its previous status.
+Then, as when the pod can't be deleted, the request gets a 500 and the token
+stays: the pod's next report, 5 seconds later, triggers the signing again
+and completes the build (files and pods that are gone already count as
+removed). A signing that GitHub keeps refusing is thus requested again every
+5 seconds, with an error in the log each time, until the setting is fixed
+or the build is canceled.
+
+A build whose pod was deleted, but whose completion then failed (e.g.,
+Pubgrade stopped), keeps its token and isn't reported again; cancel it to
+remove the token. Once a build is complete,
 reporting it again changes nothing: its image isn't signed again, and no one
 is notified again (the results of the notifications are stored with the
 build, see [Usage](usage.md#notifications)). Builds that earlier versions

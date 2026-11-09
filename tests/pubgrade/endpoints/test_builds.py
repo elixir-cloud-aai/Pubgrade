@@ -11,6 +11,7 @@ import traceback
 from types import SimpleNamespace
 from typing import Any, ClassVar, NoReturn
 from unittest.mock import MagicMock, patch
+from urllib.parse import urlsplit
 
 from foca.errors import BadRequest, InternalServerError, Unauthorized
 from git import Git, GitCommandError, Repo
@@ -79,6 +80,7 @@ def mocked_create_build(
     intermediate_registry_path: str,
     dockerhub_token: str,
     project_access_token: str,
+    repository_id: str,
 ) -> str:
     """Mock `create_build`.
 
@@ -92,6 +94,7 @@ def mocked_create_build(
         intermediate_registry_path: Intermediate registry path.
         dockerhub_token: Token for DockerHub.
         project_access_token: Access token of the project.
+        repository_id: Identifier of the repository.
 
     Returns:
         A fixed string.
@@ -188,9 +191,12 @@ def mocked_request_api(
         **kwargs: Ignored.
 
     Returns:
-        A response with status code 200.
+        A response with status code 204 for GitHub's dispatches (see
+        `trigger_signing_image()`), else 200.
     """
-    return MagicMock(status_code=200)
+    return MagicMock(
+        status_code=204 if urlsplit(url).hostname == "api.github.com" else 200
+    )
 
 
 def mocked_load_cluster_config(
@@ -564,10 +570,11 @@ class TestBuild:
             patch.object(builds, "create_build") as create,
             self.app.app_context(),
         ):
-            start_build(build, self.repository_url, "access_token")
+            start_build(build, self.repository_url, "access_token", "repo12")
         create.assert_called_once()
         assert create.call_args.kwargs["branch"] == branch
         assert create.call_args.kwargs["commit"] == commit
+        assert create.call_args.kwargs["repository_id"] == "repo12"
         path = create.call_args.kwargs["intermediate_registry_path"]
         assert path.startswith("ttl.sh/test-updater-")
         assert path.endswith(":1h")
@@ -589,7 +596,7 @@ class TestBuild:
             patch.object(builds, "create_build") as create,
             self.app.app_context(),
         ):
-            start_build(build, self.repository_url, "access_token")
+            start_build(build, self.repository_url, "access_token", "repo12")
         path = create.call_args.kwargs["intermediate_registry_path"]
         assert path.startswith("ttl.sh/test-updater-")
         assert path.endswith(":1h")
@@ -617,7 +624,7 @@ class TestBuild:
             self.app.app_context(),
             pytest.raises(GitRefNotFound),
         ):
-            start_build(build, self.repository_url, "access_token")
+            start_build(build, self.repository_url, "access_token", "repo12")
         create.assert_not_called()
 
     def test_register_builds_failed_removal(
@@ -732,6 +739,25 @@ class TestBuild:
         assert clone_path == "./build123/drs-filer"
         assert Repo(clone_path).head.commit.hexsha.startswith(drs_filer.commit)
         shutil.rmtree("./build123")
+
+    def test_git_clone_and_checkout_other_url(
+        self, drs_filer: SimpleNamespace, tmp_path: Path
+    ) -> None:
+        """The clone's directory doesn't depend on the form of the URL.
+
+        Args:
+            drs_filer: Local copy of the repository.
+            tmp_path: Temporary base directory.
+        """
+        clone_path = git_clone_and_checkout(
+            repo_url=str(drs_filer.root / "drs-filer"),
+            branch="dev",
+            commit="",
+            base_dir=str(tmp_path),
+            build_id="build123",
+        )
+        assert clone_path == f"{tmp_path}/build123/drs-filer"
+        assert Repo(clone_path).head.commit.hexsha
 
     def test_git_clone_and_checkout_without_branch(
         self, drs_filer: SimpleNamespace
@@ -927,6 +953,8 @@ class TestBuild:
             "./build123/drs-filer/deployment_file",
             "build_id/config.json",
             "project_access_token",
+            build_id="build123",
+            repository_id="repo12",
         )
         assert deployment_file_location == "./build123/drs-filer/deployment_file"
         assert os.path.isfile(deployment_file_location)
@@ -945,6 +973,8 @@ class TestBuild:
             "./build123/drs-filer/deployment_file",
             "build_id/config.json",
             "project_access_token",
+            build_id="build123",
+            repository_id="repo12",
         )
         assert deployment_file_location == "./build123/drs-filer/deployment_file"
         assert os.path.isfile(deployment_file_location)
@@ -962,6 +992,8 @@ class TestBuild:
                 "./build123/drs-filer/deployment_file",
                 "build_id" + "/config.json",
                 "project_access_token",
+                build_id="build123",
+                repository_id="repo12",
             )
             assert deployment_file_location == "./build123/drs-filer/deployment_file"
             assert os.path.isfile(deployment_file_location)
@@ -1000,6 +1032,7 @@ class TestBuild:
                 intermediate_registry_path="registry/image",
                 dockerhub_token="token",
                 project_access_token="access_token",
+                repository_id="repo12",
             )
         clone.assert_not_called()
         assert list(tmp_path.iterdir()) == [base_dir]
@@ -1045,8 +1078,11 @@ class TestBuild:
             intermediate_registry_path="registry/image",
             dockerhub_token="token",
             project_access_token="access_token",
+            repository_id="repo12",
         )
         clone.assert_called_once()
+        assert deployment.call_args.kwargs["build_id"] == "build123"
+        assert deployment.call_args.kwargs["repository_id"] == "repo12"
         config_file_writer.assert_called_once_with(
             dockerhub_token="token", config_file_location=config_file
         )
@@ -1079,6 +1115,7 @@ class TestBuild:
                 intermediate_registry_path="test_intermediate_registry_path",
                 dockerhub_token="dockerhub_token",
                 project_access_token="access_token",
+                repository_id="repo12",
             )
         deployment_file = "basedir/build123/build123.yaml"
         assert os.path.isfile(deployment_file)
@@ -1126,6 +1163,7 @@ class TestBuild:
                 intermediate_registry_path="registry/image",
                 dockerhub_token="token",
                 project_access_token="access_token",
+                repository_id="repo12",
             )
         assert build_dir.is_dir()
 
@@ -1180,6 +1218,7 @@ class TestBuild:
                 intermediate_registry_path="registry/image",
                 dockerhub_token="token",
                 project_access_token="access_token",
+                repository_id="repo12",
             )
         push_image.assert_not_called()
         assert list(base_dir.iterdir()) == []
@@ -1218,7 +1257,10 @@ class TestBuild:
             assert stored is not None
             with patch.object(builds, "create_build") as create:
                 start_build(
-                    {**stored, "id": build_id}, self.repository_url, "access_token"
+                    {**stored, "id": build_id},
+                    self.repository_url,
+                    "access_token",
+                    MOCK_REPOSITORY_2["id"],
                 )
             with (
                 patch.object(builds, "trigger_signing_image") as trigger,
@@ -1458,6 +1500,8 @@ class TestBuild:
             deployment_file_location=str(deployment_file),
             config_file_location="config.json",
             project_access_token="project-secret",
+            build_id="build123",
+            repository_id="repo12",
         )
         assert "project-secret" in deployment_file.read_text()
         caplog.set_level(logging.DEBUG)
@@ -1556,6 +1600,104 @@ class TestBuild:
             "Triggering the signing of image:1 failed: InvalidHeader"
         ]
         assert "gh-secret" not in "".join(traceback.format_exception(raised.value))
+
+    @patch("requests.request")
+    def test_trigger_signing_image_accepted(self, request: MagicMock) -> None:
+        """GitHub's 204 triggers the signing; passwords may contain colons.
+
+        Args:
+            request: Mock of `requests.request`.
+        """
+        request.return_value = MagicMock(status_code=204)
+        self.setup()
+        with self.app.app_context():
+            builds.trigger_signing_image(
+                dockerhub_token="dXNlcjpwYTpzcw==",  # user:pa:ss  gitleaks:allow
+                image_path="image",
+                pull_tag="registry/image:1",
+                push_tag="image:1",
+            )
+        payload = json.loads(request.call_args.kwargs["data"])["client_payload"]
+        assert payload["docker_username"] == "user"
+        assert payload["docker_password"] == "pa:ss"
+
+    @pytest.mark.parametrize("status", [200, 401, 404, 422, 500])
+    @patch("requests.request")
+    def test_trigger_signing_image_rejected(
+        self, request: MagicMock, status: int, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Any answer of GitHub but a 204 is a failed dispatch.
+
+        Args:
+            request: Mock of `requests.request`.
+            status: Status code of GitHub's response.
+            caplog: Pytest's log capture fixture.
+        """
+        request.return_value = MagicMock(status_code=status)
+        self.setup()
+        with self.app.app_context(), pytest.raises(InternalServerError):
+            builds.trigger_signing_image(
+                dockerhub_token="dXNlcjpwYXNzd2Q=",  # user:passwd  gitleaks:allow
+                image_path="image",
+                pull_tag="registry/image:1",
+                push_tag="image:1",
+            )
+        assert caplog.messages == [
+            f"Triggering the signing of image:1 failed: GitHub answered {status}"
+        ]
+
+    @pytest.mark.parametrize(
+        ("url", "name"),
+        [
+            ("https://github.com/org/repo", "repo"),
+            ("https://github.com/org/repo.git", "repo"),
+            ("https://github.com/org/repo/", "repo"),
+            ("https://gitlab.example.org/group/sub/repo.git", "repo"),
+            ("git@github.com:org/repo.git", "repo"),
+            ("/srv/git/my.repo.git", "my.repo"),
+            ("https://github.com", "repository"),
+            ("https://github.com/org/..", "repository"),
+            ("https://github.com/org/.git", "repository"),
+            ("https://github.com/org/-repo", "repository"),
+            # Names of the build's own files
+            ("https://github.com/org/config.json", "repository"),
+            ("https://github.com/org/build.yaml", "repository"),
+        ],
+    )
+    def test_clone_directory(self, url: str, name: str) -> None:
+        """Clones are named after the repository, if that name is safe.
+
+        Args:
+            url: URL of the repository.
+            name: Expected name of the clone's directory.
+        """
+        assert builds.clone_directory(url) == name
+
+    def test_create_deployment_yaml_names(self, tmp_path: Path) -> None:
+        """The pod is named after the build and knows its repository.
+
+        Args:
+            tmp_path: Temporary directory, more than one level deep.
+        """
+        deployment_file = tmp_path / "build123" / "build123.yaml"
+        deployment_file.parent.mkdir()
+        builds.template_file = "pubgrade/modules/endpoints/kaniko/template.yaml"
+        create_deployment_YAML(
+            dockerfile_location="Dockerfile",
+            intermediate_registry_path="registry/image",
+            build_context="context",
+            deployment_file_location=str(deployment_file),
+            config_file_location="build123/config.json",
+            project_access_token="token",
+            build_id="build123",
+            repository_id="repo1234",
+        )
+        pod = yaml.safe_load(deployment_file.read_text())
+        assert pod["metadata"]["name"] == "build123"
+        env = {var["name"]: var["value"] for var in pod["spec"]["containers"][0]["env"]}
+        assert env["BUILDNAME"] == "build123"
+        assert env["REPOSITORYID"] == "repo1234"
+        assert env["ACCESSTOKEN"] == "token"
 
 
 class TestPublish:
