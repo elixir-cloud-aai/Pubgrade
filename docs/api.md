@@ -66,8 +66,32 @@ Since version 2.0.0 of the API, errors are
 }
 ```
 
-For invalid requests, `detail` tells what is wrong. Before, errors had `msg`
-and `status_code` (a string) instead. Request bodies larger than 1 MiB are
+Requests that don't match the API's schemas (e.g., a subscription without
+`type`) list their invalid fields in `errors`, by location and with a stable
+`code`, but without their values (names of unknown parameters and body
+fields are echoed, though), and `detail` names them; only these responses
+have `type`, `code` and `errors`, e.g.:
+
+```json
+{
+  "type": "https://foca.readthedocs.io/en/latest/problems/invalid-request/",
+  "title": "Bad Request",
+  "status": 400,
+  "detail": "Invalid fields: #/type (required)",
+  "code": "invalid-request",
+  "errors": [
+    {"detail": "Is required.", "pointer": "#/type", "code": "required"}
+  ]
+}
+```
+
+(see FOCA's
+[invalid request](https://foca.readthedocs.io/en/latest/problems/invalid-request/)
+for the codes). Other invalid requests, e.g., a body that isn't JSON or is
+`null`, get `"detail": "The request is malformed."`, and Pubgrade's own
+checks (e.g., an unknown branch in `head_commit`) their own `detail`, all
+without `errors`. Before, errors had `msg` and `status_code` (a string)
+instead. Request bodies larger than 1 MiB are
 rejected with `413`. Timestamps (`started_at`, `finished_at` and
 `updated_at`) are in UTC with time zone (e.g.,
 `2026-11-06T14:04:04.619000+00:00`), and `finished_at` of a build is `null`

@@ -203,9 +203,9 @@ Version 2.1.0 of the API completes the subscriptions API:
   another repository than `{id}`. The spec declares the 404 of the calls
   that can answer it.
 
-## Upgrading to FOCA 0.21 (API 2.0.0)
+## Upgrading to FOCA 0.22 (API 2.0.0)
 
-From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA
+From November 2026, the image runs on FOCA 0.22 and Python 3.13 instead of FOCA
 0.7 and Python 3.9. The chart and its values stay the same. What changes:
 
 - **Configuration:** a configuration of your own (`pubgrade.configSecret`)
@@ -225,7 +225,8 @@ From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA
   unchanged; a value that can't be used stops the app at start, with an
   error naming the setting.
 - **Errors** are problem details (see [API](api.md)), with `title`, `status`
-  and `detail` instead of `msg` and `status_code`.
+  and `detail` instead of `msg` and `status_code`, and for requests that
+  don't match the API's schemas, the invalid fields in `errors`.
 - **Timestamps** are in UTC with time zone, and `finished_at` of an
   unfinished build is `null`. At each start, Pubgrade brings stored
   timestamps into this format (those without time zone count as UTC), as
@@ -288,7 +289,7 @@ From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA
   build completes.
 - **Image:** it runs as user 1000 (group 0), and its app files are read-only;
   any user ID works, e.g., on OpenShift.
-- **MongoDB:** FOCA 0.21 needs MongoDB 4.4 or later; the chart's MongoDB is
+- **MongoDB:** FOCA 0.22 needs MongoDB 4.4 or later; the chart's MongoDB is
   newer.
 
 ## Moving from chart 0.1

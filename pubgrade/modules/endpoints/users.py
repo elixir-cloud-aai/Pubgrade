@@ -3,8 +3,8 @@
 import logging
 from typing import Any
 
+from foca.errors import Unauthorized
 from pymongo.errors import DuplicateKeyError
-from werkzeug.exceptions import Unauthorized
 
 from pubgrade.charsets import get_charset
 from pubgrade.errors.exceptions import (
