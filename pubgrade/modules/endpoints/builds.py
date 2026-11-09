@@ -834,7 +834,9 @@ def build_completed(
     (`CANCELED`) before doesn't succeed, its image isn't signed, and the
     pod and files it may still have are removed. A build withdrawn after its
     completion was recorded counts as finished: its image is signed, but its
-    subscriptions aren't notified any more.
+    subscriptions aren't notified any more. The build's registry token
+    (`dockerhub_token`) is removed from its record once its pod and files
+    are removed; a build reported again after that is left as it is.
 
     Args:
         repository_id (str): Repository identifier.
@@ -870,6 +872,10 @@ def build_completed(
         )
     except StopIteration:
         raise BuildNotFound from None
+    if data.get("status") in FINISHED and "dockerhub_token" not in data:
+        # Its completion was recorded already: signed, cleaned up, notified
+        logger.info("Build %s was reported again; it is complete.", build_id)
+        return {"id": build_id}
     # Recorded before the signing, so that a cancellation from now on finds
     # a finished build and doesn't stop it
     finished_at = now()
@@ -908,6 +914,11 @@ def build_completed(
         build_id,
         os.getenv("NAMESPACE", "default"),
     )
+    # Not needed any more; kept until here, for a repeated report if the
+    # signing or the cleanup fails
+    db_collection_builds.update_one(
+        {"id": build_id}, {"$unset": {"dockerhub_token": ""}}
+    )
     # A build canceled meanwhile notifies no one
     if is_canceled(build_id):
         logger.info("Build %s was canceled; no one is notified.", build_id)
@@ -926,10 +937,11 @@ def cancel_build(
 ) -> dict[str, str]:
     """Withdraw a build, keeping its record.
 
-    The build is marked `CANCELED` and stays listed; a build that hadn't
-    finished gets its `finished_at`. With builds switched on, its pod and
-    files are removed (see `stop_builds()`), and its completion is no longer
-    recorded: it doesn't succeed, and no one is notified. If the pod or the
+    The build is marked `CANCELED` and stays listed, without its registry
+    token (`dockerhub_token`); a build that hadn't finished gets its
+    `finished_at`. With builds switched on, its pod and files are removed
+    (see `stop_builds()`), and its completion is no longer recorded: it
+    doesn't succeed, and no one is notified. If the pod or the
     files can't be removed, the build stays canceled and keeps the mark
     `STOPPING`, so that the request can be repeated: a repeated request for
     a marked build stops it again, instead of getting a 409. Deployments
@@ -968,12 +980,15 @@ def cancel_build(
     # canceled.
     canceled = db_collection_builds.update_one(
         {"id": build_id, "status": {"$nin": [*FINISHED, CANCELED]}},
-        {"$set": {"status": CANCELED, "finished_at": now(), STOPPING: True}},
+        {
+            "$set": {"status": CANCELED, "finished_at": now(), STOPPING: True},
+            "$unset": {"dockerhub_token": ""},
+        },
     )
     if canceled.matched_count == 0:
         finished = db_collection_builds.update_one(
             {"id": build_id, "status": {"$in": FINISHED}},
-            {"$set": {"status": CANCELED}},
+            {"$set": {"status": CANCELED}, "$unset": {"dockerhub_token": ""}},
         )
         if finished.matched_count:
             logger.info("Canceled build %s, which had finished.", build_id)

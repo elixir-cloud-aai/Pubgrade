@@ -671,6 +671,85 @@ def test_cancel_running_build(
     assert stored["status"] == "CANCELED"
     assert stored["finished_at"] is not None
     assert [item["id"] for item in check(api.get(path))] == [build["id"]]
+    with api.application.app_context():
+        record = collection("builds").find_one({"id": build["id"]})
+    assert record is not None
+    assert "dockerhub_token" not in record
+
+
+def test_completed_build_keeps_no_registry_token(
+    api: FlaskClient,
+    drs_filer: SimpleNamespace,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A completed build's record loses its registry token, once.
+
+    A repeated report of the build changes nothing. Kubernetes and the
+    signing are replaced by mocks; Git clones from a local copy (fixture
+    `drs_filer`).
+
+    Args:
+        api: Client of the API.
+        drs_filer: Local copy of the repository `drs-filer`.
+        tmp_path: Temporary directory for the builds' files.
+        monkeypatch: Pytest's monkeypatch fixture.
+    """
+    builds_dir = tmp_path / "builds"
+    builds_dir.mkdir()
+    monkeypatch.setattr(builds, "BASE_DIR", str(builds_dir))
+    monkeypatch.setattr(
+        builds,
+        "template_file",
+        str(Path(builds.__file__).parent / "kaniko" / "template.yaml"),
+    )
+    monkeypatch.setattr(builds, "load_cluster_config", lambda: None)
+    monkeypatch.setattr(
+        builds, "build_push_image_using_kaniko", lambda deployment_file_location: None
+    )
+    monkeypatch.setattr(builds, "delete_pod", lambda name, namespace: None)
+    tokens: list[str] = []
+    monkeypatch.setattr(
+        builds,
+        "trigger_signing_image",
+        lambda **kwargs: tokens.append(kwargs["dockerhub_token"]),
+    )
+    with api.application.app_context():
+        settings = endpoints()["builds"]
+    monkeypatch.setitem(settings, "enabled", True)
+    monkeypatch.setitem(
+        settings, "intermediate_registery_format", "registry.example.org/{}"
+    )
+    repository = check(
+        api.post(
+            "/repositories",
+            json={"url": "https://github.com/elixir-cloud-aai/drs-filer"},
+        )
+    )
+    headers = {"X-Project-Access-Token": repository["access_token"]}
+    path = f"/repositories/{repository['id']}/builds"
+    token = "dXNlcjpwYXNzd2Q="  # user:passwd  gitleaks:allow
+    build = check(
+        api.post(
+            path,
+            headers=headers,
+            json={
+                "images": [{"name": "org/image:1", "location": "Dockerfile"}],
+                "head_commit": {"tag": drs_filer.tag},
+                "dockerhub_token": token,
+            },
+        )
+    )
+    for _ in range(2):
+        check(
+            api.put(f"{path}/{build['id']}", headers=headers, json={"id": build["id"]})
+        )
+    assert tokens == [token]
+    with api.application.app_context():
+        record = collection("builds").find_one({"id": build["id"]})
+    assert record is not None
+    assert record["status"] == "SUCCEEDED"
+    assert "dockerhub_token" not in record
 
 
 @pytest.mark.parametrize(
