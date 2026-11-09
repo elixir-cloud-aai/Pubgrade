@@ -214,10 +214,11 @@ release workflow before the images are signed and tagged, and weekly for
 The scans of the app's image in CI and of releases fail on critical and high
 vulnerabilities that have a fix; accept a finding only with a reason and an
 expiry date, in `.trivyignore.yaml`. The updater's image, which isn't built
-on FOCA, is reported only. The weekly scan doesn't fail until the first
-release, as `latest` is still an image from January 2025 on FOCA 0.7; once
-the first release has published `latest`, drop `fail: "false"` there for
-`pubgrade` so that it fails too.
+on FOCA, is reported only. Since 0.2.0, `latest` is the image of the highest
+stable release. The weekly scan of `pubgrade` still only reports
+(`fail: "false"` in `scan.yml`, set while `latest` was an unreleased image);
+switch it to fail as the other scans do, in a pull request of its own after
+the release.
 
 The scripts in `scripts/` use only the standard library and are tested in
 `tests/scripts/`, with the app's coverage.
