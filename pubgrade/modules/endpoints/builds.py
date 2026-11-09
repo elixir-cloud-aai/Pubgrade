@@ -42,6 +42,7 @@ from pubgrade.modules.endpoints.repositories import (
 from pubgrade.modules.endpoints.subscriptions import notify_all_subscriptions
 from pubgrade.settings import collection, endpoints
 from pubgrade.timestamps import now, repaired_build
+from pubgrade.tokens import tokens_match
 
 logger = logging.getLogger(__name__)
 
@@ -273,7 +274,7 @@ def register_builds(
             "Could not find repository with given identifier: %s", repository_id
         )
         raise RepositoryNotFound
-    if data_from_db["access_token"] != access_token:
+    if not tokens_match(access_token, data_from_db["access_token"]):
         raise Unauthorized
     images = build_data.get("images")
     if not images or not all(
@@ -859,7 +860,7 @@ def build_completed(
     data_from_db = db_collection_repositories.find_one({"id": repository_id})
     if data_from_db is None:
         raise RepositoryNotFound
-    if data_from_db["access_token"] != project_access_token:
+    if not tokens_match(project_access_token, data_from_db["access_token"]):
         raise Unauthorized
     if build_id not in data_from_db.get("build_list", []):
         raise BuildNotFound
@@ -956,7 +957,7 @@ def cancel_build(
     repository = collection("repositories").find_one({"id": repository_id})
     if repository is None:
         raise RepositoryNotFound
-    if repository["access_token"] != access_token:
+    if not tokens_match(access_token, repository["access_token"]):
         raise Unauthorized
     if build_id not in repository.get("build_list", []):
         raise BuildNotFound

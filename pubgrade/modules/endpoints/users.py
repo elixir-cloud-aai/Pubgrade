@@ -15,6 +15,7 @@ from pubgrade.errors.exceptions import (
 )
 from pubgrade.modules.endpoints.repositories import generate_id
 from pubgrade.settings import collection, endpoints
+from pubgrade.tokens import tokens_match
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +106,7 @@ def delete_user(uid: str, user_access_token: str) -> str:
     data_from_db_user = db_collection_user.find_one({"uid": uid})
     if data_from_db_user is None:
         raise UserNotFound
-    if data_from_db_user["user_access_token"] != user_access_token:
+    if not tokens_match(user_access_token, data_from_db_user["user_access_token"]):
         raise Unauthorized
 
     try:
@@ -136,7 +137,7 @@ def get_users(admin_user_id: str, admin_user_access_token: str) -> list[dict[str
     data_from_db = db_collection_admin_users.find_one({"uid": admin_user_id})
     if data_from_db is None:
         raise UserNotFound
-    if data_from_db["user_access_token"] != admin_user_access_token:
+    if not tokens_match(admin_user_access_token, data_from_db["user_access_token"]):
         raise Unauthorized
 
     db_collection = collection("users")
@@ -172,7 +173,7 @@ def toggle_user_status(
     data_from_db = db_collection_admin_users.find_one({"uid": admin_user_id})
     if data_from_db is None:
         raise UserNotFound
-    if data_from_db["user_access_token"] != admin_user_access_token:
+    if not tokens_match(admin_user_access_token, data_from_db["user_access_token"]):
         raise Unauthorized
 
     db_collection_user = collection("users")

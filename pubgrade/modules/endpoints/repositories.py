@@ -19,6 +19,7 @@ from pubgrade.errors.exceptions import (
     URLNotFound,
 )
 from pubgrade.settings import collection, endpoints
+from pubgrade.tokens import tokens_match
 
 logger = logging.getLogger(__name__)
 
@@ -210,7 +211,7 @@ def modify_repository_info(
     if data_from_db is None:
         logger.error("Could not find repository with given identifier: %s", repo_id)
         raise RepositoryNotFound
-    if data_from_db["access_token"] != access_token:
+    if not tokens_match(access_token, data_from_db["access_token"]):
         raise Unauthorized
     try:
         url = data["url"]
@@ -306,7 +307,7 @@ def delete_repository(repo_id: str, access_token: str) -> None:
     if data is None:
         logger.error("Not Found any repository with id: %s", repo_id)
         raise RepositoryNotFound
-    if data["access_token"] != access_token:
+    if not tokens_match(access_token, data["access_token"]):
         raise Unauthorized
     # The builds as of the mark: builds registered later remove themselves
     # Each deletion has its own mark, so that one that fails removes only
