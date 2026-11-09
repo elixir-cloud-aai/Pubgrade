@@ -80,6 +80,8 @@ from the Secret given by `pubgrade.configSecret`. The environment variable
     least one other character. Pubgrade checks these settings
     at start and stops with an error naming the setting if one can't be used.
 
+Pubgrade compares the access tokens of requests with the stored ones in
+constant time (`hmac.compare_digest`); a missing or empty token matches none.
 Log messages name repositories, users, subscriptions, builds and pods by
 their identifiers; they contain no access tokens or other credentials.
 Failed calls to the Kubernetes API are logged with status and reason, and
@@ -102,6 +104,18 @@ others. The volume needs a storage class with `ReadWriteMany`
 builds don't work under OpenShift's default restrictions. With builds off,
 requests that need them get a 403, as does
 `PUT /repositories/{id}/builds/{build_id}`.
+
+!!! warning "Builds are for trusted repositories only"
+
+    With builds on, Pubgrade clones the repositories it is given and builds
+    their Dockerfiles in its own namespace, in pods that run as root and get
+    the registry credentials of the request. Whatever a repository's
+    Dockerfile does runs there. Register only repositories whose code and
+    maintainers you trust, run Pubgrade in a namespace of its own, and
+    switch off the registration of repositories once they are set up
+    (`repository.registration_enabled`). Where you can, leave builds off and
+    let each repository's own CI build, sign and push its images, then
+    publish them to Pubgrade.
 
 Pubgrade clones the repository and checks out the `branch` (and the
 `commit_sha`, if given) or the `tag` in `head_commit`. Branches and tags must
@@ -175,6 +189,14 @@ with builds on, images are still published to Docker Hub, so the names of
 the images to build must be Docker Hub names (e.g., `org/app:1.0`, not
 `harbor.example.org/project/app:1.0`), and the intermediate registry must
 be one that the workflow can pull from.
+
+The build's record keeps the `dockerhub_token` only as long as the build
+needs it: it is removed once the build's completion is recorded (after the
+signing is triggered and its pod and files are removed), and when the build
+is canceled. A build that is reported again after its completion was
+recorded is left as it is: its image isn't signed again, and no one is
+notified again. `GET` never returns the token. Builds recorded by earlier versions keep
+their token until they are canceled or their repository is deleted.
 
 ## Upgrading to API 2.1.0
 
