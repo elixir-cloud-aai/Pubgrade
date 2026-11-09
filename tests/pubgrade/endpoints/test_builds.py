@@ -12,13 +12,13 @@ from types import SimpleNamespace
 from typing import Any, ClassVar, NoReturn
 from unittest.mock import MagicMock, patch
 
+from foca.errors import BadRequest, InternalServerError, Unauthorized
 from git import Git, GitCommandError, Repo
 from kubernetes.client import ApiException
 import mongomock
 from pymongo.errors import DuplicateKeyError
 import pytest
 import requests
-from werkzeug.exceptions import BadRequest, InternalServerError, Unauthorized
 import yaml
 
 from pubgrade.errors.exceptions import (

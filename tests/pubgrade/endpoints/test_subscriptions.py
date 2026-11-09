@@ -7,11 +7,11 @@ import time
 from typing import Any, NoReturn
 from unittest.mock import MagicMock, patch
 
+from foca.errors import InternalServerError, Unauthorized
 import mongomock
 from pymongo.errors import DuplicateKeyError
 import pytest
 import requests
-from werkzeug.exceptions import InternalServerError, Unauthorized
 
 from pubgrade.errors.exceptions import (
     BuildNotFound,
