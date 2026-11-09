@@ -11,6 +11,7 @@ import traceback
 from types import SimpleNamespace
 from typing import Any, ClassVar, NoReturn
 from unittest.mock import MagicMock, patch
+from urllib.parse import urlsplit
 
 from foca.errors import BadRequest, InternalServerError, Unauthorized
 from git import Git, GitCommandError, Repo
@@ -193,7 +194,9 @@ def mocked_request_api(
         A response with status code 204 for GitHub's dispatches (see
         `trigger_signing_image()`), else 200.
     """
-    return MagicMock(status_code=204 if "api.github.com" in url else 200)
+    return MagicMock(
+        status_code=204 if urlsplit(url).hostname == "api.github.com" else 200
+    )
 
 
 def mocked_load_cluster_config(

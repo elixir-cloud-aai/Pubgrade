@@ -2,6 +2,7 @@
 
 from typing import Any
 from unittest.mock import MagicMock, patch
+from urllib.parse import urlsplit
 
 from flask import Flask
 from foca.models.config import MongoConfig
@@ -66,7 +67,9 @@ def mocked_request_api(
     Returns:
         A mocked response.
     """
-    return MagicMock(status_code=204 if "api.github.com" in url else 200)
+    return MagicMock(
+        status_code=204 if urlsplit(url).hostname == "api.github.com" else 200
+    )
 
 
 def test_getRepositories() -> None:
