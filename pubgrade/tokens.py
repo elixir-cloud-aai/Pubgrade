@@ -9,7 +9,7 @@ matches.
 import hmac
 
 
-def tokens_match(supplied: str | None, stored: str | None) -> bool:
+def tokens_match(supplied: object, stored: object) -> bool:
     """Check whether a supplied access token is the stored one.
 
     Args:
@@ -18,9 +18,13 @@ def tokens_match(supplied: str | None, stored: str | None) -> bool:
         stored: Stored token; `None` if there is none.
 
     Returns:
-        Whether both are given, not empty, and equal; the comparison takes
-        constant time for tokens of the same length.
+        Whether both are strings, not empty, and equal; the comparison
+        takes constant time for tokens of the same length. Values that
+        aren't strings (e.g., an unquoted number in the configuration)
+        match nothing.
     """
+    if not isinstance(supplied, str) or not isinstance(stored, str):
+        return False
     if not supplied or not stored:
         return False
     return hmac.compare_digest(supplied.encode("utf-8"), stored.encode("utf-8"))

@@ -82,6 +82,7 @@ from the Secret given by `pubgrade.configSecret`. The environment variable
 
 Pubgrade compares the access tokens of requests with the stored ones in
 constant time (`hmac.compare_digest`); a missing or empty token matches none.
+
 Log messages name repositories, users, subscriptions, builds and pods by
 their identifiers; they contain no access tokens or other credentials.
 Failed calls to the Kubernetes API are logged with status and reason, and
@@ -109,8 +110,8 @@ requests that need them get a 403, as does
 
     With builds on, Pubgrade clones the repositories it is given and builds
     their Dockerfiles in its own namespace, in pods that run as root and get
-    the registry credentials of the request. Whatever a repository's
-    Dockerfile does runs there. Register only repositories whose code and
+    the credentials of the intermediate registry and the repository's access
+    token. Whatever a repository's Dockerfile does runs there. Register only repositories whose code and
     maintainers you trust, run Pubgrade in a namespace of its own, and
     switch off the registration of repositories once they are set up
     (`repository.registration_enabled`). Where you can, leave builds off and
@@ -193,10 +194,17 @@ be one that the workflow can pull from.
 The build's record keeps the `dockerhub_token` only as long as the build
 needs it: it is removed once the build's completion is recorded (after the
 signing is triggered and its pod and files are removed), and when the build
-is canceled. A build that is reported again after its completion was
-recorded is left as it is: its image isn't signed again, and no one is
-notified again. `GET` never returns the token. Builds recorded by earlier versions keep
-their token until they are canceled or their repository is deleted.
+is canceled. `GET` never returns it. If the signing or the removal of the
+pod fails, the request gets a 500 and the token stays: the pod's next
+report signs the image again and completes the build (files and pods that
+are gone already count as removed). Once a build is complete, reporting it
+again changes nothing: its image isn't signed again, and no one is notified
+again (the results of the notifications are stored with the build, see
+[Usage](usage.md#notifications)). Builds that earlier versions recorded
+keep their token until they are canceled or their repository is deleted,
+or, if earlier versions recorded them as `SUCCEEDED`, until their pod
+reports them again: they are then signed and their subscribers notified
+once more, as before.
 
 ## Upgrading to API 2.1.0
 

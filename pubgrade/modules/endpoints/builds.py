@@ -1010,14 +1010,18 @@ def cancel_build(
 def remove_files(dir_location: str, pod_name: str, namespace: str) -> None:
     """Removes build directory and kaniko pod.
 
+    Files and a pod that are gone already count as removed, so that the
+    removal can be repeated after an error (e.g., by the pod's next report,
+    after its deletion failed).
+
     Args:
         dir_location (str): Path of directory containing build files.
         pod_name (str): Name of kaniko pod which is completed and needs to be
         deleted.
         namespace (str): Namespace of pod.
     """
-    shutil.rmtree(dir_location)
-    delete_pod(pod_name, namespace)
+    shutil.rmtree(dir_location, onexc=_ignore_missing)
+    delete_pod(pod_name, namespace, missing_ok=True)
 
 
 def delete_pod(name: str, namespace: str, missing_ok: bool = False) -> Any:

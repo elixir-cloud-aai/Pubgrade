@@ -707,7 +707,9 @@ def test_completed_build_keeps_no_registry_token(
     monkeypatch.setattr(
         builds, "build_push_image_using_kaniko", lambda deployment_file_location: None
     )
-    monkeypatch.setattr(builds, "delete_pod", lambda name, namespace: None)
+    monkeypatch.setattr(
+        builds, "delete_pod", lambda name, namespace, missing_ok=False: None
+    )
     tokens: list[str] = []
     monkeypatch.setattr(
         builds,
