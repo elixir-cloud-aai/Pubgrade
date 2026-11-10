@@ -4,12 +4,9 @@
 # are reported: the findings that have a fix are uploaded to code scanning,
 # and a full report (findings without a fix included) is uploaded as the
 # workflow artifact `trivy-report-release-<image>` (JSON and table).
-# Accepted findings are listed in `.trivyignore.yaml`. Doesn't fail on
-# findings until the first release: until then, `latest` is an image from
-# January 2025, on the old FOCA 0.7 image, with many fixable findings. Then
-# drop `fail: "false"` for `pubgrade`, so that it fails on critical and high
-# vulnerabilities that have a fix, as CI, `release.yml` and cloud-registry
-# do; `pubgrade-updater`, which isn't built on FOCA, is reported only, as in
+# Accepted findings are listed in `.trivyignore.yaml`. The scan of `pubgrade`
+# fails on critical and high vulnerabilities that have a fix, as CI,
+# `release.yml` and cloud-registry do; `pubgrade-updater`, which isn't built on FOCA, is reported only, as in
 # CI and `release.yml`. Scheduled runs use this workflow (with its pin of the
 # shared action `elixir-cloud-aai/.github/actions/scan-image`) and
 # `.trivyignore.yaml` as on the default branch, and file their findings
@@ -40,7 +37,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: [pubgrade, pubgrade-updater]
+        include:
+          - image: pubgrade
+            fail: "true"
+          - image: pubgrade-updater
+            fail: "false"
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -52,4 +53,4 @@ jobs:
           image: docker.io/${{ vars.DOCKERHUB_ORG || 'elixircloud' }}/${{ matrix.image }}:latest
           category: release-${{ matrix.image }}
           report: "true"
-          fail: "false"
+          fail: ${{ matrix.fail }}
