@@ -215,10 +215,8 @@ The scans of the app's image in CI and of releases fail on critical and high
 vulnerabilities that have a fix; accept a finding only with a reason and an
 expiry date, in `.trivyignore.yaml`. The updater's image, which isn't built
 on FOCA, is reported only. Since 0.2.0, `latest` is the image of the highest
-stable release. The weekly scan of `pubgrade` still only reports
-(`fail: "false"` in `scan.yml`, set while `latest` was an unreleased image);
-switch it to fail as the other scans do, in a pull request of its own after
-the release.
+stable release; its weekly scan fails on the same findings as the other
+scans of the app's image.
 
 The scripts in `scripts/` use only the standard library and are tested in
 `tests/scripts/`, with the app's coverage.
