@@ -60,6 +60,13 @@ With builds on, do the same for `builds.updater.securityContext`. An empty
 map (`seccompProfile: {}`) doesn't remove the profile, as Helm merges it with
 the default; `seccompProfile.type: null` does.
 
+Up to chart 0.2.0, the security contexts were fixed in the templates. When
+upgrading a release installed with such a chart, don't use
+`helm upgrade --reuse-values`: it takes the old release's values instead of
+the new chart's defaults, which have no security contexts, so the containers
+would run without them. Pass your values again (`-f` or `--set`), or use
+`--reset-then-reuse-values`.
+
 The images are `elixircloud/pubgrade` and `elixircloud/pubgrade-updater` on
 Docker Hub. The chart of a release (attached to the GitHub release) uses the
 images of that release (`X.Y.Z`); the chart in the repository uses `dev`,

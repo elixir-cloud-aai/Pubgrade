@@ -117,11 +117,17 @@ count() {
 # restricted, with the runtime's seccomp profile, and the pods have none
 builds=(--set builds.enabled=true --set builds.existingSecret=builds
   --set builds.pubgradeUrl=https://pubgrade.example.org)
-chart="$(render "${builds[@]}")"
-for pattern in 'type: RuntimeDefault' 'allowPrivilegeEscalation: false' \
-  'runAsNonRoot: true' '- ALL' 'securityContext:'; do
-  count "${chart}" "${pattern}" 2 "security context default"
+for workload in pubgrade updater; do
+  chart="$(render "${builds[@]}" --show-only "templates/${workload}/deployment.yaml")"
+  for pattern in 'type: RuntimeDefault' 'allowPrivilegeEscalation: false' \
+    'runAsNonRoot: true' '- ALL'; do
+    count "${chart}" "${pattern}" 1 "security context default (${workload})"
+  done
+  # The container's only, not the pod's
+  count "${chart}" 'securityContext:' 1 "security context default (${workload})"
 done
+count "$(render --show-only templates/mongodb/deployment.yaml)" 'securityContext' 0 \
+  "security context default (mongodb)"
 # Without a seccomp profile (e.g., on clusters that set their own), whether
 # removed or left empty (its type removed), and the rest of the context stays.
 # (An empty map, `{}`, would be merged with the default and keep its type)
@@ -142,7 +148,8 @@ for id in 1001 1002 1003; do
 done
 count "${chart}" 'allowPrivilegeEscalation: false' 3 "MongoDB security context"
 # No security context at all, on request
-count "$(render --set pubgrade.securityContext=null)" 'securityContext' 0 \
+count "$(render "${builds[@]}" --set pubgrade.securityContext=null \
+  --set builds.updater.securityContext=null)" 'securityContext' 0 \
   "security context removed"
 
 # Each Deployment has its own selector, so that no Service selects other pods

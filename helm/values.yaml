@@ -38,7 +38,8 @@ builds:
     image: elixircloud/pubgrade-updater:dev
     imagePullPolicy: Always
     resources: {}
-    # Security contexts of the pod and the container, as for `pubgrade`
+    # Security contexts of the pod and the container: the same defaults as for
+    # `pubgrade`, merged with your values in the same way, but set on their own
     podSecurityContext: {}
     securityContext:
       allowPrivilegeEscalation: false
@@ -64,9 +65,11 @@ pubgrade:
   configSecret: ""
   resources: {}
   # Security contexts of the pod and the container. No fixed user ID, as
-  # OpenShift assigns its own; the image's user otherwise. Clusters that set
-  # their own seccomp profile and reject others (e.g., CSC Rahti) need
-  # `seccompProfile: null` (or `{}`), which leaves the key out
+  # OpenShift assigns its own; the image's user otherwise. Values you set are
+  # merged with these defaults; set a key to `null` to remove it. Clusters
+  # that set their own seccomp profile and reject pods that name one (e.g., CSC
+  # Rahti) need `seccompProfile: null` (an empty map, `{}`, is merged with the
+  # default and keeps its type)
   podSecurityContext: {}
   securityContext:
     allowPrivilegeEscalation: false
