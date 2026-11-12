@@ -38,6 +38,17 @@ builds:
     image: elixircloud/pubgrade-updater:dev
     imagePullPolicy: Always
     resources: {}
+    # Security contexts of the pod and the container: the same defaults as for
+    # `pubgrade`, merged with your values in the same way, but set on their own
+    podSecurityContext: {}
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+      runAsNonRoot: true
+      seccompProfile:
+        type: RuntimeDefault
 
 pubgrade:
   # In the repository `dev`, which follows the branch; the chart of a release
@@ -53,6 +64,21 @@ pubgrade:
   # has no admin users, so that users can't be verified
   configSecret: ""
   resources: {}
+  # Security contexts of the pod and the container. No fixed user ID, as
+  # OpenShift assigns its own; the image's user otherwise. Values you set are
+  # merged with these defaults; set a key to `null` to remove it. Clusters
+  # that set their own seccomp profile and reject pods that name one (e.g., CSC
+  # Rahti) need `seccompProfile: null` (an empty map, `{}`, is merged with the
+  # default and keeps its type)
+  podSecurityContext: {}
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
   # Created if enabled; `hostName` is required then
   ingress:
     enabled: false
@@ -76,6 +102,10 @@ mongodb:
   imagePullPolicy: IfNotPresent
   port: 27017
   resources: {}
+  # Security contexts of the pod and the container; none by default, as the
+  # image starts as root and then switches to its own user
+  podSecurityContext: {}
+  securityContext: {}
   volume:
     # The cluster's default storage class if empty
     storageClass: ""

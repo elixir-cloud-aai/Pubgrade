@@ -17,12 +17,18 @@ spec:
       {{- else }}
       automountServiceAccountToken: false
       {{- end }}
+      {{- with include "pubgrade.securityContext" .Values.pubgrade.podSecurityContext }}
+      securityContext:
+        {{- . | nindent 8 }}
+      {{- end }}
       containers:
         - name: pubgrade
           image: {{ .Values.pubgrade.image | quote }}
           imagePullPolicy: {{ .Values.pubgrade.imagePullPolicy }}
+          {{- with include "pubgrade.securityContext" .Values.pubgrade.securityContext }}
           securityContext:
-            {{- include "pubgrade.securityContext" . | nindent 12 }}
+            {{- . | nindent 12 }}
+          {{- end }}
           ports:
             - name: http
               containerPort: {{ .Values.pubgrade.port }}

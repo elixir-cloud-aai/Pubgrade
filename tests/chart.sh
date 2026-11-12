@@ -105,6 +105,64 @@ if render --set builds.enabled=true > /dev/null 2>&1; then
   status=1
 fi
 
+# Count the lines of the rendered chart that match a pattern (fixed string)
+count() {
+  if [ "$(grep -cF -- "$2" <<< "$1")" -ne "$3" ]; then
+    echo "::error::$4: expected '$2' $3 times"
+    status=1
+  fi
+}
+
+# Security contexts: by default, the app's and the updater's containers are
+# restricted, with the runtime's seccomp profile, and the pods have none
+builds=(--set builds.enabled=true --set builds.existingSecret=builds
+  --set builds.pubgradeUrl=https://pubgrade.example.org)
+for workload in pubgrade updater; do
+  chart="$(render "${builds[@]}" --show-only "templates/${workload}/deployment.yaml")"
+  for pattern in 'type: RuntimeDefault' 'allowPrivilegeEscalation: false' \
+    'runAsNonRoot: true' '- ALL'; do
+    count "${chart}" "${pattern}" 1 "security context default (${workload})"
+  done
+  # The container's only, not the pod's
+  count "${chart}" 'securityContext:' 1 "security context default (${workload})"
+done
+count "$(render --show-only templates/mongodb/deployment.yaml)" 'securityContext' 0 \
+  "security context default (mongodb)"
+# Without a seccomp profile (e.g., on clusters that set their own), whether
+# removed or left empty (its type removed), and the rest of the context stays.
+# (An empty map, `{}`, would be merged with the default and keep its type)
+for key in seccompProfile seccompProfile.type; do
+  chart="$(render "${builds[@]}" \
+    --set "pubgrade.securityContext.${key}=null" \
+    --set "builds.updater.securityContext.${key}=null")"
+  hasnt "${chart}" 'seccompProfile' "${key}=null"
+  count "${chart}" 'allowPrivilegeEscalation: false' 2 "${key}=null"
+done
+# Other values than maps aren't dropped, so that Kubernetes rejects them
+has "$(render --set pubgrade.securityContext.seccompProfile=false 2> /dev/null)" \
+  'seccompProfile: false' "seccompProfile=false"
+# Pod security contexts on request, also for MongoDB
+# in each workload's own Deployment, at the pod's level (`spec.template.spec`,
+# indented by 6) or the container's (by 10)
+contexts=("${builds[@]}" --set pubgrade.podSecurityContext.fsGroup=1001
+  --set builds.updater.podSecurityContext.fsGroup=1002
+  --set mongodb.podSecurityContext.fsGroup=1003
+  --set mongodb.securityContext.allowPrivilegeEscalation=false)
+for entry in pubgrade:1001 updater:1002 mongodb:1003; do
+  workload="${entry%%:*}"
+  chart="$(render "${contexts[@]}" --show-only "templates/${workload}/deployment.yaml")"
+  has "$(grep -A1 '^      securityContext:$' <<< "${chart}")" \
+    "^        fsGroup: ${entry##*:}$" "pod security context (${workload})"
+  count "${chart}" 'fsGroup:' 1 "pod security context (${workload})"
+done
+has "$(render "${contexts[@]}" --show-only templates/mongodb/deployment.yaml \
+  | grep -A1 '^          securityContext:$')" \
+  '^            allowPrivilegeEscalation: false$' "MongoDB security context"
+# No security context at all, on request
+count "$(render "${builds[@]}" --set pubgrade.securityContext=null \
+  --set builds.updater.securityContext=null)" 'securityContext' 0 \
+  "security context removed"
+
 # Each Deployment has its own selector, so that no Service selects other pods
 selectors="$(render --set builds.enabled=true --set builds.existingSecret=builds \
   --set builds.pubgradeUrl=https://pubgrade.example.org \

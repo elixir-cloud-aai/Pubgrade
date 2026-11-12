@@ -14,12 +14,18 @@ spec:
         {{- include "pubgrade.selectorLabels" "updater" | nindent 8 }}
     spec:
       serviceAccountName: pubgrade
+      {{- with include "pubgrade.securityContext" .Values.builds.updater.podSecurityContext }}
+      securityContext:
+        {{- . | nindent 8 }}
+      {{- end }}
       containers:
         - name: updater
           image: {{ .Values.builds.updater.image | quote }}
           imagePullPolicy: {{ .Values.builds.updater.imagePullPolicy }}
+          {{- with include "pubgrade.securityContext" .Values.builds.updater.securityContext }}
           securityContext:
-            {{- include "pubgrade.securityContext" . | nindent 12 }}
+            {{- . | nindent 12 }}
+          {{- end }}
           {{- with .Values.builds.updater.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
