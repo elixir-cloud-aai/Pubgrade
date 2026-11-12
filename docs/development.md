@@ -62,6 +62,14 @@ built from the branch `dev` of
 [Pubgrade-Sidecar](https://github.com/elixir-cloud-aai/Pubgrade-Sidecar); set
 `SIDECAR_IMAGE` to use a local image instead.
 
+`tests/e2e/check-local.sh` runs the operators' check `tests/e2e/check.sh`
+(see [Deployment](deployment.md#checking-a-deployment)) against such a
+cluster from outside, with its kubeconfig and Pubgrade's URL, as against a
+deployment, in a few minutes. It needs Docker, Helm, kubectl, curl and jq, and
+takes `SIDECAR_IMAGE` as well. The check's defaults (test image and tags,
+sidecar manifest) are its own, as operators run it without this repository's
+other scripts: keep them in line with `upgrade.sh`.
+
 ## Lint
 
 Code style, type hints and the absence of secrets are checked with
@@ -100,10 +108,11 @@ Commits, at most 50 characters, as it becomes the commit message of the squash
 merge), lint (the pre-commit hooks, see [Lint](#lint), and the citation
 metadata in `CITATION.cff`), the tests (with mongomock, with coverage to
 Codecov; the integration tests also against MongoDB 7.0), the chart, the smoke
-and upgrade tests, the documentation, and a scan of the images. The scan fails
-on critical and high vulnerabilities that have a fix in the app's image; the
-updater's image, which isn't built on FOCA, is only reported for now. The job
-`CI passed` sums up all other jobs and is the only required check.
+and upgrade tests, the deployment check, the documentation, and a scan of the
+images. The scan fails on critical and high vulnerabilities that have a fix in
+the app's image; the updater's image, which isn't built on FOCA, is only
+reported for now. The job `CI passed` sums up all other jobs and is the only
+required check.
 
 Pushes to `dev` publish `elixircloud/pubgrade` and
 `elixircloud/pubgrade-updater`, signed with Sigstore and tagged `dev` and
