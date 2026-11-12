@@ -65,7 +65,7 @@ upgrading a release installed with such a chart, don't use
 `helm upgrade --reuse-values`: it takes the old release's values instead of
 the new chart's defaults, which have no security contexts, so the containers
 would run without them. Pass your values again (`-f` or `--set`), or use
-`--reset-then-reuse-values`.
+`--reset-then-reuse-values` (Helm 3.14 or later).
 
 The images are `elixircloud/pubgrade` and `elixircloud/pubgrade-updater` on
 Docker Hub. The chart of a release (attached to the GitHub release) uses the
