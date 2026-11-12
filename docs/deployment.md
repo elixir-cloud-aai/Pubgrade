@@ -365,3 +365,58 @@ Chart 0.2 can't upgrade a 0.1 release, as its selectors and names changed:
 Deploy [Pubgrade-Sidecar](sidecar/index.md) next to each Deployment that
 should follow new images, and subscribe its callback URL (see
 [Usage](usage.md#subscribe-to-a-repository)).
+
+## Checking a deployment
+
+After an install or upgrade,
+[`tests/e2e/check.sh`](https://github.com/elixir-cloud-aai/Pubgrade/blob/dev/tests/e2e/check.sh)
+checks the whole path from outside: it sets up a test Deployment with a
+Pubgrade-Sidecar in a namespace of your current kubectl context, registers a
+repository, a user and a subscription of the sidecar, publishes a prebuilt
+image and checks that the sidecar rolls it out. Afterwards, also when a step
+fails, it removes everything it created and names anything it couldn't
+remove. It prints one line per step and exits with a non-zero status on
+failure. It needs curl, jq and kubectl (or `oc`, with `KUBECTL=oc`).
+
+Credentials come from the environment only, never from the command line:
+
+```bash
+export PUBGRADE_URL=https://pubgrade.example.org
+export PUBGRADE_ADMIN_ID=<admin user ID>
+read -rs PUBGRADE_ADMIN_TOKEN && export PUBGRADE_ADMIN_TOKEN  # admin access token
+tests/e2e/check.sh
+```
+
+The admin user is one of `subscriptions.admin_users` (see
+[Configuration](#configuration)); it verifies the test user. Registrations of
+repositories, users and subscriptions must be on (the default). The check
+publishes the way a repository's CI does with builds off (the default, see
+[Publish an image](usage.md#publish-an-image)); with builds on, Pubgrade would
+build the test repository instead, so the check doesn't apply.
+
+Further variables, all optional:
+
+```text
+Variable              Default
+CHECK_NAMESPACE       pubgrade-check-<run>, created and deleted; an existing
+                      namespace is kept, with only the check's objects deleted
+CHECK_CALLBACK_URL    http://<sidecar Service>.<namespace>.svc:8080/deployment
+CHECK_SIDECAR_IMAGE   elixircloud/pubgrade-sidecar:0.2.0
+CHECK_IMAGE           rancher/mirrored-pause (on Docker Hub)
+CHECK_OLD_TAG         3.9, the tag the test Deployment starts with
+CHECK_NEW_TAG         3.10, the tag the check publishes
+CHECK_REPOSITORY_URL  https://github.com/elixir-cloud-aai/Pubgrade.git (only stored)
+CHECK_TIMEOUT         300, seconds to wait for each rollout
+KUBECTL               kubectl
+```
+
+Your kubectl context needs rights to create, in that namespace, Deployments,
+a Service, a ServiceAccount, a Role, a RoleBinding and a Secret, and to read
+EndpointSlices; and to create and delete the namespace, unless you give an
+existing one. The default callback URL works if Pubgrade runs in the same
+cluster and may reach the namespace: if a NetworkPolicy keeps it out, the
+check fails with the notification `failed`. For a Pubgrade elsewhere, expose
+the sidecar's Service (e.g., by a Route or Ingress, with TLS) and set
+`CHECK_CALLBACK_URL`. The sidecar checks that the new tag exists in the
+image's registry, so the cluster needs access to Docker Hub, or set
+`CHECK_IMAGE` and the tags to an image of a registry it can reach.
