@@ -18,15 +18,17 @@ true
 {{- end -}}
 
 {{/*
-Security settings of the containers of the app; no fixed user ID, as OpenShift
-assigns its own. The image's own user otherwise.
+A security context (of a pod or a container) from the values, as YAML; nothing
+if it is empty. An empty `seccompProfile` (`{}`) is left out, like one removed
+with `null`, so that the cluster's own profile applies (e.g., on OpenShift).
+Call with the context's values.
 */}}
 {{- define "pubgrade.securityContext" -}}
-allowPrivilegeEscalation: false
-capabilities:
-  drop:
-    - ALL
-runAsNonRoot: true
-seccompProfile:
-  type: RuntimeDefault
+{{- $context := . | default dict -}}
+{{- if not $context.seccompProfile -}}
+{{- $context = omit $context "seccompProfile" -}}
+{{- end -}}
+{{- with $context -}}
+{{- toYaml . -}}
+{{- end -}}
 {{- end -}}

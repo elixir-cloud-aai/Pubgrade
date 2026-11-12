@@ -105,6 +105,46 @@ if render --set builds.enabled=true > /dev/null 2>&1; then
   status=1
 fi
 
+# Count the lines of the rendered chart that match a pattern (fixed string)
+count() {
+  if [ "$(grep -cF -- "$2" <<< "$1")" -ne "$3" ]; then
+    echo "::error::$4: expected '$2' $3 times"
+    status=1
+  fi
+}
+
+# Security contexts: by default, the app's and the updater's containers are
+# restricted, with the runtime's seccomp profile, and the pods have none
+builds=(--set builds.enabled=true --set builds.existingSecret=builds
+  --set builds.pubgradeUrl=https://pubgrade.example.org)
+chart="$(render "${builds[@]}")"
+for pattern in 'type: RuntimeDefault' 'allowPrivilegeEscalation: false' \
+  'runAsNonRoot: true' '- ALL' 'securityContext:'; do
+  count "${chart}" "${pattern}" 2 "security context default"
+done
+# Without a seccomp profile (e.g., on clusters that set their own), whether
+# removed or left empty (its type removed), and the rest of the context stays.
+# (An empty map, `{}`, would be merged with the default and keep its type)
+for key in seccompProfile seccompProfile.type; do
+  chart="$(render "${builds[@]}" \
+    --set "pubgrade.securityContext.${key}=null" \
+    --set "builds.updater.securityContext.${key}=null")"
+  hasnt "${chart}" 'seccompProfile' "${key}=null"
+  count "${chart}" 'allowPrivilegeEscalation: false' 2 "${key}=null"
+done
+# Pod security contexts on request, also for MongoDB
+chart="$(render "${builds[@]}" --set pubgrade.podSecurityContext.fsGroup=1001 \
+  --set builds.updater.podSecurityContext.fsGroup=1002 \
+  --set mongodb.podSecurityContext.fsGroup=1003 \
+  --set mongodb.securityContext.allowPrivilegeEscalation=false)"
+for id in 1001 1002 1003; do
+  count "${chart}" "fsGroup: ${id}" 1 "pod security context"
+done
+count "${chart}" 'allowPrivilegeEscalation: false' 3 "MongoDB security context"
+# No security context at all, on request
+count "$(render --set pubgrade.securityContext=null)" 'securityContext' 0 \
+  "security context removed"
+
 # Each Deployment has its own selector, so that no Service selects other pods
 selectors="$(render --set builds.enabled=true --set builds.existingSecret=builds \
   --set builds.pubgradeUrl=https://pubgrade.example.org \

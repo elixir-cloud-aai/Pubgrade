@@ -16,10 +16,18 @@ spec:
         {{- include "pubgrade.selectorLabels" "mongodb" | nindent 8 }}
     spec:
       automountServiceAccountToken: false
+      {{- with include "pubgrade.securityContext" .Values.mongodb.podSecurityContext }}
+      securityContext:
+        {{- . | nindent 8 }}
+      {{- end }}
       containers:
         - name: mongodb
           image: {{ .Values.mongodb.image | quote }}
           imagePullPolicy: {{ .Values.mongodb.imagePullPolicy }}
+          {{- with include "pubgrade.securityContext" .Values.mongodb.securityContext }}
+          securityContext:
+            {{- . | nindent 12 }}
+          {{- end }}
           args: ["--port", {{ .Values.mongodb.port | quote }}]
           ports:
             - name: mongodb
