@@ -411,7 +411,8 @@ CHECK_IMAGE           rancher/mirrored-pause (on Docker Hub)
 CHECK_OLD_TAG         3.9, the tag the test Deployment starts with
 CHECK_NEW_TAG         3.10, the tag the check publishes
 CHECK_REPOSITORY_URL  https://example.org/pubgrade-check.git (only stored)
-CHECK_TIMEOUT         300, seconds to wait for each rollout
+CHECK_TIMEOUT         300, seconds to wait for each rollout and each call
+                      to Pubgrade
 KUBECTL               kubectl
 ```
 

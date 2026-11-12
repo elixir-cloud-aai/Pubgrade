@@ -31,7 +31,8 @@
 #   CHECK_REPOSITORY_URL   URL of the test repository, only stored; by default
 #                          one that can't be cloned, so that a Pubgrade with
 #                          builds on refuses the build
-#   CHECK_TIMEOUT          Seconds to wait for each rollout (default: 300)
+#   CHECK_TIMEOUT          Seconds to wait for each rollout and each call to
+#                          Pubgrade (default: 300)
 #   KUBECTL                kubectl or a compatible command, e.g. oc
 #
 # Usage: tests/e2e/check.sh
@@ -51,7 +52,7 @@ for tool in curl jq "${KUBECTL}"; do
 done
 
 api_url="${PUBGRADE_URL%/}"
-run_id="$(od -An -N4 -tx1 /dev/urandom | tr -d ' \n')"
+run_id="$(od -An -N6 -tx1 /dev/urandom | tr -d ' \n')"
 name="${CHECK_NAME:-pubgrade-check-${run_id}}"
 namespace="${CHECK_NAMESPACE:-pubgrade-check-${run_id}}"
 target="${name}-target"
@@ -93,9 +94,10 @@ fail() {
 api() {
   local method="$1" path="$2" expected="$3" headers="$4" body="${5:-}" status
   # `--disable` first: no ~/.curlrc, which could log or forward the headers.
-  # The build's POST waits for the notifications
+  # The build's POST waits for the notifications (Pubgrade: at most twice
+  # `notification_timeout`), so the limit is the timeout of the check
   local -a args=(--disable --silent --show-error --connect-timeout 10
-    --max-time 120 --request "${method}" --output "${work}/response" --write-out '%{http_code}')
+    --max-time "${timeout}" --request "${method}" --output "${work}/response" --write-out '%{http_code}')
   if [ -n "${headers}" ]; then
     args+=(--header "@${headers}")
   fi
@@ -138,7 +140,7 @@ cleanup() {
     fi
   fi
   if [ -n "${created_namespace}" ]; then
-    if ! "${KUBECTL}" delete namespace "${namespace}" --wait=true \
+    if ! "${KUBECTL}" delete namespace "${namespace}" --ignore-not-found --wait=true \
       --timeout="${timeout}s" > /dev/null; then
       left+=("namespace ${namespace}")
     fi
@@ -178,8 +180,10 @@ log "OK: Pubgrade answers"
 # objects of these names fail the check instead of being taken over (and
 # deleted), and no last-applied annotation copies the token
 if [ -z "${CHECK_NAMESPACE:-}" ]; then
-  "${KUBECTL}" create namespace "${namespace}" > /dev/null
+  # Recorded first: the namespace is new to this run, and a create whose
+  # answer got lost still leaves one to delete
   created_namespace=1
+  "${KUBECTL}" create namespace "${namespace}" > /dev/null
 fi
 created_objects=1
 kube create --filename - > /dev/null << EOF
