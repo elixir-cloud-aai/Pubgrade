@@ -139,14 +139,22 @@ for key in seccompProfile seccompProfile.type; do
   count "${chart}" 'allowPrivilegeEscalation: false' 2 "${key}=null"
 done
 # Pod security contexts on request, also for MongoDB
-chart="$(render "${builds[@]}" --set pubgrade.podSecurityContext.fsGroup=1001 \
-  --set builds.updater.podSecurityContext.fsGroup=1002 \
-  --set mongodb.podSecurityContext.fsGroup=1003 \
-  --set mongodb.securityContext.allowPrivilegeEscalation=false)"
-for id in 1001 1002 1003; do
-  count "${chart}" "fsGroup: ${id}" 1 "pod security context"
+# in each workload's own Deployment, at the pod's level (`spec.template.spec`,
+# indented by 6) or the container's (by 10)
+contexts=("${builds[@]}" --set pubgrade.podSecurityContext.fsGroup=1001
+  --set builds.updater.podSecurityContext.fsGroup=1002
+  --set mongodb.podSecurityContext.fsGroup=1003
+  --set mongodb.securityContext.allowPrivilegeEscalation=false)
+for entry in pubgrade:1001 updater:1002 mongodb:1003; do
+  workload="${entry%%:*}"
+  chart="$(render "${contexts[@]}" --show-only "templates/${workload}/deployment.yaml")"
+  has "$(grep -A1 '^      securityContext:$' <<< "${chart}")" \
+    "^        fsGroup: ${entry##*:}$" "pod security context (${workload})"
+  count "${chart}" 'fsGroup:' 1 "pod security context (${workload})"
 done
-count "${chart}" 'allowPrivilegeEscalation: false' 3 "MongoDB security context"
+has "$(render "${contexts[@]}" --show-only templates/mongodb/deployment.yaml \
+  | grep -A1 '^          securityContext:$')" \
+  '^            allowPrivilegeEscalation: false$' "MongoDB security context"
 # No security context at all, on request
 count "$(render "${builds[@]}" --set pubgrade.securityContext=null \
   --set builds.updater.securityContext=null)" 'securityContext' 0 \
