@@ -92,8 +92,10 @@ fail() {
 # argument list. Prints the response body; fails on another status
 api() {
   local method="$1" path="$2" expected="$3" headers="$4" body="${5:-}" status
-  local -a args=(--silent --show-error --request "${method}"
-    --output "${work}/response" --write-out '%{http_code}')
+  # `--disable` first: no ~/.curlrc, which could log or forward the headers.
+  # The build's POST waits for the notifications
+  local -a args=(--disable --silent --show-error --connect-timeout 10
+    --max-time 120 --request "${method}" --output "${work}/response" --write-out '%{http_code}')
   if [ -n "${headers}" ]; then
     args+=(--header "@${headers}")
   fi
@@ -117,6 +119,8 @@ api() {
 # Remove what the check created, newest first; report anything left behind
 cleanup() {
   local status=$? left=()
+  # A second interrupt mustn't stop the cleanup halfway
+  trap "" INT TERM
   trap - EXIT
   log "Cleaning up"
   if [ -n "${subscription_id}" ] \
@@ -169,14 +173,16 @@ log "Checking ${api_url} (run ${run_id})"
 api GET /repositories 200 "" > /dev/null
 log "OK: Pubgrade answers"
 
-# The test Deployment and a sidecar with rights on it only. Applied from
-# stdin, so that the token is in no argument list
+# The test Deployment and a sidecar with rights on it only, from stdin, so
+# that the token is in no argument list. Created, not applied: existing
+# objects of these names fail the check instead of being taken over (and
+# deleted), and no last-applied annotation copies the token
 if [ -z "${CHECK_NAMESPACE:-}" ]; then
   "${KUBECTL}" create namespace "${namespace}" > /dev/null
   created_namespace=1
 fi
 created_objects=1
-kube apply --filename - > /dev/null << EOF
+kube create --filename - > /dev/null << EOF
 apiVersion: v1
 kind: Secret
 metadata:
@@ -284,27 +290,33 @@ kube rollout status deployment "${target}" --timeout="${timeout}s" > /dev/null \
 kube rollout status deployment "${sidecar}" --timeout="${timeout}s" > /dev/null \
   || fail "The sidecar didn't start in ${namespace}"
 # Pubgrade notifies only once, so the Service must route to the sidecar first
+routed=""
 for _ in $(seq 1 30); do
-  if [ -n "$(kube get endpointslices --selector "kubernetes.io/service-name=${sidecar}" \
-    --output 'jsonpath={.items[*].endpoints[?(@.conditions.ready==true)].addresses[*]}' 2> /dev/null)" ]; then
+  routed="$(kube get endpointslices --selector "kubernetes.io/service-name=${sidecar}" \
+    --output 'jsonpath={.items[*].endpoints[?(@.conditions.ready==true)].addresses[*]}' \
+    2> /dev/null || true)"
+  if [ -n "${routed}" ]; then
     break
   fi
   sleep 2
 done
+[ -n "${routed}" ] || fail "The Service ${sidecar} doesn't route to the sidecar" \
+  "(or EndpointSlices can't be read)"
 log "OK: test Deployment ${target} runs ${image}:${old_tag}, with a sidecar, in ${namespace}"
 
 jq -n --arg url "${repository_url}" '{url: $url}' > "${work}/repository.json"
 api POST /repositories 200 "" "${work}/repository.json" > "${work}/repository"
-repository_id="$(jq -r .id "${work}/repository")"
+# The identifiers are set once their headers are written, for the cleanup
 printf 'X-Project-Access-Token: %s\n' "$(jq -r .access_token "${work}/repository")" \
   > "${work}/repository.headers"
+repository_id="$(jq -r .id "${work}/repository")"
 log "OK: registered repository ${repository_id}"
 
 jq -n --arg name "${name}" '{name: $name}' > "${work}/user.json"
 api POST /users/register 200 "" "${work}/user.json" > "${work}/user"
-uid="$(jq -r .uid "${work}/user")"
-printf 'X-User-Id: %s\nX-User-Access-Token: %s\n' "${uid}" \
+printf 'X-User-Id: %s\nX-User-Access-Token: %s\n' "$(jq -r .uid "${work}/user")" \
   "$(jq -r .user_access_token "${work}/user")" > "${work}/user.headers"
+uid="$(jq -r .uid "${work}/user")"
 printf 'X-Super-User-Id: %s\nX-Super-User-Access-Token: %s\n' \
   "${PUBGRADE_ADMIN_ID}" "${PUBGRADE_ADMIN_TOKEN}" > "${work}/admin.headers"
 api PUT "/users/${uid}/verify" 200 "${work}/admin.headers" > /dev/null

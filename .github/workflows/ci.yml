@@ -4,12 +4,12 @@
 # the image, an upgrade test and the deployment check on local clusters, a
 # scan of the images (report only) and, on pushes, push the images by digest
 # (with SBOM and provenance attestations), scan exactly those digests, then
-# attest, sign (Sigstore) and tag them. The gate `passed` ("CI passed") is the only check to
-# require. No `paths:` filters, so that the gate always reports; skip jobs
-# with `if:` instead (and allow the skip in the gate). Runs also when a pull
-# request is edited, so that the title check follows the title; all jobs run
-# then, as a run that skipped the tests would report "CI passed" for the
-# commit
+# attest, sign (Sigstore) and tag them. The gate `passed` ("CI passed") is
+# the only check to require. No `paths:` filters, so that the gate always
+# reports; skip jobs with `if:` instead (and allow the skip in the gate).
+# Runs also when a pull request is edited, so that the title check follows
+# the title; all jobs run then, as a run that skipped the tests would report
+# "CI passed" for the commit
 
 name: CI
 on:
@@ -290,8 +290,8 @@ jobs:
       - name: Run upgrade test
         run: tests/e2e/upgrade.sh
 
-  # `tests/e2e/check.sh`, the check for operators, from outside a local
-  # cluster with Pubgrade from its chart, as against a deployment
+  # The operators' check `tests/e2e/check.sh`, run from outside a local
+  # cluster with Pubgrade from its chart, as against a real deployment
   check:
     name: Deployment check
     runs-on: ubuntu-latest

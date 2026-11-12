@@ -415,15 +415,23 @@ CHECK_TIMEOUT         300, seconds to wait for each rollout
 KUBECTL               kubectl
 ```
 
-Your kubectl context needs rights to create, in that namespace, Deployments,
-a Service, a ServiceAccount, a Role, a RoleBinding and a Secret, and to read
-EndpointSlices; and to create and delete the namespace, unless you name an
-existing one. The default callback URL works if Pubgrade runs in the same
-cluster and may reach the namespace: if a NetworkPolicy keeps it out, the
-check fails with the notification `failed`. For a Pubgrade elsewhere, expose
-the sidecar's Service: set up a Route or Ingress, with TLS, to the Service
-`<prefix>-sidecar` (port 8080) in a namespace of your own, then run the check
-with `CHECK_NAMESPACE`, `CHECK_NAME=<prefix>` and `CHECK_CALLBACK_URL` set to
-`<sidecar URL>/deployment`. Only one check at a time can use that prefix. The sidecar checks that the new tag exists in the
-image's registry, so the cluster needs access to Docker Hub, or set
-`CHECK_IMAGE` and the tags to an image of a registry it can reach.
+Your kubectl context needs the rights of the role `admin` in that namespace
+(to create, watch and delete Deployments, a Service, a ServiceAccount, a
+Role, a RoleBinding and a Secret, and to read EndpointSlices and logs), and to
+create and delete the namespace, unless you name an existing one. In a named
+namespace, objects of the check's names (`<prefix>-target`,
+`<prefix>-sidecar`) must not exist: the check fails then and leaves them
+alone. The test pods run as non-root, without privilege escalation or
+capabilities, but name no seccomp profile, as some clusters set their own:
+namespaces that enforce the Pod Security level `restricted` reject them, and
+the check fails with "didn't start". The sidecar checks that the new tag exists in the image's
+registry, so the cluster needs access to Docker Hub, or set `CHECK_IMAGE` and
+the tags to an image of a registry it can reach.
+
+The default callback URL works if Pubgrade runs in the same cluster and may
+reach the namespace: if a NetworkPolicy keeps it out, the check fails with the
+notification `failed`. For a Pubgrade elsewhere, expose the sidecar's Service:
+set up a Route or Ingress, with TLS, to the Service `<prefix>-sidecar` (port
+8080) in a namespace of your own, then run the check with `CHECK_NAMESPACE`,
+`CHECK_NAME=<prefix>` and `CHECK_CALLBACK_URL` set to
+`<sidecar URL>/deployment`. Only one check at a time can use that prefix.
