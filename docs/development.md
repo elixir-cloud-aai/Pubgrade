@@ -41,7 +41,7 @@ MONGODB_TEST_URI=mongodb://localhost:27017 uv run pytest tests/integration
 docker stop pubgrade-test-mongo
 ```
 
-The app is built on [FOCA](https://foca.readthedocs.io/) 0.21: its
+The app is built on [FOCA](https://foca.readthedocs.io/) 0.22: its
 configuration is `pubgrade/config.yaml`, and `pubgrade/app.py` creates the app
 (`create_app()`). The image serves it with Gunicorn, with FOCA's settings
 and more threads and shutdown time (`pubgrade/gunicorn_config.py`);
@@ -163,9 +163,8 @@ chart are released together, with one version: the tag `vX.Y.Z` (or
 `CITATION.cff`.
 Until 1.0.0, all releases are GitHub pre-releases.
 
-For the first release, the chart's `version` (0.2.0, from before the release
-workflow) and the app's version (0.1.0) differ; the release-prep pull request
-sets both, e.g., to 0.2.0.
+The first release, 0.2.0, took the chart's earlier `version` (0.2.0, from
+before the release workflow) for the app, which was 0.1.0 before.
 
 1. Release-prep pull request to `dev`: set the version in `pyproject.toml`
    (then run `uv lock`), `helm/Chart.yaml` (`version` and `appVersion`)
@@ -215,10 +214,9 @@ release workflow before the images are signed and tagged, and weekly for
 The scans of the app's image in CI and of releases fail on critical and high
 vulnerabilities that have a fix; accept a finding only with a reason and an
 expiry date, in `.trivyignore.yaml`. The updater's image, which isn't built
-on FOCA, is reported only. The weekly scan doesn't fail until the first
-release, as `latest` is still an image from January 2025 on FOCA 0.7; once
-the first release has published `latest`, drop `fail: "false"` there for
-`pubgrade` so that it fails too.
+on FOCA, is reported only. Since 0.2.0, `latest` is the image of the highest
+stable release; its weekly scan fails on the same findings as the other
+scans of the app's image.
 
 The scripts in `scripts/` use only the standard library and are tested in
 `tests/scripts/`, with the app's coverage.

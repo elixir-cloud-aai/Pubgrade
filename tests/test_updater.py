@@ -118,6 +118,19 @@ def test_report_build(updater: ModuleType, monkeypatch: pytest.MonkeyPatch) -> N
     )
 
 
+def test_report_build_repository_id(
+    updater: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The repository comes from the pod, whatever the length of its ID."""
+    request = MagicMock()
+    monkeypatch.setattr(updater.requests, "request", request)
+    env = {**BUILD_ENV, "REPOSITORYID": "abcdefgh", "BUILDNAME": "abcdefghij"}
+    updater.report_build(make_pod(env=env))
+    assert request.call_args.args[1] == (
+        "http://pubgrade/repositories/abcdefgh/builds/abcdefghij"
+    )
+
+
 @pytest.mark.parametrize(
     "pod",
     [

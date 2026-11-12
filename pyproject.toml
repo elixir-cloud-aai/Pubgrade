@@ -1,6 +1,6 @@
 [project]
 name = "pubgrade"
-version = "0.1.0"
+version = "0.2.0"
 description = "Publish-subscribe service that notifies deployments of new images"
 authors = [
     {name = "ELIXIR On-Cloud", email = "cloud-service@elixir-europe.org"},
@@ -31,7 +31,7 @@ dependencies = [
     # FOCA is bumped by hand, together with the base image in the
     # `Dockerfile` (`.github/dependabot.yml`; checked by
     # `tests/test_image.py`)
-    "foca>=0.21.0,<0.22",
+    "foca>=0.22.0,<0.23",
     "gitpython>=3.2.1,<4",
     "gunicorn>=26.2.0,<27",
     "kubernetes>=37.0.2,<38",

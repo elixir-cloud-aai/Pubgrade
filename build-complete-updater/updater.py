@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 NAMESPACE = os.getenv("NAMESPACE") or "broker"
 SLEEP_INTERVAL = 5
+# Length of repository IDs of build pods without `REPOSITORYID` (the default
+# of `endpoints.repository.id_length`)
 BUILD_ID_LENGTH = 6
 _BROKER = os.getenv("BROKER_URL", "")
 # URL of the build endpoint, with placeholders for the repository and build
@@ -48,8 +50,10 @@ def report_build(pod: Any) -> None:
     """Report a build pod to Pubgrade if it succeeded.
 
     Pods without a spec or status, that haven't succeeded, or whose first
-    container lacks `BUILDNAME` or `ACCESSTOKEN`, are skipped. Failed
-    requests are logged, so that the next pods are still reported.
+    container lacks `BUILDNAME` or `ACCESSTOKEN`, are skipped. The build is
+    reported to the repository in `REPOSITORYID`, or, for pods without it,
+    to the one named by the first `BUILD_ID_LENGTH` characters of the build's
+    ID. Failed requests are logged, so that the next pods are still reported.
 
     Args:
         pod: The pod (`V1Pod`).
@@ -63,7 +67,9 @@ def report_build(pod: Any) -> None:
     access_token = get_env(env, "ACCESSTOKEN")
     if build_name is None or access_token is None:
         return
-    repo_id = build_name[:BUILD_ID_LENGTH]
+    # Pods of earlier versions lack `REPOSITORYID`; their repositories have
+    # IDs of the default length
+    repo_id = get_env(env, "REPOSITORYID") or build_name[:BUILD_ID_LENGTH]
     url = BROKER_URL.format(repo_id, build_name)
     payload = json.dumps({"id": build_name})
     headers = {
