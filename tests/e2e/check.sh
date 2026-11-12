@@ -15,8 +15,11 @@
 #   PUBGRADE_ADMIN_TOKEN   `user_access_token` of that admin user
 #
 # Optional:
-#   CHECK_NAMESPACE        Namespace for the test Deployment and sidecar; created
-#                          and deleted if it doesn't exist (default: one per run)
+#   CHECK_NAMESPACE        An existing namespace for the test Deployment and
+#                          sidecar, which is kept (default: a new one per run,
+#                          created and deleted)
+#   CHECK_NAME             Prefix of the objects' names, e.g. to route to the
+#                          Service `<prefix>-sidecar` (default: one per run)
 #   CHECK_CALLBACK_URL     The URL Pubgrade notifies; by default the sidecar's
 #                          Service, which works if Pubgrade runs in the same
 #                          cluster and may reach the namespace
@@ -25,7 +28,9 @@
 #                          Deployment runs (default: rancher/mirrored-pause),
 #   CHECK_OLD_TAG          from this tag (default: 3.9)
 #   CHECK_NEW_TAG          to this one (default: 3.10); both must exist
-#   CHECK_REPOSITORY_URL   URL of the test repository, only stored
+#   CHECK_REPOSITORY_URL   URL of the test repository, only stored; by default
+#                          one that can't be cloned, so that a Pubgrade with
+#                          builds on refuses the build
 #   CHECK_TIMEOUT          Seconds to wait for each rollout (default: 300)
 #   KUBECTL                kubectl or a compatible command, e.g. oc
 #
@@ -47,8 +52,8 @@ done
 
 api_url="${PUBGRADE_URL%/}"
 run_id="$(od -An -N4 -tx1 /dev/urandom | tr -d ' \n')"
-name="pubgrade-check-${run_id}"
-namespace="${CHECK_NAMESPACE:-${name}}"
+name="${CHECK_NAME:-pubgrade-check-${run_id}}"
+namespace="${CHECK_NAMESPACE:-pubgrade-check-${run_id}}"
 target="${name}-target"
 sidecar="${name}-sidecar"
 callback_url="${CHECK_CALLBACK_URL:-http://${sidecar}.${namespace}.svc:8080/deployment}"
@@ -56,7 +61,7 @@ sidecar_image="${CHECK_SIDECAR_IMAGE:-elixircloud/pubgrade-sidecar:0.2.0}"
 image="${CHECK_IMAGE:-rancher/mirrored-pause}"
 old_tag="${CHECK_OLD_TAG:-3.9}"
 new_tag="${CHECK_NEW_TAG:-3.10}"
-repository_url="${CHECK_REPOSITORY_URL:-https://github.com/elixir-cloud-aai/Pubgrade.git}"
+repository_url="${CHECK_REPOSITORY_URL:-https://example.org/pubgrade-check.git}"
 timeout="${CHECK_TIMEOUT:-300}"
 # The sidecar's token, for the subscription
 sidecar_token="$(head -c 24 /dev/urandom | base64 | tr -d '/+=')"
@@ -166,7 +171,7 @@ log "OK: Pubgrade answers"
 
 # The test Deployment and a sidecar with rights on it only. Applied from
 # stdin, so that the token is in no argument list
-if ! "${KUBECTL}" get namespace "${namespace}" > /dev/null 2>&1; then
+if [ -z "${CHECK_NAMESPACE:-}" ]; then
   "${KUBECTL}" create namespace "${namespace}" > /dev/null
   created_namespace=1
 fi
@@ -281,7 +286,7 @@ kube rollout status deployment "${sidecar}" --timeout="${timeout}s" > /dev/null 
 # Pubgrade notifies only once, so the Service must route to the sidecar first
 for _ in $(seq 1 30); do
   if [ -n "$(kube get endpointslices --selector "kubernetes.io/service-name=${sidecar}" \
-    --output 'jsonpath={.items[*].endpoints[?(@.conditions.ready==true)].addresses[*]}')" ]; then
+    --output 'jsonpath={.items[*].endpoints[?(@.conditions.ready==true)].addresses[*]}' 2> /dev/null)" ]; then
     break
   fi
   sleep 2

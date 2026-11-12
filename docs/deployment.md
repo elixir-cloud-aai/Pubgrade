@@ -392,31 +392,38 @@ The admin user is one of `subscriptions.admin_users` (see
 repositories, users and subscriptions must be on (the default). The check
 publishes the way a repository's CI does with builds off (the default, see
 [Publish an image](usage.md#publish-an-image)); with builds on, Pubgrade would
-build the test repository instead, so the check doesn't apply.
+build the test repository instead, so the check doesn't apply: it fails when
+Pubgrade can't clone the test repository, whose URL can't be cloned.
 
 Further variables, all optional:
 
 ```text
 Variable              Default
-CHECK_NAMESPACE       pubgrade-check-<run>, created and deleted; an existing
-                      namespace is kept, with only the check's objects deleted
+CHECK_NAMESPACE       pubgrade-check-<run>, created and deleted; a namespace
+                      you name must exist, and is kept: only the check's
+                      objects (label pubgrade-check=<run>) are deleted
+CHECK_NAME            pubgrade-check-<run>, prefix of the names of the user
+                      and the objects: <prefix>-target, <prefix>-sidecar
 CHECK_CALLBACK_URL    http://<sidecar Service>.<namespace>.svc:8080/deployment
+                      (the sidecar's PUT /deployment)
 CHECK_SIDECAR_IMAGE   elixircloud/pubgrade-sidecar:0.2.0
 CHECK_IMAGE           rancher/mirrored-pause (on Docker Hub)
 CHECK_OLD_TAG         3.9, the tag the test Deployment starts with
 CHECK_NEW_TAG         3.10, the tag the check publishes
-CHECK_REPOSITORY_URL  https://github.com/elixir-cloud-aai/Pubgrade.git (only stored)
+CHECK_REPOSITORY_URL  https://example.org/pubgrade-check.git (only stored)
 CHECK_TIMEOUT         300, seconds to wait for each rollout
 KUBECTL               kubectl
 ```
 
 Your kubectl context needs rights to create, in that namespace, Deployments,
 a Service, a ServiceAccount, a Role, a RoleBinding and a Secret, and to read
-EndpointSlices; and to create and delete the namespace, unless you give an
+EndpointSlices; and to create and delete the namespace, unless you name an
 existing one. The default callback URL works if Pubgrade runs in the same
 cluster and may reach the namespace: if a NetworkPolicy keeps it out, the
 check fails with the notification `failed`. For a Pubgrade elsewhere, expose
-the sidecar's Service (e.g., by a Route or Ingress, with TLS) and set
-`CHECK_CALLBACK_URL`. The sidecar checks that the new tag exists in the
+the sidecar's Service: set up a Route or Ingress, with TLS, to the Service
+`<prefix>-sidecar` (port 8080) in a namespace of your own, then run the check
+with `CHECK_NAMESPACE`, `CHECK_NAME=<prefix>` and `CHECK_CALLBACK_URL` set to
+`<sidecar URL>/deployment`. Only one check at a time can use that prefix. The sidecar checks that the new tag exists in the
 image's registry, so the cluster needs access to Docker Hub, or set
 `CHECK_IMAGE` and the tags to an image of a registry it can reach.
