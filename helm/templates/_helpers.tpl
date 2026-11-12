@@ -26,7 +26,7 @@ Call with the context's values.
 */}}
 {{- define "pubgrade.securityContext" -}}
 {{- $context := . | default dict -}}
-{{- if not $context.seccompProfile -}}
+{{- if and (kindIs "map" $context.seccompProfile) (empty $context.seccompProfile) -}}
 {{- $context = omit $context "seccompProfile" -}}
 {{- end -}}
 {{- with $context -}}

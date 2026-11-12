@@ -138,6 +138,9 @@ for key in seccompProfile seccompProfile.type; do
   hasnt "${chart}" 'seccompProfile' "${key}=null"
   count "${chart}" 'allowPrivilegeEscalation: false' 2 "${key}=null"
 done
+# Other values than maps aren't dropped, so that Kubernetes rejects them
+has "$(render --set pubgrade.securityContext.seccompProfile=false 2> /dev/null)" \
+  'seccompProfile: false' "seccompProfile=false"
 # Pod security contexts on request, also for MongoDB
 # in each workload's own Deployment, at the pod's level (`spec.template.spec`,
 # indented by 6) or the container's (by 10)
