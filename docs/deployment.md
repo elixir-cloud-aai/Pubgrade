@@ -30,6 +30,43 @@ at the router); on other clusters, enable an Ingress with
 for all values. Pubgrade's pods run as any user ID in group 0, with no fixed
 ID, as OpenShift assigns its own.
 
+### Security contexts
+
+The security contexts of the pods and containers are values, in Helm's usual
+form: `podSecurityContext` and `securityContext` under `pubgrade`,
+`builds.updater` and `mongodb`. By default, the containers of Pubgrade and the
+updater run as non-root, without privilege escalation or capabilities, and
+with the container runtime's seccomp profile (`RuntimeDefault`); the pods, and
+MongoDB, have none. Values you set are merged with these defaults; set a key to
+`null` to remove it.
+
+Some clusters set their own seccomp profile and reject pods that name one,
+e.g., CSC Rahti (OpenShift) since November 2026. There, remove the profile:
+
+```bash
+helm install pubgrade helm/ -n pubgrade --set pubgrade.configSecret=pubgrade-config \
+  --set hostName=<host name> --set pubgrade.securityContext.seccompProfile=null
+```
+
+or, in a values file:
+
+```yaml
+pubgrade:
+  securityContext:
+    seccompProfile: null
+```
+
+With builds on, do the same for `builds.updater.securityContext`. An empty
+map (`seccompProfile: {}`) doesn't remove the profile, as Helm merges it with
+the default; `seccompProfile.type: null` does.
+
+Up to chart 0.2.0, the security contexts were fixed in the templates. When
+upgrading a release installed with such a chart, don't use
+`helm upgrade --reuse-values`: it takes the old release's values instead of
+the new chart's defaults, which have no security contexts, so the containers
+would run without them. Pass your values again (`-f` or `--set`), or use
+`--reset-then-reuse-values` (Helm 3.14 or later).
+
 The images are `elixircloud/pubgrade` and `elixircloud/pubgrade-updater` on
 Docker Hub. The chart of a release (attached to the GitHub release) uses the
 images of that release (`X.Y.Z`); the chart in the repository uses `dev`,
