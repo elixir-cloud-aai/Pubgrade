@@ -34,7 +34,8 @@ The images are `elixircloud/pubgrade` and `elixircloud/pubgrade-updater` on
 Docker Hub. The chart of a release (attached to the GitHub release) uses the
 images of that release (`X.Y.Z`); the chart in the repository uses `dev`,
 which follows the branch `dev`. Pin `X.Y.Z` or `sha-<commit>` to control
-upgrades. Until the first release, `latest` is outdated.
+upgrades. `latest` is the highest stable release (from 0.2.0 on; before, it
+was an outdated image).
 
 ## Configuration
 
@@ -44,7 +45,9 @@ from the Secret given by `pubgrade.configSecret`. The environment variable
 
 - `subscriptions.admin_users`: the users that can verify other users, each with
   `name`, `uid` and `user_access_token`. At each start, the database is made to
-  match this list: after changing the Secret, restart Pubgrade.
+  match this list: after changing the Secret, restart Pubgrade. Quote tokens
+  that YAML would read as numbers (e.g., `"123456"`): tokens that aren't
+  strings match no request.
 - `repository.registration_enabled`, `user.registration_enabled` and
   `subscriptions.registration_enabled` (default: on): switch these off once
   repositories, users and subscriptions are set up. Further registrations then
@@ -80,11 +83,14 @@ from the Secret given by `pubgrade.configSecret`. The environment variable
     least one other character. Pubgrade checks these settings
     at start and stops with an error naming the setting if one can't be used.
 
+Pubgrade compares the access tokens of requests with the stored ones in
+constant time (`hmac.compare_digest`); a missing or empty token matches none.
+
 Log messages name repositories, users, subscriptions, builds and pods by
 their identifiers; they contain no access tokens or other credentials.
 Failed calls to the Kubernetes API are logged with status and reason, and
 requests to GitHub that fail (e.g., no connection) with the type of the
-error; responses of GitHub are not checked.
+error, and those that GitHub doesn't accept with the status of its response.
 
 ## Builds
 
@@ -97,14 +103,33 @@ image and a `dockerhub_token`. This adds an updater, a shared volume and rights
 to manage pods in the namespace. Every 5 seconds, the updater reports build
 pods that succeeded to Pubgrade, waiting up to 30 seconds to connect and
 again for the response; a report that fails is logged and doesn't stop the
-others. The volume needs a storage class with `ReadWriteMany`
+others. Each build pod names its repository (`REPOSITORYID`), so any
+`repository.id_length` works; pods of earlier versions, without it, are
+reported to the repository named by the first 6 characters of the build's
+identifier. The volume needs a storage class with `ReadWriteMany`
 (`builds.volume.storageClass`). Build pods run as root, so
 builds don't work under OpenShift's default restrictions. With builds off,
 requests that need them get a 403, as does
 `PUT /repositories/{id}/builds/{build_id}`.
 
+!!! warning "Builds are for trusted repositories only"
+
+    With builds on, Pubgrade clones the repositories it is given and builds
+    their Dockerfiles in its own namespace, in pods that run as root and get
+    the credentials of the intermediate registry and the repository's access
+    token. Whatever a repository's Dockerfile does runs there. Register only
+    repositories whose code and maintainers you trust, run Pubgrade in a
+    namespace of its own, and switch off the registration of repositories
+    once they are set up (`repository.registration_enabled`). Where you can,
+    leave builds off and let each repository's own CI build, sign and push
+    its images, then publish them to Pubgrade.
+
 Pubgrade clones the repository and checks out the `branch` (and the
-`commit_sha`, if given) or the `tag` in `head_commit`. Branches and tags must
+`commit_sha`, if given) or the `tag` in `head_commit`. The clone's directory
+is named after the last part of the repository's URL, without `.git` (e.g.,
+`tesk-api`), or `repository` if that isn't a plain file name, so remote URLs
+of other forms than `https://host/owner/repo` work too, e.g., of GitLab's
+subgroups. Branches and tags must
 be given by their exact names, and `commit_sha` as a commit hash (4 to 64
 hexadecimal digits); revision expressions such as `dev~1` aren't accepted.
 If one of them is empty, isn't in the repository or (a short hash) isn't
@@ -176,6 +201,32 @@ the images to build must be Docker Hub names (e.g., `org/app:1.0`, not
 `harbor.example.org/project/app:1.0`), and the intermediate registry must
 be one that the workflow can pull from.
 
+The build's record keeps the `dockerhub_token` only as long as the build
+needs it: it is removed once the build's completion is recorded (after the
+signing is triggered and its pod and files are removed), and when the build
+is canceled. `GET` never returns it.
+
+If GitHub can't be reached for the signing or doesn't accept it (any
+response but `204`, e.g., a `401` for a wrong `GH_ACCESS_TOKEN` or a `404`
+for a wrong `gh_action_path`), the build goes back to its previous status.
+Then, as when the pod can't be deleted, the request gets a 500 and the token
+stays: the pod's next report, 5 seconds later, triggers the signing again
+and completes the build (files and pods that are gone already count as
+removed). A signing that GitHub keeps refusing is thus requested again every
+5 seconds, with an error in the log each time, until the setting is fixed
+or the build is canceled.
+
+A build whose pod was deleted, but whose completion then failed (e.g.,
+Pubgrade stopped), keeps its token and isn't reported again; cancel it to
+remove the token. Once a build is complete,
+reporting it again changes nothing: its image isn't signed again, and no one
+is notified again (the results of the notifications are stored with the
+build, see [Usage](usage.md#notifications)). Builds that earlier versions
+recorded: canceled ones lose their token at Pubgrade's start; others keep it
+until they are canceled or their repository is deleted, or, if earlier
+versions recorded them as `SUCCEEDED`, until their pod reports them again:
+they are then signed and their subscribers notified once more, as before.
+
 ## Upgrading to API 2.1.0
 
 Version 2.1.0 of the API completes the subscriptions API:
@@ -203,9 +254,9 @@ Version 2.1.0 of the API completes the subscriptions API:
   another repository than `{id}`. The spec declares the 404 of the calls
   that can answer it.
 
-## Upgrading to FOCA 0.21 (API 2.0.0)
+## Upgrading to FOCA 0.22 (API 2.0.0)
 
-From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA
+From November 2026, the image runs on FOCA 0.22 and Python 3.13 instead of FOCA
 0.7 and Python 3.9. The chart and its values stay the same. What changes:
 
 - **Configuration:** a configuration of your own (`pubgrade.configSecret`)
@@ -225,7 +276,8 @@ From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA
   unchanged; a value that can't be used stops the app at start, with an
   error naming the setting.
 - **Errors** are problem details (see [API](api.md)), with `title`, `status`
-  and `detail` instead of `msg` and `status_code`.
+  and `detail` instead of `msg` and `status_code`, and for requests that
+  don't match the API's schemas, the invalid fields in `errors`.
 - **Timestamps** are in UTC with time zone, and `finished_at` of an
   unfinished build is `null`. At each start, Pubgrade brings stored
   timestamps into this format (those without time zone count as UTC), as
@@ -288,7 +340,7 @@ From November 2026, the image runs on FOCA 0.21 and Python 3.13 instead of FOCA
   build completes.
 - **Image:** it runs as user 1000 (group 0), and its app files are read-only;
   any user ID works, e.g., on OpenShift.
-- **MongoDB:** FOCA 0.21 needs MongoDB 4.4 or later; the chart's MongoDB is
+- **MongoDB:** FOCA 0.22 needs MongoDB 4.4 or later; the chart's MongoDB is
   newer.
 
 ## Moving from chart 0.1

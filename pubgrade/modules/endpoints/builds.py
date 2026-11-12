@@ -8,14 +8,15 @@ import os
 import re
 import shutil
 from typing import Any
+from urllib.parse import urlsplit
 
+from foca.errors import Unauthorized
 from git import GitCommandError, Repo
 from kubernetes import client, config
 from kubernetes.client import ApiException
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 import requests
-from werkzeug.exceptions import Unauthorized
 import yaml
 
 from pubgrade.charsets import get_charset
@@ -42,6 +43,7 @@ from pubgrade.modules.endpoints.repositories import (
 from pubgrade.modules.endpoints.subscriptions import notify_all_subscriptions
 from pubgrade.settings import collection, endpoints
 from pubgrade.timestamps import now, repaired_build
+from pubgrade.tokens import tokens_match
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +55,10 @@ REQUEST_TIMEOUT = 30
 # Seconds to connect to the Kubernetes API and for its response, when
 # deleting a pod
 KUBERNETES_TIMEOUT = 10
+# Names of clones that are taken from the repository's URL; others are
+# replaced by `CLONE_DIRECTORY`
+SAFE_CLONE_NAME = re.compile(r"[A-Za-z0-9_][A-Za-z0-9._-]*")
+CLONE_DIRECTORY = "repository"
 
 # States of builds that have finished
 FINISHED = ["SUCCEEDED", "FAILED"]
@@ -273,7 +279,7 @@ def register_builds(
             "Could not find repository with given identifier: %s", repository_id
         )
         raise RepositoryNotFound
-    if data_from_db["access_token"] != access_token:
+    if not tokens_match(access_token, data_from_db["access_token"]):
         raise Unauthorized
     images = build_data.get("images")
     if not images or not all(
@@ -330,7 +336,7 @@ def register_builds(
         )
         return {"id": build_data["id"]}
     try:
-        start_build(build_data, data_from_db["url"], access_token)
+        start_build(build_data, data_from_db["url"], access_token, repository_id)
     except CreatePodError:
         # The pod may have been created nonetheless, and reports to the build
         ensure_accepting(repository_id, build_data["id"])
@@ -375,13 +381,16 @@ def register_builds(
     return {"id": build_data["id"]}
 
 
-def start_build(build_data: dict[str, Any], repo_url: str, access_token: str) -> None:
+def start_build(
+    build_data: dict[str, Any], repo_url: str, access_token: str, repository_id: str
+) -> None:
     """Start a registered build.
 
     Args:
         build_data (dict): The build, as registered.
         repo_url (str): URL of the repository.
         access_token (str): Access token of the repository.
+        repository_id (str): Identifier of the repository.
 
     Raises:
         GitRefNotFound: Raised when the branch, tag or commit isn't in the
@@ -414,6 +423,7 @@ def start_build(build_data: dict[str, Any], repo_url: str, access_token: str) ->
         commit=commit_sha,
         base_dir=BASE_DIR,
         build_id=build_data["id"],
+        repository_id=repository_id,
         dockerfile_location=build_data["images"][0]["location"],
         intermediate_registry_path=intermediate_registry_path,
         dockerhub_token=build_data["dockerhub_token"],
@@ -502,6 +512,7 @@ def create_build(
     intermediate_registry_path: str,
     dockerhub_token: str,
     project_access_token: str,
+    repository_id: str,
 ) -> None:
     """Create build and push to DockerHub.
 
@@ -522,6 +533,8 @@ def create_build(
         dockerhub to push image `echo -n USER:PASSWD | base64`
         project_access_token (str): Secret used to verify source, will be used
         by callback_url to inform pubgrade for build completion.
+        repository_id (str): Identifier of the repository, which the build's pod
+            reports to.
 
     Raises:
         InternalServerError: If the build's directory would be outside
@@ -559,6 +572,8 @@ def create_build(
             deployment_file_location,
             f"{build_id}/config.json",
             project_access_token,
+            build_id=build_id,
+            repository_id=repository_id,
         )
 
         # Create dockerhub config file
@@ -602,6 +617,33 @@ def remove_build_dir(build_dir: str, build_id: str) -> None:
         )
 
 
+def clone_directory(repo_url: str) -> str:
+    """Name the directory of a repository's clone.
+
+    The name is the last part of the URL's path (or of an scp-like address,
+    e.g., `git@github.com:org/repo.git`), without `.git`. Names that could
+    leave the build's directory or be taken for an option (e.g., `..`,
+    `-repo`), names of the build's own files (`config.json`, `*.yaml`), and
+    URLs without a path, get `CLONE_DIRECTORY` instead.
+
+    Args:
+        repo_url: URL of the repository.
+
+    Returns:
+        The name of the directory.
+    """
+    path = urlsplit(repo_url).path if "://" in repo_url else repo_url
+    name = path.rstrip("/").rsplit("/", 1)[-1].rsplit(":", 1)[-1]
+    name = name.removesuffix(".git")
+    if (
+        not SAFE_CLONE_NAME.fullmatch(name)
+        or name == "config.json"
+        or name.endswith(".yaml")
+    ):
+        return CLONE_DIRECTORY
+    return name
+
+
 def git_clone_and_checkout(
     repo_url: str, branch: str, commit: str, base_dir: str, build_id: str
 ) -> str:
@@ -623,8 +665,7 @@ def git_clone_and_checkout(
         GitRefNotFound: Raised when the branch, or the tag or commit, isn't in
             the repository.
     """
-    repo_name = repo_url.split("/")[4].split(".", maxsplit=1)[0]
-    clone_path = f"{base_dir}/{build_id}/{repo_name}"
+    clone_path = f"{base_dir}/{build_id}/{clone_directory(repo_url)}"
     try:
         repo = Repo.clone_from(repo_url, clone_path)
     except GitCommandError:
@@ -699,6 +740,8 @@ def create_deployment_YAML(
     deployment_file_location: str,
     config_file_location: str,
     project_access_token: str,
+    build_id: str,
+    repository_id: str,
 ) -> str:
     """Create kaniko deployment file.
 
@@ -715,6 +758,9 @@ def create_deployment_YAML(
         dockerhub access token.
         project_access_token (str): Secret used to verify source, will be used
         by callback_url to inform pubgrade for build completion.
+        build_id (str): Identifier of the build, which names the pod.
+        repository_id (str): Identifier of the build's repository, which the pod
+            reports to (`REPOSITORYID`).
 
     Returns:
         deployment_file_location (str): Location of kaniko deployment file
@@ -725,7 +771,6 @@ def create_deployment_YAML(
         deployment file.
     """
     try:
-        build_id = deployment_file_location.split("/")[2]
         with open(template_file) as file_stream:
             data = yaml.safe_load(file_stream)
         data["metadata"]["name"] = build_id
@@ -756,6 +801,9 @@ def create_deployment_YAML(
             data["spec"]["containers"][0]["env"][2]["value"] = "default"
         data["spec"]["containers"][0]["env"][3]["value"] = os.getenv("PUBGRADE_URL")
         data["spec"]["containers"][0]["env"][4]["value"] = "8080"  # PORT
+        data["spec"]["containers"][0]["env"].append(
+            {"name": "REPOSITORYID", "value": repository_id}
+        )
         with open(deployment_file_location, "w") as yaml_file:
             yaml_file.write(yaml.dump(data, default_flow_style=False))
         return deployment_file_location
@@ -833,7 +881,9 @@ def build_completed(
     (`CANCELED`) before doesn't succeed, its image isn't signed, and the
     pod and files it may still have are removed. A build withdrawn after its
     completion was recorded counts as finished: its image is signed, but its
-    subscriptions aren't notified any more.
+    subscriptions aren't notified any more. The build's registry token
+    (`dockerhub_token`) is removed from its record once its pod and files
+    are removed; a build reported again after that is left as it is.
 
     Args:
         repository_id (str): Repository identifier.
@@ -859,7 +909,7 @@ def build_completed(
     data_from_db = db_collection_repositories.find_one({"id": repository_id})
     if data_from_db is None:
         raise RepositoryNotFound
-    if data_from_db["access_token"] != project_access_token:
+    if not tokens_match(project_access_token, data_from_db["access_token"]):
         raise Unauthorized
     if build_id not in data_from_db.get("build_list", []):
         raise BuildNotFound
@@ -869,6 +919,10 @@ def build_completed(
         )
     except StopIteration:
         raise BuildNotFound from None
+    if data.get("status") in FINISHED and "dockerhub_token" not in data:
+        # Its completion was recorded already: signed, cleaned up, notified
+        logger.info("Build %s was reported again; it is complete.", build_id)
+        return {"id": build_id}
     # Recorded before the signing, so that a cancellation from now on finds
     # a finished build and doesn't stop it
     finished_at = now()
@@ -907,6 +961,11 @@ def build_completed(
         build_id,
         os.getenv("NAMESPACE", "default"),
     )
+    # Not needed any more; kept until here, for a repeated report if the
+    # signing or the cleanup fails
+    db_collection_builds.update_one(
+        {"id": build_id}, {"$unset": {"dockerhub_token": ""}}
+    )
     # A build canceled meanwhile notifies no one
     if is_canceled(build_id):
         logger.info("Build %s was canceled; no one is notified.", build_id)
@@ -925,10 +984,11 @@ def cancel_build(
 ) -> dict[str, str]:
     """Withdraw a build, keeping its record.
 
-    The build is marked `CANCELED` and stays listed; a build that hadn't
-    finished gets its `finished_at`. With builds switched on, its pod and
-    files are removed (see `stop_builds()`), and its completion is no longer
-    recorded: it doesn't succeed, and no one is notified. If the pod or the
+    The build is marked `CANCELED` and stays listed, without its registry
+    token (`dockerhub_token`); a build that hadn't finished gets its
+    `finished_at`. With builds switched on, its pod and files are removed
+    (see `stop_builds()`), and its completion is no longer recorded: it
+    doesn't succeed, and no one is notified. If the pod or the
     files can't be removed, the build stays canceled and keeps the mark
     `STOPPING`, so that the request can be repeated: a repeated request for
     a marked build stops it again, instead of getting a 409. Deployments
@@ -956,7 +1016,7 @@ def cancel_build(
     repository = collection("repositories").find_one({"id": repository_id})
     if repository is None:
         raise RepositoryNotFound
-    if repository["access_token"] != access_token:
+    if not tokens_match(access_token, repository["access_token"]):
         raise Unauthorized
     if build_id not in repository.get("build_list", []):
         raise BuildNotFound
@@ -967,12 +1027,15 @@ def cancel_build(
     # canceled.
     canceled = db_collection_builds.update_one(
         {"id": build_id, "status": {"$nin": [*FINISHED, CANCELED]}},
-        {"$set": {"status": CANCELED, "finished_at": now(), STOPPING: True}},
+        {
+            "$set": {"status": CANCELED, "finished_at": now(), STOPPING: True},
+            "$unset": {"dockerhub_token": ""},
+        },
     )
     if canceled.matched_count == 0:
         finished = db_collection_builds.update_one(
             {"id": build_id, "status": {"$in": FINISHED}},
-            {"$set": {"status": CANCELED}},
+            {"$set": {"status": CANCELED}, "$unset": {"dockerhub_token": ""}},
         )
         if finished.matched_count:
             logger.info("Canceled build %s, which had finished.", build_id)
@@ -994,14 +1057,18 @@ def cancel_build(
 def remove_files(dir_location: str, pod_name: str, namespace: str) -> None:
     """Removes build directory and kaniko pod.
 
+    Files and a pod that are gone already count as removed, so that the
+    removal can be repeated after an error (e.g., by the pod's next report,
+    after its deletion failed).
+
     Args:
         dir_location (str): Path of directory containing build files.
         pod_name (str): Name of kaniko pod which is completed and needs to be
         deleted.
         namespace (str): Namespace of pod.
     """
-    shutil.rmtree(dir_location)
-    delete_pod(pod_name, namespace)
+    shutil.rmtree(dir_location, onexc=_ignore_missing)
+    delete_pod(pod_name, namespace, missing_ok=True)
 
 
 def delete_pod(name: str, namespace: str, missing_ok: bool = False) -> Any:
@@ -1218,9 +1285,11 @@ def trigger_signing_image(
         push_tag: Image to publish.
 
     Raises:
-        InternalServerError: If GitHub can't be reached.
+        InternalServerError: If GitHub can't be reached, or doesn't accept
+            the dispatch (any response but 204).
     """
-    username, password = base64.b64decode(dockerhub_token).decode("utf-8").split(":")
+    # Passwords may contain colons, user names don't
+    username, password = base64.b64decode(dockerhub_token).decode("utf-8").split(":", 1)
     url = "https://api.github.com/repos/{}/dispatches".format(
         endpoints()["builds"]["gh_action_path"]
     )
@@ -1247,7 +1316,7 @@ def trigger_signing_image(
         "Content-Type": "application/json",
     }
     try:
-        requests.request(
+        response = requests.request(
             "POST", url, headers=headers, data=payload, timeout=REQUEST_TIMEOUT
         )
     except requests.exceptions.RequestException as error:
@@ -1257,3 +1326,12 @@ def trigger_signing_image(
             "Triggering the signing of %s failed: %s", push_tag, type(error).__name__
         )
         raise InternalServerError from None
+    # GitHub accepts a dispatch with 204; anything else (e.g., a 401 for a
+    # wrong token, a 404 for a wrong `gh_action_path`) triggers no workflow
+    if response.status_code != 204:
+        logger.error(
+            "Triggering the signing of %s failed: GitHub answered %s",
+            push_tag,
+            response.status_code,
+        )
+        raise InternalServerError

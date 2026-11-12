@@ -1,18 +1,16 @@
 """Exceptions of Pubgrade and their API responses."""
 
-from connexion.exceptions import (
-    BadRequestProblem,
+from foca.errors import (
+    BadRequest,
+    Conflict,
     ExtraParameterProblem,
     Forbidden,
+    InternalServerError,
+    NotFound,
+    RequestValidationProblem,
     Unauthorized,
 )
 from git import GitCommandError
-from werkzeug.exceptions import (
-    BadRequest,
-    Conflict,
-    InternalServerError,
-    NotFound,
-)
 
 
 class RepositoryNotFound(NotFound):
@@ -129,14 +127,16 @@ class DeletePodError(InternalServerError):
 
 # Problem details (RFC 9457) of the exceptions, by class (`exceptions.mapping`
 # in the configuration); exceptions that aren't listed get those of their
-# closest listed base class
+# closest listed base class. The classes of `foca.errors` also cover the
+# Werkzeug classes they derive from, e.g., Flask's `NotFound` for unknown
+# paths
 exceptions = {
     Exception: {
         "title": "Internal Server Error",
         "status": 500,
         "detail": "An unexpected error occurred.",
     },
-    BadRequestProblem: {
+    RequestValidationProblem: {
         "title": "Bad Request",
         "status": 400,
         "detail": "The request is malformed.",

@@ -5,15 +5,4 @@
 # Limit entries to the affected package versions (`purls`), so that other
 # packages with the same vulnerability are still reported. The file applies
 # to both images (`pubgrade` and `pubgrade-updater`)
-vulnerabilities:
-  # zlib1g in the FOCA 0.21.0 base image; fixed by the next FOCA base image
-  # (0.22.0), then bump the base and remove these entries (as in
-  # Pubgrade-Sidecar)
-  - id: CVE-2026-76844
-    purls: ["pkg:deb/debian/zlib1g@1.3.dfsg%2Breally1.3.1-1%2Bb1?epoch=1"]
-    statement: zlib1g in the FOCA 0.21.0 base image, fixed by FOCA 0.22.0
-    expired_at: 2026-11-30
-  - id: CVE-2026-85091
-    purls: ["pkg:deb/debian/zlib1g@1.3.dfsg%2Breally1.3.1-1%2Bb1?epoch=1"]
-    statement: zlib1g in the FOCA 0.21.0 base image, fixed by FOCA 0.22.0
-    expired_at: 2026-11-30
+vulnerabilities: []

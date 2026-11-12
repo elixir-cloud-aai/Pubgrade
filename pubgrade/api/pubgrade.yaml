@@ -1375,6 +1375,55 @@ components:
           description: 'A human-readable explanation specific to this occurrence
            of the error.'
           example: 'Internal server error'
+        type:
+          type: string
+          format: uri
+          description: URI of the problem type; only for requests that don't
+           match the API's schemas (400), that of
+           [FOCA's invalid request](https://foca.readthedocs.io/en/latest/problems/invalid-request/).
+          example: 'https://foca.readthedocs.io/en/latest/problems/invalid-request/'
+        code:
+          type: string
+          description: Stable code of the problem type; only for requests that
+           don't match the API's schemas (400), `invalid-request`.
+          example: 'invalid-request'
+        errors:
+          type: array
+          description: Only for requests that don't match the API's schemas
+           (400), the invalid fields, without their values.
+          items:
+            $ref: '#/components/schemas/FieldError'
       required:
         - status
         - title
+    FieldError:
+      type: object
+      description: An invalid field of a request.
+      properties:
+        detail:
+          type: string
+          description: What is wrong with the field.
+          example: 'Is required.'
+        pointer:
+          type: string
+          description: The field in the request body, as a JSON Pointer
+           ([RFC 6901](https://www.rfc-editor.org/rfc/rfc6901)) in URI
+           fragment form, e.g., `#/callback_url`.
+          example: '#/callback_url'
+        parameter:
+          type: string
+          description: The parameter, instead of `pointer`, e.g.,
+           `X-User-Id`.
+        code:
+          type: string
+          description: Stable code of what is wrong, e.g., `required`.
+          example: 'required'
+      required:
+        - detail
+        - code
+      # Located either in the body or by a parameter
+      oneOf:
+        - required:
+            - pointer
+        - required:
+            - parameter
