@@ -298,6 +298,9 @@ def test_git_inputs(
         ({"REPOSITORY_ID": ".."}, "Invalid input 'repository-id'"),
         ({"TOKEN": 'a" -o "x'}, "Invalid input 'token'"),
         ({"TOKEN": "a\nb"}, "Invalid input 'token'"),
+        ({"TOKEN": "a_b"}, "Invalid input 'token'"),
+        ({"REPOSITORY_ID": "a_b"}, "Invalid input 'repository-id'"),
+        ({"URL": "https://bad host"}, "Invalid input 'url'"),
         ({"IMAGE": "org/image"}, "needs a tag"),
         ({"IMAGE": "org/image:1@sha256:" + "a" * 64}, "needs a tag"),
         ({"URL": "ftp://example.org"}, "must start with https:// or http://"),
@@ -349,39 +352,11 @@ def test_error_without_fail_on_error(tmp_path: Path, stub: Stub) -> None:
     assert result.outputs == {}
 
 
-def test_retry_when_unavailable(tmp_path: Path, stub: Stub) -> None:
-    """A 503 is retried; the build ID of the success is output."""
-    stub.responses = [(503, {}), (503, {}), (200, {"id": "b2"})]
-    result = run(tmp_path, stub.url)
-    assert result.returncode == 0, result.output
-    assert result.outputs == {"build-id": "b2"}
-    assert len(stub.requests) == 3
-    assert result.output.count("retrying") == 2
-
-
-@pytest.mark.parametrize("fail_on_error", ["true", "false"])
-def test_retries_exhausted(tmp_path: Path, stub: Stub, fail_on_error: str) -> None:
-    """After three 503s, the step fails, or only warns.
-
-    Args:
-        tmp_path: Pytest's temporary directory.
-        stub: The stub of Pubgrade.
-        fail_on_error: Input `fail-on-error`.
-    """
-    stub.responses = [(503, {}), (503, {}), (503, {})]
-    result = run(tmp_path, stub.url, {"FAIL_ON_ERROR": fail_on_error})
-    level = "error" if fail_on_error == "true" else "warning"
-    assert result.returncode == (1 if fail_on_error == "true" else 0)
-    assert f"::{level}::Pubgrade answered 503" in result.output
-    assert len(stub.requests) == 3
-    assert result.outputs == {}
-
-
-@pytest.mark.parametrize("status", [500, 502, 504])
+@pytest.mark.parametrize("status", [500, 502, 503, 504])
 def test_no_retry_after_request_may_have_arrived(
     tmp_path: Path, stub: Stub, status: int
 ) -> None:
-    """500, 502 and 504 aren't retried, as Pubgrade may have the build.
+    """Server errors aren't retried, as Pubgrade may have the build.
 
     Args:
         tmp_path: Pytest's temporary directory.

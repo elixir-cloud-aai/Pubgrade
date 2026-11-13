@@ -54,8 +54,8 @@ inputs:
   fail-on-error:
     description: >-
       Whether the step fails if Pubgrade can't be reached or rejects the
-      request (`true` or `false`); with `false` it only warns. Invalid inputs
-      always fail.
+      request (`true` or `false`); with `false` it only warns. Inputs that
+      the action checks itself always fail if invalid.
     required: false
     default: "true"
   allow-http:

@@ -104,7 +104,10 @@ gets a 400. A build without a type reaches only subscriptions without
 ### Notify Pubgrade from CI
 
 In GitHub Actions, the action `actions/notify` of this repository makes this
-request, as a step right after the one that pushes the image. Pin it to the
+request, as a step right after the one that pushes the image. It publishes
+a prebuilt image, so it needs Pubgrade with builds switched off (the
+default); with builds on, Pubgrade expects a build request instead, and
+the action's requests fail. Pin it to the
 commit of a Pubgrade release, with the version as a comment (release tags
 don't move, and Dependabot updates pinned commits):
 
@@ -135,21 +138,19 @@ command line.
 | `git-tag` | no | Git tag of the build; by default the run's tag (`github.ref_name`), if the run is for a tag and neither `git-branch` nor `git-commit` is set. |
 | `git-branch` | no | Git branch of the build, if there is no tag; by default the run's branch (`github.ref_name`). Set it in runs for pull requests, whose `github.ref_name` is `<number>/merge`. |
 | `git-commit` | no | Git commit of the build, with a branch; by default the run's commit (`github.sha`). In a run for a tag, it needs `git-branch` (or `git-tag`). |
-| `fail-on-error` | no | `true` (default): the step fails if Pubgrade can't be reached or rejects the request; `false`: it only warns. Invalid inputs always fail. |
+| `fail-on-error` | no | `true` (default): the step fails if Pubgrade can't be reached or rejects the request; `false`: it only warns. Inputs that the action checks itself (required inputs, the URL, the formats of `repository-id`, `token` and `image`, `git-commit` in a run for a tag) always fail if invalid; others, such as an undeclared build type, are rejected by Pubgrade. |
 | `allow-http` | no | `true` allows a `url` with `http://`, e.g. for tests against a local Pubgrade; the token then goes unencrypted. Default `false`. |
 
 The output `build-id` is the build's identifier (empty if the request failed
 with `fail-on-error: false`), for
 `GET /repositories/<repository ID>/builds/<build ID>`. The action repeats
-the request up to twice, 5 seconds apart, only if it didn't reach Pubgrade:
-if the connection is refused or the host name doesn't resolve, or a proxy
-in front of Pubgrade answers 503 (no ready instance; Pubgrade itself never
-answers 503). It doesn't repeat other errors, such as a connection timeout,
-a 500, 502 or 504, which may come after Pubgrade registered the build (e.g.
-a proxy's timeout while Pubgrade notifies the subscriptions); check the
-repository's builds before running such a step again. Some proxies (e.g.
-Envoy) also answer 503 when Pubgrade drops a request it already received;
-behind them, a repeated request may register a build twice. It needs `bash`, `curl` and `jq`, as on
+the request up to twice, 5 seconds apart, only if it never left the runner:
+if the connection is refused or the host name doesn't resolve. It doesn't
+repeat other errors, such as a connection timeout or any answer, even a 502,
+503 or 504 of a proxy: they may come after Pubgrade registered the build
+(e.g. a proxy's timeout while Pubgrade notifies the subscriptions), and a
+repeated request would register it twice. Check the repository's builds
+before running such a step again. It needs `bash`, `curl` and `jq`, as on
 GitHub's hosted runners.
 
 ## Notifications

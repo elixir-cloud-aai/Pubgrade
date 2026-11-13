@@ -6,12 +6,13 @@
 # `GITHUB_*`; see "Notify Pubgrade from CI" in `docs/usage.md`.
 #
 # The token is masked first, never printed and never on a command line (it
-# goes to curl through stdin). Invalid inputs always fail; failed requests
-# fail unless `fail-on-error` is `false`. Only requests that didn't reach
-# Pubgrade are retried: no connection (curl exit status 6 or 7), or a 503,
-# which proxies answer when Pubgrade has no ready instance. A 502 or 504 may
-# come after Pubgrade registered the build (e.g. while it notifies the
-# subscriptions), so it isn't retried, so that a build isn't registered twice.
+# goes to curl through stdin). Inputs that the action checks itself always
+# fail if invalid; failed requests (including those Pubgrade rejects) fail
+# unless `fail-on-error` is `false`. Only requests that never left the runner
+# are retried: no connection (curl exit status 6 or 7). Any answer, even a
+# 502, 503 or 504 of a proxy, may come after Pubgrade registered the build
+# (e.g. while it notifies the subscriptions), so it isn't retried, so that a
+# build isn't registered twice.
 
 set -euo pipefail
 
@@ -65,15 +66,15 @@ for name in fail-on-error allow-http; do
   fi
 done
 # Pubgrade's identifiers and tokens are made of the characters that its
-# settings allow (`pubgrade/charsets.py`). The identifier is part of the path,
-# so it starts with a letter or digit (no `.` or `..`); the token goes into
-# curl's configuration in quotes, so it has no quotes, backslashes or line
-# breaks (and isn't printed)
-if [[ ! "${repository_id}" =~ ^[A-Za-z0-9][A-Za-z0-9._~-]*$ ]]; then
-  fail "Invalid input 'repository-id': letters, digits, '.', '_', '~' and '-' only, starting with a letter or digit"
+# settings allow (`pubgrade/charsets.py`: letters, digits, `.`, `~` and `-`).
+# The identifier is part of the path, so it starts with a letter or digit (no
+# `.` or `..`); the token goes into curl's configuration in quotes, so it has
+# no quotes, backslashes or line breaks (and isn't printed)
+if [[ ! "${repository_id}" =~ ^[A-Za-z0-9][A-Za-z0-9.~-]*$ ]]; then
+  fail "Invalid input 'repository-id': letters, digits, '.', '~' and '-' only, starting with a letter or digit"
 fi
-if [[ ! "${token}" =~ ^[A-Za-z0-9._~-]+$ ]]; then
-  fail "Invalid input 'token': letters, digits, '.', '_', '~' and '-' only"
+if [[ ! "${token}" =~ ^[A-Za-z0-9.~-]+$ ]]; then
+  fail "Invalid input 'token': letters, digits, '.', '~' and '-' only"
 fi
 # Pubgrade notifies subscribers of the image's tag, so it needs a tag and
 # takes no digest; it checks the full reference itself
@@ -139,12 +140,12 @@ for attempt in $(seq 1 "${attempts}"); do
     0:200)
       break
       ;;
-    6:* | 7:* | 0:503)
-      if [[ "${status}" -eq 0 ]]; then
-        reason="Pubgrade answered ${code}"
-      else
-        reason="Could not reach Pubgrade (curl exit status ${status})"
-      fi
+    3:*)
+      # curl can't parse the URL: an invalid input
+      fail "Invalid input 'url': not a valid URL"
+      ;;
+    6:* | 7:*)
+      reason="Could not reach Pubgrade (curl exit status ${status})"
       if [[ "${attempt}" -lt "${attempts}" ]]; then
         echo "${reason}; retrying in ${retry_delay} s"
         sleep "${retry_delay}"
@@ -165,7 +166,7 @@ for attempt in $(seq 1 "${attempts}"); do
 done
 
 build_id="$(jq -r '.id // empty' "${response}" 2> /dev/null || true)"
-if [[ ! "${build_id}" =~ ^[A-Za-z0-9._~-]+$ ]]; then
+if [[ ! "${build_id}" =~ ^[A-Za-z0-9.~-]+$ ]]; then
   give_up "Pubgrade's response has no build ID"
 fi
 echo "build-id=${build_id}" >> "${GITHUB_OUTPUT}"
