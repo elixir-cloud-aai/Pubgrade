@@ -6,10 +6,10 @@
 # push the images by digest (with SBOM and provenance attestations), scan
 # exactly those digests, then attest, sign (Sigstore) and tag them. The gate
 # `passed` ("CI passed") is the only check to require. No `paths:` filters,
-# so that the gate always reports; skip jobs with `if:` instead (and allow the skip in the gate).
-# Runs also when a pull request is edited, so that the title check follows
-# the title; all jobs run then, as a run that skipped the tests would report
-# "CI passed" for the commit
+# so that the gate always reports; skip jobs with `if:` instead (and allow
+# the skip in the gate). Runs also when a pull request is edited, so that
+# the title check follows the title; all jobs run then, as a run that
+# skipped the tests would report "CI passed" for the commit
 
 name: CI
 on:
@@ -257,7 +257,7 @@ jobs:
   # from the branch's image (`tests/start.sh`): it registers a build that
   # Pubgrade then lists, and a wrong token fails the step, or only warns with
   # `fail-on-error: false`. `tests/test_notify_action.py` covers the rest
-  action:
+  notify:
     name: Notify action
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -300,13 +300,20 @@ jobs:
           REPOSITORY: ${{ steps.repository.outputs.id }}
           BUILD: ${{ steps.notify.outputs.build-id }}
         run: |
-          test -n "${BUILD}"
+          if [[ -z "${BUILD}" ]]; then
+            echo "::error::The action output no build ID"
+            exit 1
+          fi
           curl --silent --show-error --fail-with-body \
-            "${API}/repositories/${REPOSITORY}/builds/${BUILD}" \
-            | jq -e '.status == "SUCCEEDED"
+            "${API}/repositories/${REPOSITORY}/builds/${BUILD}" > build.json
+          if ! jq -e '.status == "SUCCEEDED"
               and .images == [{"name": "elixircloud/pubgrade:1.0.0"}]
               and .head_commit.branch == env.GITHUB_REF_NAME
-              and .head_commit.commit_sha == env.GITHUB_SHA'
+              and .head_commit.commit_sha == env.GITHUB_SHA' build.json; then
+            echo "::error::Unexpected build at Pubgrade"
+            cat build.json
+            exit 1
+          fi
       - name: Notify Pubgrade with a wrong token
         id: rejected
         continue-on-error: true
@@ -333,9 +340,14 @@ jobs:
           WARNED: ${{ steps.warned.outcome }}
           BUILD: ${{ steps.warned.outputs.build-id }}
         run: |
-          test "${REJECTED}" = failure
-          test "${WARNED}" = success
-          test -z "${BUILD}"
+          if [[ "${REJECTED}" != failure ]]; then
+            echo "::error::A wrong token didn't fail the step (${REJECTED})"
+            exit 1
+          fi
+          if [[ "${WARNED}" != success || -n "${BUILD}" ]]; then
+            echo "::error::With fail-on-error false, a wrong token didn't only warn (${WARNED}, build '${BUILD}')"
+            exit 1
+          fi
       - name: Show app logs
         if: failure()
         run: docker logs pubgrade
@@ -508,7 +520,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     if: ${{ github.event_name == 'push' }}
-    needs: [lint, test, chart, docs, smoke, action, upgrade, check, push, scan]
+    needs: [lint, test, chart, docs, smoke, notify, upgrade, check, push, scan]
     # Docker Hub secrets; the environment only allows branch `dev`
     environment: dev-images
     permissions:
@@ -611,7 +623,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     if: always()
-    needs: [title, lint, test, chart, docs, smoke, action, upgrade, check, push, scan, publish]
+    needs: [title, lint, test, chart, docs, smoke, notify, upgrade, check, push, scan, publish]
     permissions: {}
     steps:
       - name: Check results of all jobs

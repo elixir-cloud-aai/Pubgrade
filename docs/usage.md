@@ -133,18 +133,21 @@ command line.
 | `image` | yes | The image with its tag, e.g. `org/image:1.0.0`; Pubgrade takes no digest, and notifies subscribers of the tag. |
 | `build-type` | no | One of the repository's build types. |
 | `git-tag` | no | Git tag of the build; by default the run's tag (`github.ref_name`), if the run is for a tag and neither `git-branch` nor `git-commit` is set. |
-| `git-branch` | no | Git branch of the build, if there is no tag; by default the run's branch. |
-| `git-commit` | no | Git commit of the build, with a branch; by default the run's commit (`github.sha`). |
+| `git-branch` | no | Git branch of the build, if there is no tag; by default the run's branch (`github.ref_name`). Set it in runs for pull requests, whose `github.ref_name` is `<number>/merge`. |
+| `git-commit` | no | Git commit of the build, with a branch; by default the run's commit (`github.sha`). In a run for a tag, it needs `git-branch` (or `git-tag`). |
 | `fail-on-error` | no | `true` (default): the step fails if Pubgrade can't be reached or rejects the request; `false`: it only warns. Invalid inputs always fail. |
 | `allow-http` | no | `true` allows a `url` with `http://`, e.g. for tests against a local Pubgrade; the token then goes unencrypted. Default `false`. |
 
 The output `build-id` is the build's identifier (empty if the request failed
 with `fail-on-error: false`), for
 `GET /repositories/<repository ID>/builds/<build ID>`. The action repeats
-the request up to twice, 5 seconds apart, if Pubgrade can't be reached or a
-proxy in front of it answers 502, 503 or 504; it doesn't repeat other
-errors, such as a 500, after which Pubgrade may have registered the build
-already. It needs `bash`, `curl` and `jq`, as on GitHub's hosted runners.
+the request up to twice, 5 seconds apart, only if it didn't reach Pubgrade:
+if Pubgrade can't be reached, or a proxy in front of it answers 503 (no
+ready instance). It doesn't repeat other errors, such as a 500, 502 or 504,
+which may come after Pubgrade registered the build (e.g. a proxy's timeout
+while Pubgrade notifies the subscriptions); check the repository's builds
+before running such a step again. It needs `bash`, `curl` and `jq`, as on
+GitHub's hosted runners.
 
 ## Notifications
 

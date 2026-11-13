@@ -7,9 +7,11 @@
 #
 # The token is masked first, never printed and never on a command line (it
 # goes to curl through stdin). Invalid inputs always fail; failed requests
-# fail unless `fail-on-error` is `false`. Only answers that show the request
-# didn't reach Pubgrade are retried (no connection, 502, 503, 504), so that a
-# build is never registered twice.
+# fail unless `fail-on-error` is `false`. Only requests that didn't reach
+# Pubgrade are retried: no connection (curl exit status 6 or 7), or a 503,
+# which proxies answer when Pubgrade has no ready instance. A 502 or 504 may
+# come after Pubgrade registered the build (e.g. while it notifies the
+# subscriptions), so it isn't retried, so that a build isn't registered twice.
 
 set -euo pipefail
 
@@ -28,10 +30,21 @@ git_commit="${INPUT_GIT_COMMIT:-}"
 fail_on_error="${INPUT_FAIL_ON_ERROR:-true}"
 allow_http="${INPUT_ALLOW_HTTP:-false}"
 attempts=3
+# Seconds between attempts; the variable is for the tests only
 retry_delay="${NOTIFY_RETRY_DELAY:-5}"
 
+# Prints a workflow command (`error` or `warning`) with a message, escaped so
+# that it stays one command whatever the message holds
+annotate() {
+  local message="$2"
+  message="${message//'%'/%25}"
+  message="${message//$'\r'/%0D}"
+  message="${message//$'\n'/%0A}"
+  echo "::$1::${message}"
+}
+
 fail() {
-  echo "::error::$1"
+  annotate error "$1"
   exit 1
 }
 
@@ -74,7 +87,12 @@ else
 fi
 
 # The Git reference the image was built from: the inputs, else the run's tag,
-# else its branch and commit
+# else its branch and commit. A run for a tag has no branch to go with a
+# commit
+if [[ -z "${git_tag}${git_branch}" && -n "${git_commit}" \
+  && "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+  fail "Input 'git-commit' needs 'git-branch' (or 'git-tag') in a run for a tag"
+fi
 if [[ -n "${git_tag}" ]]; then
   head_commit="$(jq --null-input --arg tag "${git_tag}" '{tag: $tag}')"
 elif [[ -z "${git_branch}${git_commit}" && "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
@@ -98,10 +116,9 @@ trap 'rm -f "${response}"' EXIT
 # `fail-on-error`
 give_up() {
   if [[ "${fail_on_error}" == "true" ]]; then
-    echo "::error::$1"
-    exit 1
+    fail "$1"
   fi
-  echo "::warning::$1"
+  annotate warning "$1"
   exit 0
 }
 
@@ -118,7 +135,7 @@ for attempt in $(seq 1 "${attempts}"); do
     0:200)
       break
       ;;
-    6:* | 7:* | 0:502 | 0:503 | 0:504)
+    6:* | 7:* | 0:503)
       if [[ "${status}" -eq 0 ]]; then
         reason="Pubgrade answered ${code}"
       else

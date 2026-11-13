@@ -2,7 +2,7 @@
 # build of a repository (`POST /repositories/{id}/builds`), and Pubgrade
 # notifies the repository's subscriptions. See "Notify Pubgrade from CI" in
 # `docs/usage.md`; the work is done by `notify.sh`, tested in
-# `tests/test_notify_action.py` and by the CI job `action`
+# `tests/test_notify_action.py` and by the CI job `notify`
 name: Notify Pubgrade
 description: Register a new image at Pubgrade, which notifies the subscribed deployments
 author: ELIXIR Cloud & AAI
@@ -40,13 +40,15 @@ inputs:
   git-branch:
     description: >-
       Git branch the image was built from (if there is no tag). By default
-      the branch or tag of the run (`github.ref_name`).
+      the branch or tag of the run (`github.ref_name`); set it in runs for
+      pull requests, whose `github.ref_name` is `<number>/merge`.
     required: false
     default: ""
   git-commit:
     description: >-
       Git commit the image was built from (with a branch). By default the
-      commit of the run (`github.sha`).
+      commit of the run (`github.sha`). In a run for a tag, it needs
+      `git-branch` (or `git-tag`).
     required: false
     default: ""
   fail-on-error:

@@ -2,7 +2,7 @@
 
 The script runs against a stub of Pubgrade's `POST
 /repositories/{id}/builds` on localhost, which answers with queued responses
-and records the requests. The CI job `action` also runs the action itself
+and records the requests. The CI job `notify` also runs the action itself
 against Pubgrade.
 """
 
@@ -86,7 +86,7 @@ def stub() -> Iterator[Stub]:
             status, body = (
                 state.responses.pop(0) if state.responses else (200, {"id": "b1"})
             )
-            data = json.dumps(body).encode()
+            data = body if isinstance(body, bytes) else json.dumps(body).encode()
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(data)))
@@ -289,8 +289,9 @@ def test_git_inputs(
         ({"TOKEN": "a\nb"}, "Invalid input 'token'"),
         ({"IMAGE": "org/image"}, "needs a tag"),
         ({"IMAGE": "org/image:1@sha256:" + "a" * 64}, "needs a tag"),
-        ({"URL": "ftp://example.org"}, "must start with https://"),
-        ({"ALLOW_HTTP": "false"}, "must start with https://"),
+        ({"URL": "ftp://example.org"}, "must start with https:// or http://"),
+        ({"ALLOW_HTTP": "false"}, "must start with https:// (or set"),
+        ({"GIT_COMMIT": "abc1234"}, "Input 'git-commit' needs 'git-branch'"),
         ({"FAIL_ON_ERROR": "maybe"}, "Invalid input 'fail-on-error'"),
         ({"ALLOW_HTTP": "maybe"}, "Invalid input 'allow-http'"),
     ],
@@ -337,30 +338,77 @@ def test_error_without_fail_on_error(tmp_path: Path, stub: Stub) -> None:
     assert result.outputs == {}
 
 
-def test_retry_on_gateway_errors(tmp_path: Path, stub: Stub) -> None:
-    """502, 503 and 504 are retried; the build ID of the success is output."""
-    stub.responses = [(502, {}), (503, {}), (200, {"id": "b2"})]
+def test_retry_when_unavailable(tmp_path: Path, stub: Stub) -> None:
+    """A 503 is retried; the build ID of the success is output."""
+    stub.responses = [(503, {}), (503, {}), (200, {"id": "b2"})]
     result = run(tmp_path, stub.url)
     assert result.returncode == 0, result.output
     assert result.outputs == {"build-id": "b2"}
     assert len(stub.requests) == 3
+    assert result.output.count("retrying") == 2
 
 
-def test_retries_exhausted(tmp_path: Path, stub: Stub) -> None:
-    """After three attempts with gateway errors, the step fails."""
-    stub.responses = [(504, {}), (504, {}), (504, {})]
-    result = run(tmp_path, stub.url)
-    assert result.returncode == 1
-    assert "::error::Pubgrade answered 504" in result.output
+@pytest.mark.parametrize("fail_on_error", ["true", "false"])
+def test_retries_exhausted(tmp_path: Path, stub: Stub, fail_on_error: str) -> None:
+    """After three 503s, the step fails, or only warns.
+
+    Args:
+        tmp_path: Pytest's temporary directory.
+        stub: The stub of Pubgrade.
+        fail_on_error: Input `fail-on-error`.
+    """
+    stub.responses = [(503, {}), (503, {}), (503, {})]
+    result = run(tmp_path, stub.url, {"FAIL_ON_ERROR": fail_on_error})
+    level = "error" if fail_on_error == "true" else "warning"
+    assert result.returncode == (1 if fail_on_error == "true" else 0)
+    assert f"::{level}::Pubgrade answered 503" in result.output
     assert len(stub.requests) == 3
+    assert result.outputs == {}
 
 
-def test_no_retry_on_server_error(tmp_path: Path, stub: Stub) -> None:
-    """A 500 is not retried, as Pubgrade may have registered the build."""
-    stub.responses = [(500, {"status": 500, "title": "Internal Server Error"})]
+@pytest.mark.parametrize("status", [500, 502, 504])
+def test_no_retry_after_request_may_have_arrived(
+    tmp_path: Path, stub: Stub, status: int
+) -> None:
+    """500, 502 and 504 aren't retried, as Pubgrade may have the build.
+
+    Args:
+        tmp_path: Pytest's temporary directory.
+        stub: The stub of Pubgrade.
+        status: Status of the response.
+    """
+    stub.responses = [(status, {"status": status, "title": "Error"})]
     result = run(tmp_path, stub.url)
     assert result.returncode == 1
+    assert f"::error::Pubgrade answered {status}: Error" in result.output
     assert len(stub.requests) == 1
+    assert "retrying" not in result.output
+
+
+@pytest.mark.parametrize(
+    ("body", "message"),
+    [
+        (b"<html>Bad Gateway</html>", "Pubgrade answered 400\n"),
+        ({"title": "Bad Request"}, "Pubgrade answered 400: Bad Request\n"),
+        (
+            {"title": "Bad\n::stop-commands::x", "detail": "100%"},
+            "Pubgrade answered 400: Bad%0A::stop-commands::x: 100%25\n",
+        ),
+    ],
+)
+def test_error_details(tmp_path: Path, stub: Stub, body: Any, message: str) -> None:
+    """Errors show Pubgrade's title and detail, escaped for the runner.
+
+    Args:
+        tmp_path: Pytest's temporary directory.
+        stub: The stub of Pubgrade.
+        body: Body of the error response; bytes are sent as they are.
+        message: Expected error message, with its line end.
+    """
+    stub.responses = [(400, body)]
+    result = run(tmp_path, stub.url)
+    assert result.returncode == 1
+    assert f"::error::{message}" in result.output
 
 
 def test_response_without_id(tmp_path: Path, stub: Stub) -> None:
@@ -371,9 +419,27 @@ def test_response_without_id(tmp_path: Path, stub: Stub) -> None:
     assert "::error::Pubgrade's response has no build ID" in result.output
 
 
-def test_unreachable(tmp_path: Path) -> None:
-    """A Pubgrade that can't be reached fails the step after retries."""
-    result = run(tmp_path, "http://127.0.0.1:9")
-    assert result.returncode == 1
-    assert "::error::Could not reach Pubgrade" in result.output
+@pytest.mark.parametrize("fail_on_error", ["true", "false"])
+def test_unreachable(tmp_path: Path, fail_on_error: str) -> None:
+    """A Pubgrade that can't be reached fails the step, or warns, after retries.
+
+    Args:
+        tmp_path: Pytest's temporary directory.
+        fail_on_error: Input `fail-on-error`.
+    """
+    result = run(tmp_path, "http://127.0.0.1:9", {"FAIL_ON_ERROR": fail_on_error})
+    level = "error" if fail_on_error == "true" else "warning"
+    assert result.returncode == (1 if fail_on_error == "true" else 0)
+    assert f"::{level}::Could not reach Pubgrade (curl exit status 7)" in (
+        result.output
+    )
     assert result.output.count("retrying") == 2
+
+
+def test_other_curl_errors_not_retried(tmp_path: Path, stub: Stub) -> None:
+    """Other curl errors (here TLS against plain HTTP) aren't retried."""
+    url = stub.url.replace("http://", "https://")
+    result = run(tmp_path, url, {"ALLOW_HTTP": "false"})
+    assert result.returncode == 1
+    assert "::error::Could not reach Pubgrade (curl exit status 35)" in result.output
+    assert "retrying" not in result.output
