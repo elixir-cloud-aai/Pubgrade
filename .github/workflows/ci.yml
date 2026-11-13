@@ -305,7 +305,8 @@ jobs:
             exit 1
           fi
           curl --silent --show-error --fail-with-body \
-            "${API}/repositories/${REPOSITORY}/builds/${BUILD}" > build.json
+            "${API}/repositories/${REPOSITORY}/builds/${BUILD}" > build.json \
+            || { cat build.json; exit 1; }
           if ! jq -e '.status == "SUCCEEDED"
               and .images == [{"name": "elixircloud/pubgrade:1.0.0"}]
               and .head_commit.branch == env.GITHUB_REF_NAME

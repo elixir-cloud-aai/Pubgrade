@@ -16,9 +16,13 @@
 set -euo pipefail
 
 token="${INPUT_TOKEN:-}"
-if [[ -n "${token}" ]]; then
-  echo "::add-mask::${token}"
-fi
+# Each line of the token is masked (it is checked below), as the runner masks
+# a secret
+while IFS= read -r line; do
+  if [[ -n "${line}" ]]; then
+    echo "::add-mask::${line}"
+  fi
+done <<< "${token//$'\r'/$'\n'}"
 
 url="${INPUT_URL:-}"
 repository_id="${INPUT_REPOSITORY_ID:-}"

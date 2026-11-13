@@ -142,11 +142,14 @@ The output `build-id` is the build's identifier (empty if the request failed
 with `fail-on-error: false`), for
 `GET /repositories/<repository ID>/builds/<build ID>`. The action repeats
 the request up to twice, 5 seconds apart, only if it didn't reach Pubgrade:
-if Pubgrade can't be reached, or a proxy in front of it answers 503 (no
-ready instance). It doesn't repeat other errors, such as a 500, 502 or 504,
-which may come after Pubgrade registered the build (e.g. a proxy's timeout
-while Pubgrade notifies the subscriptions); check the repository's builds
-before running such a step again. It needs `bash`, `curl` and `jq`, as on
+if the connection is refused or the host name doesn't resolve, or a proxy
+in front of Pubgrade answers 503 (no ready instance; Pubgrade itself never
+answers 503). It doesn't repeat other errors, such as a connection timeout,
+a 500, 502 or 504, which may come after Pubgrade registered the build (e.g.
+a proxy's timeout while Pubgrade notifies the subscriptions); check the
+repository's builds before running such a step again. Some proxies (e.g.
+Envoy) also answer 503 when Pubgrade drops a request it already received;
+behind them, a repeated request may register a build twice. It needs `bash`, `curl` and `jq`, as on
 GitHub's hosted runners.
 
 ## Notifications

@@ -212,6 +212,17 @@ def test_token_masked_and_not_printed(tmp_path: Path, stub: Stub) -> None:
     assert result.output.count(TOKEN) == 1
 
 
+def test_token_with_line_breaks_masked(tmp_path: Path, stub: Stub) -> None:
+    """Each line of an invalid token is masked before the token is rejected."""
+    result = run(tmp_path, stub.url, {"TOKEN": "first\r\nsecond"})
+    assert result.returncode == 1
+    lines = result.output.splitlines()
+    assert lines[:2] == ["::add-mask::first", "::add-mask::second"]
+    assert "first" not in "".join(lines[2:])
+    assert "second" not in "".join(lines[2:])
+    assert stub.requests == []
+
+
 def test_trailing_slash_and_build_type(tmp_path: Path, stub: Stub) -> None:
     """A trailing slash of the URL is dropped; a build type is sent."""
     result = run(tmp_path, f"{stub.url}/", {"BUILD_TYPE": "production"})

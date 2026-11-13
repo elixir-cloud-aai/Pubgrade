@@ -40,7 +40,7 @@ inputs:
   git-branch:
     description: >-
       Git branch the image was built from (if there is no tag). By default
-      the branch or tag of the run (`github.ref_name`); set it in runs for
+      the branch of the run (`github.ref_name`); set it in runs for
       pull requests, whose `github.ref_name` is `<number>/merge`.
     required: false
     default: ""
