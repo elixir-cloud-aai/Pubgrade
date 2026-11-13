@@ -50,8 +50,18 @@ bumped by hand: the tag and digest of the base image in the `Dockerfile`
 and `foca` in `pyproject.toml` and `uv.lock` together, following FOCA's
 migration guides; `tests/test_image.py` fails if they don't match.
 
-`tests/smoke.sh <base URL>` checks the API of a running Pubgrade with an empty
-database, and `tests/chart.sh` the rendered chart.
+`tests/start.sh <image>` starts an image of Pubgrade with MongoDB in Docker,
+on port 8080; `tests/smoke.sh <base URL>` checks the API of a running
+Pubgrade with an empty database, and `tests/chart.sh` the rendered chart.
+
+The action that notifies Pubgrade from CI (`actions/notify`, see
+[Notify Pubgrade from CI](usage.md#notify-pubgrade-from-ci)) is a composite
+action around `actions/notify/notify.sh`. `tests/test_notify_action.py`
+runs the script against a stub of Pubgrade (it needs `bash`, `curl` and
+`jq`; `NOTIFY_RETRY_DELAY=0` skips the waits between attempts), and the CI
+job "Notify action" runs the action itself against
+Pubgrade from the branch's image. The action is versioned with Pubgrade:
+callers pin the commit of a release.
 
 `tests/e2e/upgrade.sh` tests the whole path, and needs Docker, Helm and jq: it
 starts a throwaway k3s cluster, installs Pubgrade from its chart, sets up two
@@ -108,11 +118,11 @@ Commits, at most 50 characters, as it becomes the commit message of the squash
 merge), lint (the pre-commit hooks, see [Lint](#lint), and the citation
 metadata in `CITATION.cff`), the tests (with mongomock, with coverage to
 Codecov; the integration tests also against MongoDB 7.0), the chart, the smoke
-and upgrade tests, the deployment check, the documentation, and a scan of the
-images. The scan fails on critical and high vulnerabilities that have a fix in
-the app's image; the updater's image, which isn't built on FOCA, is only
-reported for now. The job `CI passed` sums up all other jobs and is the only
-required check.
+test, the notify action, the upgrade test, the deployment check, the
+documentation, and a scan of the images. The scan fails on critical and high
+vulnerabilities that have a fix in the app's image; the updater's image,
+which isn't built on FOCA, is only reported for now. The job `CI passed` sums
+up all other jobs and is the only required check.
 
 Pushes to `dev` publish `elixircloud/pubgrade` and
 `elixircloud/pubgrade-updater`, signed with Sigstore and tagged `dev` and
