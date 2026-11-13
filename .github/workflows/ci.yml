@@ -1,12 +1,12 @@
 # Everything that must pass on pull requests and pushes to `dev`: the pull
 # request title, lint (pre-commit hooks, the lock and the citation metadata),
 # the unit tests (coverage to Codecov), the chart, the docs, a smoke test of
-# the image, an upgrade test and the deployment check on local clusters, a
-# scan of the images (report only) and, on pushes, push the images by digest
-# (with SBOM and provenance attestations), scan exactly those digests, then
-# attest, sign (Sigstore) and tag them. The gate `passed` ("CI passed") is
-# the only check to require. No `paths:` filters, so that the gate always
-# reports; skip jobs with `if:` instead (and allow the skip in the gate).
+# the image, a test of the notify action, an upgrade test and the deployment
+# check on local clusters, a scan of the images (report only) and, on pushes,
+# push the images by digest (with SBOM and provenance attestations), scan
+# exactly those digests, then attest, sign (Sigstore) and tag them. The gate
+# `passed` ("CI passed") is the only check to require. No `paths:` filters,
+# so that the gate always reports; skip jobs with `if:` instead (and allow the skip in the gate).
 # Runs also when a pull request is edited, so that the title check follows
 # the title; all jobs run then, as a run that skipped the tests would report
 # "CI passed" for the commit
@@ -227,8 +227,8 @@ jobs:
       - name: Build documentation
         run: mkdocs build --strict
 
-  # Starts the image with MongoDB, under an arbitrary user ID as on OpenShift;
-  # the container's name is the host in `pubgrade/config.yaml`
+  # Starts the image with MongoDB, under an arbitrary user ID as on OpenShift
+  # (`tests/start.sh`)
   smoke:
     name: Smoke test
     runs-on: ubuntu-latest
@@ -246,28 +246,96 @@ jobs:
           docker build --tag pubgrade-updater:smoke \
             --file build-complete-updater/Dockerfile .
       - name: Start app
-        run: |
-          docker network create smoke
-          docker run --detach --name mongodb --network smoke \
-            mongo:7.0
-          for _ in $(seq 1 30); do
-            if docker exec mongodb mongosh --quiet --eval 'db.adminCommand({ping: 1}).ok' > /dev/null 2>&1; then
-              break
-            fi
-            sleep 2
-          done
-          docker run --detach --name pubgrade --network smoke \
-            --user 12345:0 --publish 8080:8080 pubgrade:smoke
-          for _ in $(seq 1 60); do
-            if curl --fail --silent --output /dev/null "${API}/ui/"; then
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "::error::App did not respond"
-          exit 1
+        run: tests/start.sh pubgrade:smoke
       - name: Check API with MongoDB
         run: tests/smoke.sh "${API}"
+      - name: Show app logs
+        if: failure()
+        run: docker logs pubgrade
+
+  # Runs the notify action (`actions/notify`) as callers do, against Pubgrade
+  # from the branch's image (`tests/start.sh`): it registers a build that
+  # Pubgrade then lists, and a wrong token fails the step, or only warns with
+  # `fail-on-error: false`. `tests/test_notify_action.py` covers the rest
+  action:
+    name: Notify action
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      API: http://localhost:8080
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build image
+        run: docker build --tag pubgrade:action .
+      - name: Start app
+        run: tests/start.sh pubgrade:action
+      # The token is masked like a secret, and passed on through the
+      # environment of the job, as callers pass theirs from a secret
+      - name: Register repository
+        id: repository
+        run: |
+          curl --silent --show-error --fail-with-body --output repository.json \
+            --request POST --header 'Content-Type: application/json' \
+            --data '{"url": "https://github.com/elixir-cloud-aai/Pubgrade.git"}' \
+            "${API}/repositories"
+          token="$(jq -r .access_token repository.json)"
+          echo "::add-mask::${token}"
+          echo "PUBGRADE_TOKEN=${token}" >> "$GITHUB_ENV"
+          echo "id=$(jq -r .id repository.json)" >> "$GITHUB_OUTPUT"
+          rm repository.json
+      - name: Notify Pubgrade
+        id: notify
+        uses: ./actions/notify
+        with:
+          url: ${{ env.API }}
+          repository-id: ${{ steps.repository.outputs.id }}
+          token: ${{ env.PUBGRADE_TOKEN }}
+          image: elixircloud/pubgrade:1.0.0
+          allow-http: "true"
+      - name: Check build
+        env:
+          REPOSITORY: ${{ steps.repository.outputs.id }}
+          BUILD: ${{ steps.notify.outputs.build-id }}
+        run: |
+          test -n "${BUILD}"
+          curl --silent --show-error --fail-with-body \
+            "${API}/repositories/${REPOSITORY}/builds/${BUILD}" \
+            | jq -e '.status == "SUCCEEDED"
+              and .images == [{"name": "elixircloud/pubgrade:1.0.0"}]
+              and .head_commit.branch == env.GITHUB_REF_NAME
+              and .head_commit.commit_sha == env.GITHUB_SHA'
+      - name: Notify Pubgrade with a wrong token
+        id: rejected
+        continue-on-error: true
+        uses: ./actions/notify
+        with:
+          url: ${{ env.API }}
+          repository-id: ${{ steps.repository.outputs.id }}
+          token: wrong-token
+          image: elixircloud/pubgrade:1.0.0
+          allow-http: "true"
+      - name: Notify Pubgrade with a wrong token, without failing
+        id: warned
+        uses: ./actions/notify
+        with:
+          url: ${{ env.API }}
+          repository-id: ${{ steps.repository.outputs.id }}
+          token: wrong-token
+          image: elixircloud/pubgrade:1.0.0
+          fail-on-error: "false"
+          allow-http: "true"
+      - name: Check failures
+        env:
+          REJECTED: ${{ steps.rejected.outcome }}
+          WARNED: ${{ steps.warned.outcome }}
+          BUILD: ${{ steps.warned.outputs.build-id }}
+        run: |
+          test "${REJECTED}" = failure
+          test "${WARNED}" = success
+          test -z "${BUILD}"
       - name: Show app logs
         if: failure()
         run: docker logs pubgrade
@@ -440,7 +508,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     if: ${{ github.event_name == 'push' }}
-    needs: [lint, test, chart, docs, smoke, upgrade, check, push, scan]
+    needs: [lint, test, chart, docs, smoke, action, upgrade, check, push, scan]
     # Docker Hub secrets; the environment only allows branch `dev`
     environment: dev-images
     permissions:
@@ -543,7 +611,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     if: always()
-    needs: [title, lint, test, chart, docs, smoke, upgrade, check, push, scan, publish]
+    needs: [title, lint, test, chart, docs, smoke, action, upgrade, check, push, scan, publish]
     permissions: {}
     steps:
       - name: Check results of all jobs

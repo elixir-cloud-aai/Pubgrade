@@ -1,0 +1,90 @@
+# Notifies Pubgrade of a new image from a CI job: registers the image as a
+# build of a repository (`POST /repositories/{id}/builds`), and Pubgrade
+# notifies the repository's subscriptions. See "Notify Pubgrade from CI" in
+# `docs/usage.md`; the work is done by `notify.sh`, tested in
+# `tests/test_notify_action.py` and by the CI job `action`
+name: Notify Pubgrade
+description: Register a new image at Pubgrade, which notifies the subscribed deployments
+author: ELIXIR Cloud & AAI
+branding:
+  icon: bell
+  color: purple
+
+inputs:
+  url:
+    description: Base URL of Pubgrade's API, e.g. `https://pubgrade.example.org`.
+    required: true
+  repository-id:
+    description: Identifier of the repository at Pubgrade (`id` of `POST /repositories`).
+    required: true
+  token:
+    description: >-
+      Access token of the repository at Pubgrade (`access_token` of
+      `POST /repositories`). Pass it from a secret; it is masked.
+    required: true
+  image:
+    description: >-
+      Image to publish, with its tag and without a digest, e.g.
+      `elixircloud/tesk-api:v1.2.0`; subscribers are notified of this tag.
+    required: true
+  build-type:
+    description: One of the repository's build types, if it declares any.
+    required: false
+    default: ""
+  git-tag:
+    description: >-
+      Git tag the image was built from. By default the tag of the run, if it
+      runs for a tag and neither `git-branch` nor `git-commit` is set.
+    required: false
+    default: ""
+  git-branch:
+    description: >-
+      Git branch the image was built from (if there is no tag). By default
+      the branch or tag of the run (`github.ref_name`).
+    required: false
+    default: ""
+  git-commit:
+    description: >-
+      Git commit the image was built from (with a branch). By default the
+      commit of the run (`github.sha`).
+    required: false
+    default: ""
+  fail-on-error:
+    description: >-
+      Whether the step fails if Pubgrade can't be reached or rejects the
+      request (`true` or `false`); with `false` it only warns. Invalid inputs
+      always fail.
+    required: false
+    default: "true"
+  allow-http:
+    description: >-
+      Whether `url` may use plain HTTP (`true` or `false`), e.g. for a
+      Pubgrade on the runner in tests. The token then goes unencrypted.
+    required: false
+    default: "false"
+
+outputs:
+  build-id:
+    description: Identifier of the build at Pubgrade; empty if it failed with `fail-on-error` set to `false`.
+    value: ${{ steps.notify.outputs.build-id }}
+
+runs:
+  using: composite
+  steps:
+    # Inputs go in through the environment, never into the script, so that
+    # their values can't change it
+    - name: Notify Pubgrade
+      id: notify
+      shell: bash
+      env:
+        INPUT_URL: ${{ inputs.url }}
+        INPUT_REPOSITORY_ID: ${{ inputs.repository-id }}
+        INPUT_TOKEN: ${{ inputs.token }}
+        INPUT_IMAGE: ${{ inputs.image }}
+        INPUT_BUILD_TYPE: ${{ inputs.build-type }}
+        INPUT_GIT_TAG: ${{ inputs.git-tag }}
+        INPUT_GIT_BRANCH: ${{ inputs.git-branch }}
+        INPUT_GIT_COMMIT: ${{ inputs.git-commit }}
+        INPUT_FAIL_ON_ERROR: ${{ inputs.fail-on-error }}
+        INPUT_ALLOW_HTTP: ${{ inputs.allow-http }}
+      run: bash "${GITHUB_ACTION_PATH}/notify.sh"
