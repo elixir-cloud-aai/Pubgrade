@@ -221,6 +221,17 @@ def test_trailing_slash_and_build_type(tmp_path: Path, stub: Stub) -> None:
     assert request.body["build_type"] == "production"
 
 
+def test_identifiers_with_all_characters(tmp_path: Path, stub: Stub) -> None:
+    """Identifiers and tokens may have all characters Pubgrade generates."""
+    stub.responses = [(200, {"id": "b.1~x-y"})]
+    result = run(tmp_path, stub.url, {"REPOSITORY_ID": "r.1-a", "TOKEN": "t.~-1"})
+    assert result.returncode == 0, result.output
+    assert result.outputs == {"build-id": "b.1~x-y"}
+    [request] = stub.requests
+    assert request.path == "/repositories/r.1-a/builds"
+    assert request.headers["x-project-access-token"] == "t.~-1"
+
+
 def test_branch_from_context(tmp_path: Path, stub: Stub) -> None:
     """A run for a branch sends the branch and the commit of the run."""
     result = run(
@@ -273,6 +284,9 @@ def test_git_inputs(
         ({"TOKEN": ""}, "Input 'token' is required"),
         ({"IMAGE": ""}, "Input 'image' is required"),
         ({"REPOSITORY_ID": "../x"}, "Invalid input 'repository-id'"),
+        ({"REPOSITORY_ID": ".."}, "Invalid input 'repository-id'"),
+        ({"TOKEN": 'a" -o "x'}, "Invalid input 'token'"),
+        ({"TOKEN": "a\nb"}, "Invalid input 'token'"),
         ({"IMAGE": "org/image"}, "needs a tag"),
         ({"IMAGE": "org/image:1@sha256:" + "a" * 64}, "needs a tag"),
         ({"URL": "ftp://example.org"}, "must start with https://"),

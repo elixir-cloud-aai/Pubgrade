@@ -47,9 +47,16 @@ for name in fail-on-error allow-http; do
     fail "Invalid input '${name}': must be 'true' or 'false'"
   fi
 done
-# The identifier is part of the path
-if [[ ! "${repository_id}" =~ ^[A-Za-z0-9_-]+$ ]]; then
-  fail "Invalid input 'repository-id': only letters, digits, '_' and '-'"
+# Pubgrade's identifiers and tokens are made of the characters that its
+# settings allow (`pubgrade/charsets.py`). The identifier is part of the path,
+# so it starts with a letter or digit (no `.` or `..`); the token goes into
+# curl's configuration in quotes, so it has no quotes, backslashes or line
+# breaks (and isn't printed)
+if [[ ! "${repository_id}" =~ ^[A-Za-z0-9][A-Za-z0-9._~-]*$ ]]; then
+  fail "Invalid input 'repository-id': letters, digits, '.', '_', '~' and '-' only, starting with a letter or digit"
+fi
+if [[ ! "${token}" =~ ^[A-Za-z0-9._~-]+$ ]]; then
+  fail "Invalid input 'token': letters, digits, '.', '_', '~' and '-' only"
 fi
 # Pubgrade notifies subscribers of the image's tag, so it needs a tag and
 # takes no digest; it checks the full reference itself
@@ -137,7 +144,7 @@ for attempt in $(seq 1 "${attempts}"); do
 done
 
 build_id="$(jq -r '.id // empty' "${response}" 2> /dev/null || true)"
-if [[ ! "${build_id}" =~ ^[A-Za-z0-9_-]+$ ]]; then
+if [[ ! "${build_id}" =~ ^[A-Za-z0-9._~-]+$ ]]; then
   give_up "Pubgrade's response has no build ID"
 fi
 echo "build-id=${build_id}" >> "${GITHUB_OUTPUT}"
