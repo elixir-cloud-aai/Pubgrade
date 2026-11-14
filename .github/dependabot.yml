@@ -1,7 +1,7 @@
 version: 2
-# Every entry targets `dev` (`target-branch`), which takes all pull
-# requests whatever the default branch is (`main` only moves forward to
-# releases); security updates always target the default branch, though
+# No entry sets `target-branch`: pull requests go to the default branch
+# (`dev`) anyway, and while `target-branch` is set, GitHub doesn't apply
+# the entry's options (`labels`, `ignore`, ...) to security updates
 updates:
   # Dependencies in `pyproject.toml` and the lock (`uv.lock`), updated
   # together; the image build installs the locked ones (`Dockerfile`)
@@ -10,7 +10,6 @@ updates:
     labels: ["type: dependencies"]
     schedule:
       interval: monthly
-    target-branch: dev
     versioning-strategy: increase-if-necessary
     ignore:
       # FOCA is bumped by hand, together with the base image (see the `docker`
@@ -35,7 +34,6 @@ updates:
     labels: ["type: dependencies"]
     schedule:
       interval: monthly
-    target-branch: dev
     groups:
       updater-dependencies:
         patterns: ["*"]
@@ -47,7 +45,6 @@ updates:
     labels: ["type: dependencies"]
     schedule:
       interval: monthly
-    target-branch: dev
     groups:
       github-actions:
         patterns: ["*"]
@@ -57,7 +54,6 @@ updates:
     labels: ["type: dependencies"]
     schedule:
       interval: monthly
-    target-branch: dev
     ignore:
       # FOCA is bumped by hand, in the base image and the `foca` requirement
       # in `pyproject.toml` and `uv.lock` together (see the `uv` entry)
@@ -76,7 +72,6 @@ updates:
     labels: ["type: dependencies"]
     schedule:
       interval: monthly
-    target-branch: dev
     groups:
       pre-commit:
         patterns: ["*"]
@@ -88,4 +83,3 @@ updates:
     labels: ["type: dependencies"]
     schedule:
       interval: monthly
-    target-branch: dev
