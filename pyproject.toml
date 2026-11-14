@@ -33,7 +33,7 @@ dependencies = [
     # `tests/test_image.py`)
     "foca>=0.22.0,<0.23",
     "gitpython>=3.2.1,<4",
-    "gunicorn>=26.2.0,<27",
+    "gunicorn>=26.2.0,<28",
     "kubernetes>=37.0.2,<38",
     "pymongo>=4.19.0,<5",
     "pyyaml>=6.0.3,<7",
