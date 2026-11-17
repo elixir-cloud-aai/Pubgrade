@@ -256,11 +256,14 @@ first` builds them instead, because without a previous tag GitHub starts at
 an older tag of its own choice. The notes of immutable releases stay
 editable, their assets don't, so the release is created as a draft, gets its
 assets and is published last
-(`scripts/release_assets.py`); a re-run of failed jobs finishes it. A re-run
-also replaces the notes of a published release with the curated ones (and
-freshly generated ones), so fix notes in `docs/releases/<version>.md`, not
-by hand in the release. Don't re-run all jobs of a release that was
-published: that builds new image
+(`scripts/release_assets.py`); a re-run of failed jobs finishes it. Every
+job reads the notes of the tagged commit, which can't change, so the notes
+must be right before the tag (the checks above). To fix the notes of a
+published release, edit them by hand (they stay editable), and make the same
+change in `docs/releases/<version>.md` on `dev`, for the docs. A re-run of
+`publish` writes the notes of the tagged commit back into a published
+release, over hand edits, so don't re-run it after editing them. Don't
+re-run all jobs of a release that was published: that builds new image
 digests and moves the release's image tags to them before it fails at the
 release.
 
