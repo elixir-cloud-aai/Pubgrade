@@ -41,8 +41,10 @@ Commands:
 
 Errors (and warnings) are printed as GitHub annotations to standard error.
 Only the stdlib is used, so the workflow runs it without installing the app.
-Ported from cloud-registry's `scripts/release_notes.py`; Pubgrade-Sidecar has
-the same script (keep them in sync).
+Ported from cloud-registry's `scripts/release_notes.py`, which is canonical;
+Pubgrade-Sidecar has the same script (keep them in sync). Only `DOCS_HOST`
+and `REPOSITORIES` (and `_REPOSITORY`, built from it) differ from
+cloud-registry's, so a sync replaces everything else.
 """
 
 import argparse

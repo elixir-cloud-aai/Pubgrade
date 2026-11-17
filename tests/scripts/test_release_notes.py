@@ -218,8 +218,14 @@ def test_check_invalid(markdown: str, messages: list[tuple[int, str]]) -> None:
 
 @pytest.mark.parametrize("notes", sorted((ROOT / "docs/releases").glob("*.md")))
 def test_curated_notes(notes: Path) -> None:
-    """The curated notes in the repository are in the agreed format."""
-    assert release_notes.check(notes.read_text(encoding="utf-8")) == []
+    """The curated notes in the repository are in the agreed format, finished.
+
+    The release workflow rejects notes with a `TODO` after the tag is pushed,
+    which then can't be reused, so CI rejects them before.
+    """
+    text = notes.read_text(encoding="utf-8")
+    assert release_notes.check(text) == []
+    assert "TODO" not in text
 
 
 def test_body() -> None:

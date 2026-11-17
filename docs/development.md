@@ -190,10 +190,18 @@ before the release workflow) for the app, which was 0.1.0 before.
    and `CITATION.cff` (`python scripts/citation.py set <version>`, which
    also sets the release date), and add the curated release notes
    `docs/releases/<version>.md` (see below), also to the `nav` of
-   `mkdocs.yml` (section "Releases").
-2. Once CI has passed for its commit on `dev`, check the notes
-   (`python scripts/release_notes.py require <version>` and
-   `python scripts/release_notes.py check docs/releases/<version>.md`) and
+   `mkdocs.yml`, newest first, in the section "Releases" after "Development"
+   (before the section that `docs/hooks.py` appends; the first notes add it):
+
+   ```yaml
+   - Releases:
+       - "0.3.0": releases/0.3.0.md
+   ```
+2. Once CI has passed for its commit on `dev`, check the notes, as the
+   release workflow does after the tag (a failure there needs a new version):
+   `python scripts/release_notes.py require <version>`,
+   `! grep -n TODO docs/releases/<version>.md` and
+   `python scripts/release_notes.py check docs/releases/<version>.md`. Then
    bring that commit to `main`.
 3. Tag it on `main` with a signed, annotated tag and push the tag:
    `git tag -s v<version> -m v<version>`, then
@@ -248,8 +256,11 @@ first` builds them instead, because without a previous tag GitHub starts at
 an older tag of its own choice. The notes of immutable releases stay
 editable, their assets don't, so the release is created as a draft, gets its
 assets and is published last
-(`scripts/release_assets.py`); a re-run of failed jobs finishes it. Don't
-re-run all jobs of a release that was published: that builds new image
+(`scripts/release_assets.py`); a re-run of failed jobs finishes it. A re-run
+also replaces the notes of a published release with the curated ones (and
+freshly generated ones), so fix notes in `docs/releases/<version>.md`, not
+by hand in the release. Don't re-run all jobs of a release that was
+published: that builds new image
 digests and moves the release's image tags to them before it fails at the
 release.
 
