@@ -1,10 +1,9 @@
-"""Tests of the notes of first releases (`scripts/release_notes.py`)."""
-
-from __future__ import annotations
+"""Tests of the release notes check and body (`scripts/release_notes.py`)."""
 
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
 import sys
 
 import pytest
@@ -19,6 +18,581 @@ release_notes = importlib.util.module_from_spec(_spec)
 # Registered first, as dataclasses look up their module in `sys.modules`
 sys.modules[_spec.name] = release_notes
 _spec.loader.exec_module(release_notes)
+
+CURATED = """\
+The release brings a feature. See the [upgrade
+guide](https://example.org/upgrading/).
+
+## Breaking changes
+
+- A breaking change, described
+  over two lines (#1, #2)
+- Another one, with a lazy
+continuation line (#3; #4, #5)
+
+## Features
+
+- A feature with an example (#6, #7):
+
+  ```yaml
+  key: value
+  ## not a heading
+  ```
+
+  And more text about it (#8)
+* A bullet with another marker (#9)
+
+## Maintenance
+
+1. A numbered item (#10)
+"""
+
+# As GitHub's `generate-notes` API returns them (`body`)
+GENERATED = """\
+## What's Changed
+* feat: add a feature by @someone in https://github.com/o/r/pull/7
+* fix: fix a bug by @newcomer in https://github.com/o/r/pull/11
+
+## New Contributors
+* @newcomer made their first contribution in https://github.com/o/r/pull/11
+
+**Full Changelog**: https://github.com/o/r/compare/v0.2.0...v0.3.0"""
+
+
+def _messages(markdown: str) -> list[tuple[int, str]]:
+    """Return the line and the start of the message of each finding.
+
+    Args:
+        markdown: Curated release notes.
+
+    Returns:
+        Line and first three words of the message of each finding.
+    """
+    return [
+        (finding.line, " ".join(finding.message.split()[:3]))
+        for finding in release_notes.check(markdown)
+    ]
+
+
+@pytest.mark.parametrize(
+    "markdown",
+    [
+        CURATED,
+        # The intro alone, and sections with closing hashes
+        "A fix release.\n",
+        "Intro.\n\n## Fixes ##\n\n- Fix (#1)\n",
+        # Code blocks in the intro, headings in code blocks
+        "Intro.\n\n```text\n## Unknown\n```\n\n## Fixes\n\n- Fix (#1)\n",
+        # Fences close only with the same character, at least as long, and
+        # nothing else on the line
+        "Intro.\n\n## Fixes\n\n- Fix (#1):\n\n  ````md\n  ```\n  ## No\n  ```\n"
+        "  ````\n\n  More (#2)\n",
+        "Intro.\n\n## Fixes\n\n- Fix (#1):\n\n  ```\n  ~~~\n  ``` x\n  ```\n\n"
+        "  More (#2)\n",
+        # HTML comments, and a byte order mark
+        "<!-- Notes of 0.3.0 -->\nIntro.\n\n## Fixes\n\n<!-- comment -->\n- Fix (#1)\n",
+        "\ufeffIntro.\n\n## Fixes\n\n- Fix (#1)\n",
+        "Intro.\n\n## Fixes\n\n- Fix (#1)\n    <!-- c -->\n- Fix (#2)\n<!-- c -->\n",
+        "Intro.\n\n## Fixes\n\n- Fix (#1)\n\n<!-- c -->\n\n- Fix (#2)\n",
+        # Code blocks may show the generated parts
+        "Intro.\n\n```md\n**Full Changelog**: https://x/compare/a...b\n```\n",
+        # Numbers wrapped over lines
+        "Intro.\n\n## Fixes\n\n- Fix (#1,\n  #2; #3,\n  #4)\n",
+        # Hashes that are no headings
+        "Intro.\n\n## Fixes\n\n- Fix of\n#12 (#13)\n",
+    ],
+)
+def test_check_valid(markdown: str) -> None:
+    """Notes in the agreed format have no findings."""
+    assert release_notes.check(markdown) == []
+
+
+@pytest.mark.parametrize(
+    ("markdown", "messages"),
+    [
+        # No intro
+        ("", [(1, "No intro paragraph")]),
+        ("<!-- comment -->\n", [(1, "No intro paragraph")]),
+        # Lists and code blocks are no intro paragraph
+        ("- Item\n\n## Fixes\n\n- Fix (#1)\n", [(3, "No intro paragraph")]),
+        ("```\ncode\n```\n\n## Fixes\n\n- Fix (#1)\n", [(5, "No intro paragraph")]),
+        (
+            "<!-- a --> Intro <!-- b -->\n\n## Fixes\n\n- Fix (#1)\n",
+            [],
+        ),
+        (
+            "<!-- comment -->\n## Fixes\n\n- Fix (#1)\n",
+            [(2, "No intro paragraph")],
+        ),
+        ("\ufeff## Fixes\n\n- Fix (#1)\n", [(1, "No intro paragraph")]),
+        ("\n\n", [(2, "No intro paragraph")]),
+        (
+            "## Fixes\n\n- Fix (#1)\n",
+            [(1, "No intro paragraph")],
+        ),
+        # Other headings
+        (
+            "# Cloud Registry 0.3.0\n\nIntro.\n",
+            [(1, "Heading of level"), (1, "No intro paragraph")],
+        ),
+        (
+            "Intro.\n\n## Fixes\n\n### API\n\n- Fix (#1)\n",
+            [(3, "Empty section"), (5, "Heading of level")],
+        ),
+        (
+            "Intro.\n\n## New features\n\n- Feature (#1)\n",
+            [(3, "Unknown section 'New")],
+        ),
+        (
+            "Intro.\n\n#\n",
+            [(3, "Heading of level")],
+        ),
+        # Setext headings and thematic breaks
+        ("Intro\n===\n", [(2, "Setext heading or")]),
+        ("Intro.\n\n## Fixes\n\n- Fix (#1)\n\n---\n", [(7, "Setext heading or")]),
+        ("Intro.\n\n***\n", [(3, "Setext heading or")]),
+        # Order, duplicates and empty sections
+        (
+            "Intro.\n\n## Fixes\n\n- Fix (#1)\n\n## Features\n\n- Feature (#2)\n",
+            [(7, "Section 'Features' after")],
+        ),
+        (
+            "Intro.\n\n## Fixes\n\n- Fix (#1)\n\n## Fixes\n\n- Fix (#2)\n",
+            [(7, "Section 'Fixes' after")],
+        ),
+        (
+            "Intro.\n\n## Fixes\n\n## Maintenance\n\n- Chore (#1)\n",
+            [(3, "Empty section")],
+        ),
+        ("Intro.\n\n## Fixes\n", [(3, "Empty section")]),
+        # Parts that the release workflow adds
+        (
+            "Intro.\n\n## Commits\n\n* fix by @a in https://x/pull/1\n",
+            [(3, "Section 'Commits': the")],
+        ),
+        (
+            "Intro.\n\n**Full Changelog**: https://x/compare/a...b\n",
+            [(3, "'**Full Changelog**' line:")],
+        ),
+        # Sections hold bullets only
+        (
+            "Intro.\n\n## Fixes\n\n- Fix (#1)\n\nA paragraph.\n",
+            [(7, "Sections hold bullets")],
+        ),
+        (
+            "Intro.\n\n## Fixes\n\nA paragraph.\n\n- Fix (#1)\n",
+            [(5, "Sections hold bullets")],
+        ),
+        (
+            "Intro.\n\n## Fixes\n\n```\ncode\n```\n\n- Fix (#1)\n",
+            [(5, "Sections hold bullets")],
+        ),
+        # Bullets end with their issue and pull request numbers
+        (
+            "Intro.\n\n## Fixes\n\n- Fix\n- Fix (#1).\n- Fix (#1) more\n"
+            "- Fix (1, 2)\n- Fix (#a)\n- Fix #1\n",
+            [
+                (5, "Bullet doesn't end"),
+                (6, "Bullet doesn't end"),
+                (7, "Bullet doesn't end"),
+                (8, "Bullet doesn't end"),
+                (9, "Bullet doesn't end"),
+                (10, "Bullet doesn't end"),
+            ],
+        ),
+        (
+            "Intro.\n\n## Fixes\n\n- Fix (#1):\n\n  More text.\n",
+            [(7, "Bullet doesn't end")],
+        ),
+        # Unclosed code blocks
+        (
+            "Intro.\n\n## Fixes\n\n- Fix (#1)\n\n  ```\n  code\n",
+            [(8, "Bullet doesn't end"), (8, "Unclosed fenced code")],
+        ),
+    ],
+)
+def test_check_invalid(markdown: str, messages: list[tuple[int, str]]) -> None:
+    """Notes that differ from the agreed format have findings."""
+    assert _messages(markdown) == messages
+
+
+@pytest.mark.parametrize("notes", sorted((ROOT / "docs/releases").glob("*.md")))
+def test_curated_notes(notes: Path) -> None:
+    """The curated notes in the repository are in the agreed format."""
+    assert release_notes.check(notes.read_text(encoding="utf-8")) == []
+
+
+def test_body() -> None:
+    """The body is the curated notes, then the generated ones, without header."""
+    text, warnings = release_notes.body(CURATED, GENERATED)
+    assert text == (
+        f"{CURATED.strip()}\n\n## Commits\n\n"
+        f"{GENERATED.removeprefix("## What's Changed\n")}\n"
+    )
+    assert text.endswith(
+        "\n\n**Full Changelog**: https://github.com/o/r/compare/v0.2.0...v0.3.0\n"
+    )
+    assert "What's Changed" not in text
+    assert warnings == []
+
+
+def test_body_comment() -> None:
+    """The header is also dropped after a comment (e.g., of a configuration)."""
+    generated = f"<!-- Release notes generated using configuration -->\n\n{GENERATED}"
+    text, warnings = release_notes.body("Intro.\n", generated)
+    assert text.startswith(
+        "Intro.\n\n## Commits\n\n<!-- Release notes generated using configuration"
+        " -->\n\n* feat: add a feature"
+    )
+    assert "What's Changed" not in text
+    assert warnings == []
+
+
+def test_body_no_changes() -> None:
+    """Without changes in the generated notes, the body has no `Commits`."""
+    generated = "**Full Changelog**: https://github.com/o/r/commits/v0.3.0\n"
+    assert release_notes.body("Intro.\n", generated) == (
+        "Intro.\n\n**Full Changelog**: https://github.com/o/r/commits/v0.3.0\n",
+        [],
+    )
+
+
+@pytest.mark.parametrize("newline", ["\r\n", "\r"])
+def test_body_crlf(newline: str) -> None:
+    """Generated notes with CRLF or CR line endings are normalized.
+
+    Args:
+        newline: Line ending of the generated notes.
+    """
+    generated = GENERATED.replace("\n", newline) + newline
+    assert release_notes.body(CURATED, generated) == release_notes.body(
+        CURATED, GENERATED
+    )
+
+
+@pytest.mark.parametrize(
+    ("generated", "commits"),
+    [
+        ("", ""),
+        (
+            "## What's Changed\n* fix by @a in https://x/pull/1\n",
+            "\n\n## Commits\n\n* fix by @a in https://x/pull/1",
+        ),
+        (
+            "**Full Changelog**: https://x/commits/v1\n\nMore text.\n",
+            "\n\n## Commits\n\n**Full Changelog**: https://x/commits/v1\n\nMore text.",
+        ),
+    ],
+)
+def test_body_unexpected_generated(generated: str, commits: str) -> None:
+    """Generated notes without a final `**Full Changelog**` line are kept."""
+    assert release_notes.body("Intro.\n", generated) == (
+        f"Intro.{commits}\n",
+        ["Generated notes don't end with a '**Full Changelog**: ' line"],
+    )
+
+
+def test_main_check(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """`check` passes for notes in the agreed format."""
+    notes = tmp_path / "0.3.0.md"
+    notes.write_text(CURATED, encoding="utf-8")
+    assert release_notes.main(["check", str(notes)]) == 0
+    assert capsys.readouterr() == ("", "")
+
+
+def test_main_check_findings(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`check` prints findings as error annotations."""
+    notes = tmp_path / "0.3.0.md"
+    notes.write_text("Intro.\n\n## Fixes\n", encoding="utf-8")
+    assert release_notes.main(["check", str(notes)]) == 1
+    assert capsys.readouterr() == ("", f"::error file={notes},line=3::Empty section\n")
+
+
+@pytest.mark.parametrize("command", ["check", "body"])
+def test_main_unreadable(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], command: str
+) -> None:
+    """Files that can't be read fail with an error annotation."""
+    notes = tmp_path / "0.3.0.md"
+    args = [command, str(notes)] + (
+        [str(tmp_path / "x.md")] if command == "body" else []
+    )
+    assert release_notes.main(args) == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err.startswith("::error::Can't read the notes: ")
+
+
+def test_main_body(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """`body` prints the body of the release."""
+    notes = tmp_path / "0.3.0.md"
+    notes.write_text(CURATED, encoding="utf-8")
+    generated = tmp_path / "generated.md"
+    generated.write_text(GENERATED, encoding="utf-8")
+    assert release_notes.main(["body", str(notes), str(generated)]) == 0
+    assert capsys.readouterr() == (release_notes.body(CURATED, GENERATED)[0], "")
+
+
+def test_main_body_findings(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """`body` fails without output if the curated notes have findings."""
+    notes = tmp_path / "0.3.0.md"
+    notes.write_text("## Fixes\n\n- Fix (#1)\n", encoding="utf-8")
+    generated = tmp_path / "generated.md"
+    generated.write_text(GENERATED, encoding="utf-8")
+    assert release_notes.main(["body", str(notes), str(generated)]) == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "No intro paragraph" in captured.err
+
+
+def test_main_body_unexpected_generated(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`body` warns of unexpected generated notes, and keeps them."""
+    notes = tmp_path / "0.3.0.md"
+    notes.write_text("Intro.\n", encoding="utf-8")
+    generated = tmp_path / "generated.md"
+    generated.write_text("Changes.\n", encoding="utf-8")
+    assert release_notes.main(["body", str(notes), str(generated)]) == 0
+    assert capsys.readouterr() == (
+        "Intro.\n\n## Commits\n\nChanges.\n",
+        "::warning::Generated notes don't end with a '**Full Changelog**: ' line;"
+        " kept as they are\n",
+    )
+
+
+@pytest.mark.parametrize(
+    "files, missing",
+    [
+        # the first release with notes needs none
+        ([], False),
+        # notes of another release, earlier or later: required
+        (["0.4.0.md"], True),
+        (["0.6.0.md"], True),
+        (["0.4.0.md", "0.5.0.md"], False),
+        (["0.5.0.md"], False),
+        (["0.4.0rc1.md"], True),
+        # other files don't count
+        (["README.txt"], False),
+        (["README.md", "draft-0.4.0.md", "0.4.md"], False),
+    ],
+)
+def test_missing_notes(tmp_path: Path, files: list[str], missing: bool) -> None:
+    """Notes are required once notes of another release exist."""
+    for name in files:
+        (tmp_path / name).write_text(CURATED, encoding="utf-8")
+    expected = tmp_path / "0.5.0.md" if missing else None
+    assert release_notes.missing_notes("0.5.0", tmp_path) == expected
+
+
+def test_missing_notes_without_directory(tmp_path: Path) -> None:
+    """Without a directory of notes, none are required."""
+    assert release_notes.missing_notes("0.5.0", tmp_path / "releases") is None
+
+
+def test_main_require(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """`require` fails with an error annotation if required notes are missing."""
+    (tmp_path / "0.4.0.md").write_text(CURATED, encoding="utf-8")
+    args = ["require", "0.5.0", "--releases", str(tmp_path)]
+    assert release_notes.main(args) == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err.startswith(f"::error::{tmp_path / '0.5.0.md'} is missing")
+    (tmp_path / "0.5.0.md").write_text(CURATED, encoding="utf-8")
+    assert release_notes.main(args) == 0
+    assert capsys.readouterr() == ("", "")
+
+
+def test_main_require_default(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """`require` reads the notes in `docs/releases/` by default."""
+    releases = tmp_path / "docs" / "releases"
+    releases.mkdir(parents=True)
+    (releases / "0.4.0.md").write_text(CURATED, encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    assert release_notes.main(["require", "0.5.0"]) == 1
+    assert release_notes.main(["require", "0.4.0"]) == 0
+
+
+def test_script(tmp_path: Path) -> None:
+    """The script runs as the release workflow calls it."""
+    notes = tmp_path / "0.3.0.md"
+    notes.write_text(CURATED, encoding="utf-8")
+    generated = tmp_path / "generated.md"
+    generated.write_text(GENERATED, encoding="utf-8")
+    result = subprocess.run(  # noqa: S603 (fixed arguments, no shell)
+        [sys.executable, "-I", str(SCRIPT), "body", str(notes), str(generated)],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        check=False,
+    )
+    assert (result.returncode, result.stdout, result.stderr) == (
+        0,
+        release_notes.body(CURATED, GENERATED)[0],
+        "",
+    )
+
+
+@pytest.mark.parametrize(
+    "link",
+    [
+        "https://pubgrade.readthedocs.io/en/latest/sidecar/deployment/",
+        "https://pubgrade.readthedocs.io/en/stable/",
+        "https://github.com/elixir-cloud-aai/Pubgrade/blob/dev/README.md",
+        "https://github.com/elixir-cloud-aai/pubgrade/tree/main/docs",
+        "https://github.com/elixir-cloud-aai/Pubgrade-Sidecar/blob/dev/README.md",
+        "https://github.com/elixir-cloud-aai/Pubgrade-Sidecar/tree/main/docs",
+        "https://github.com/elixir-cloud-aai/Pubgrade-Sidecar/releases/latest",
+        "https://raw.githubusercontent.com/elixir-cloud-aai/Pubgrade-Sidecar/dev/x",
+    ],
+)
+def test_check_moving_links(link: str) -> None:
+    """Links to versions that move are rejected, also in sections."""
+    markdown = f"Intro, [docs]({link}).\n\n## Fixes\n\n- Fix, see <{link}> (#1)\n"
+    assert _messages(markdown) == [(1, "Link to a"), (5, "Link to a")]
+
+
+@pytest.mark.parametrize(
+    "link",
+    [
+        "https://pubgrade.readthedocs.io/en/v0.3.0/sidecar/deployment/",
+        "https://github.com/elixir-cloud-aai/Pubgrade/blob/v0.3.0/README.md",
+        "https://github.com/elixir-cloud-aai/Pubgrade-Other/blob/dev/README.md",
+        "https://github.com/elixir-cloud-aai/Pubgrade-Sidecar/blob/v0.3.0/README.md",
+        "https://github.com/elixir-cloud-aai/Pubgrade-Sidecar/tree/dev-notes/docs",
+        "https://example.org/en/latest/",
+    ],
+)
+def test_check_versioned_links(link: str) -> None:
+    """Links to a release, and other sites' links, are accepted."""
+    assert release_notes.check(f"Intro, [docs]({link}).\n") == []
+
+
+@pytest.mark.parametrize(
+    ("markdown", "line"),
+    [
+        # Inline links and images, also with angle brackets or a title
+        ("Intro, [Upgrading](../upgrading.md#from-100rc1).\n", 1),
+        ("Intro, [Upgrading](upgrading.md).\n", 1),
+        ("Intro, [docs](./index.md 'Docs').\n", 1),
+        ("Intro, [docs](/docs/index.md).\n", 1),
+        ("Intro, [docs](//example.org/docs/).\n", 1),
+        ("Intro, [docs](<../upgrading.md>).\n", 1),
+        ("Intro, ![logo](images/logo.png).\n", 1),
+        ("Intro, [nothing]().\n", 1),
+        # Targets on the line after the text
+        ("Intro, [Upgrading](\n  ../upgrading.md).\n", 2),
+        # In sections, and with link text over lines
+        ("Intro.\n\n## Fixes\n\n- Fix, see [the\n  docs](../x.md) (#1)\n", 6),
+        # Reference definitions
+        ("Intro, [Upgrading][up].\n\n[up]: ../upgrading.md\n", 3),
+        ("Intro, [Upgrading][up].\n\n   [up]:  <upgrading.md> 'Up'\n", 3),
+        ("Intro, [Upgrading][up].\n\n[up]:\n  ../upgrading.md\n", 4),
+        ("Intro.\n\n> [Upgrading][up].\n>\n> [up]: ../upgrading.md\n", 5),
+        ("Intro.\n\n> [Upgrading][up].\n>\n>  [up]: ../upgrading.md\n", 5),
+        ("Intro.\n\n> [Upgrading][up].\n>\n> [up]:\n> ../upgrading.md\n", 6),
+        ("Intro.\n\n> See [Upgrading](\n> ../upgrading.md).\n", 4),
+        # Reference definitions in list items and other containers, also
+        # nested and indented
+        ("Intro, [a][a].\n\n- [a]: ../x.md\n", 3),
+        ("Intro, [a][a].\n\n* [a]: ../x.md\n", 3),
+        ("Intro, [a][a].\n\n+ [a]: ../x.md\n", 3),
+        ("Intro, [a][a].\n\n1. [a]: ../x.md\n", 3),
+        ("Intro, [a][a].\n\n12) [a]: ../x.md\n", 3),
+        ("Intro, [a][a].\n\n- item\n\n  [a]: ../x.md\n", 5),
+        ("Intro, [a][a].\n\n- item\n\n      [a]: ../x.md\n", 5),
+        ("Intro, [a][a].\n\n> - [a]: ../x.md\n", 3),
+        ("Intro, [a][a].\n\n- > 1. [a]: ../x.md\n", 3),
+        ("Intro, [a][a].\n\n- [a]:\n  ../x.md\n", 4),
+        # Lines of paragraphs that look like definitions count too
+        ("Intro text that ends\n[Upgrading]: a section name.\n", 2),
+        # HTML
+        ('Intro, <a href="../upgrading.md">Upgrading</a>.\n', 1),
+        ("Intro, <img src='logo.png' alt='logo'>.\n", 1),
+        ("Intro, <a HREF=upgrading.md>Upgrading</a>.\n", 1),
+        ('Intro, <a href=\n"../x.md">x</a>.\n', 2),
+        ('Intro, <img src=""> logo.\n', 1),
+        ('Intro, <svg><use xlink:href="docs/x.svg"/></svg>.\n', 1),
+        ('Intro, <a/href="docs/x.md">x</a>.\n', 1),
+        (
+            '<picture><source srcset="logo-dark.png 1x, https://x.org/l.png 2x">'
+            '<img src="https://x.org/l.png"></picture> Intro.\n',
+            1,
+        ),
+        # Each attribute and each URL of a srcset on its own, also after a
+        # quoted `>`
+        ('<img src="https://x.org/a.png" srcset="b.png"> Intro.\n', 1),
+        ('<img srcset="https://x.org/a.png 1x, b.png 2x"> Intro.\n', 1),
+        ('Intro, <a title="a > b" href="../x.md">x</a>.\n', 1),
+        # Escaped brackets in reference labels
+        ("Intro, [a][foo\\]].\n\n[foo\\]]: ../guide.md\n", 3),
+        # Destinations end at ASCII whitespace only, and other spaces are
+        # part of them
+        ("Intro, [x](\u00a0../x.md).\n", 1),
+        ("Intro, [x](\u00a0https://example.org/).\n", 1),
+        # Also in code, as the notes are published as written
+        ("Intro.\n\n```md\n[Upgrading](upgrading.md)\n```\n", 4),
+    ],
+)
+def test_check_relative_links(markdown: str, line: int) -> None:
+    """Relative links are rejected: they don't work in the release body."""
+    assert [
+        (finding.line, finding.message.endswith(release_notes.RELATIVE_LINK))
+        for finding in release_notes.check(markdown)
+    ] == [(line, True)]
+
+
+@pytest.mark.parametrize(
+    "markdown",
+    [
+        "Intro, [docs](https://pubgrade.readthedocs.io/en/v1.0.0/).\n",
+        "Intro, [docs](HTTPS://example.org/) and [mail](mailto:a@example.org).\n",
+        "Intro, [docs](<https://example.org/a b>).\n",
+        "Intro, [below](#fixes), <https://example.org/>.\n",
+        "Intro, [docs][d].\n\n[d]: https://example.org/\n",
+        "Intro, [d]: not a definition, and [b] (c).\n",
+        "Intro, with a footnote[^1].\n\n[^1]: The footnote.\n",
+        'Intro, <a href="https://example.org/">docs</a>, <a href="#x">x</a>.\n',
+        # Other attributes
+        '<img data-src="logo.png" src="https://example.org/logo.png"> Intro.\n',
+        # Query parameters of autolinks and URLs
+        "Intro, <https://example.org/search?src=mail>.\n",
+        "Intro, if a<b, see [x](https://example.org/?href=c).\n",
+        # Targets on the next line of block quotes
+        "> [!IMPORTANT]\n> See [the docs](\n> https://example.org/x).\n",
+        "Intro, [a][a].\n\n> [a]:\n> https://example.org/x\n",
+    ],
+)
+def test_check_absolute_links(markdown: str) -> None:
+    """Links with a scheme, and links within the page, are accepted."""
+    assert release_notes.check(markdown) == []
+
+
+def test_check_relative_and_moving_links() -> None:
+    """Relative links and links to versions that move are both reported."""
+    markdown = (
+        "Intro.\n\n## Fixes\n\n- Fix, see [docs](../x.md) (#1)\n"
+        "- Fix, see <https://pubgrade.readthedocs.io/en/latest/> (#2)\n"
+    )
+    assert _messages(markdown) == [(5, "Relative link ('../x.md'):"), (6, "Link to a")]
+
+
+@pytest.mark.parametrize(
+    ("markdown", "target"),
+    [
+        ("Intro, [Upgrading](../upgrading.md#x).\n", "../upgrading.md#x"),
+        ("Intro, [x](\u00a0../x.md).\n", "\u00a0../x.md"),
+        ('Intro, <img srcset=" a.png 1x, https://x.org/b.png 2x">.\n', "a.png"),
+        ('Intro, <a href=" ../x.md ">x</a>.\n', "../x.md"),
+    ],
+)
+def test_check_relative_link_message(markdown: str, target: str) -> None:
+    """The finding names the link target."""
+    assert [finding.message for finding in release_notes.check(markdown)] == [
+        f"Relative link ('{target}'): {release_notes.RELATIVE_LINK}"
+    ]
 
 
 def _pull(
@@ -88,6 +662,10 @@ def test_first_release_notes() -> None:
         "\n"
         "**Full Changelog**: https://github.com/o/r/commits/v1.0.0\n"
     )
+    # As GitHub's generated notes, for the body of the release
+    text, warnings = release_notes.body("Intro.\n", notes)
+    assert text.startswith("Intro.\n\n## Commits\n\n* PR 1 by @a in ")
+    assert warnings == []
 
 
 def test_first_release_notes_without_pull_requests() -> None:
@@ -189,3 +767,11 @@ def test_first_release_notes_title_on_one_line() -> None:
     pulls = release_notes.merged_pull_requests([[pull]])
     notes = release_notes.first_release_notes("v1.0.0", "o/r", pulls, ["c1"])
     assert "* x ## Security * y by @a in https://github.com/o/r/pull/1\n" in notes
+
+
+def test_body_splits_at_line_breaks_only() -> None:
+    """Other line separators (e.g., U+2028) in generated notes start no line."""
+    generated = "* x\u2028## Security by @a in u\n\n**Full Changelog**: c\n"
+    text, warnings = release_notes.body("Intro.\n", generated)
+    assert "\n## Security" not in text
+    assert warnings == []

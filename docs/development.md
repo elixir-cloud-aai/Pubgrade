@@ -188,8 +188,13 @@ before the release workflow) for the app, which was 0.1.0 before.
 1. Release-prep pull request to `dev`: set the version in `pyproject.toml`
    (then run `uv lock`), `helm/Chart.yaml` (`version` and `appVersion`)
    and `CITATION.cff` (`python scripts/citation.py set <version>`, which
-   also sets the release date).
-2. Once CI has passed for its commit on `dev`, bring that commit to `main`.
+   also sets the release date), and add the curated release notes
+   `docs/releases/<version>.md` (see below), also to the `nav` of
+   `mkdocs.yml` (section "Releases").
+2. Once CI has passed for its commit on `dev`, check the notes
+   (`python scripts/release_notes.py require <version>` and
+   `python scripts/release_notes.py check docs/releases/<version>.md`) and
+   bring that commit to `main`.
 3. Tag it on `main` with a signed, annotated tag and push the tag:
    `git tag -s v<version> -m v<version>`, then
    `git push origin v<version>`.
@@ -215,12 +220,34 @@ cosign verify elixircloud/pubgrade:<version> \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
-The release gets GitHub's generated notes; for a first release (no published
-release before it), `scripts/release_notes.py` builds them instead, because
-without a previous tag GitHub starts at an older tag of its own choice. Edit
-the notes by hand into the agreed format after publishing: the notes of
-immutable releases stay editable, their assets don't. So the release is
-created as a draft, gets its assets and is published last
+Release notes follow the format agreed for all repositories of the
+organization:
+
+1. An intro paragraph saying what the release brings, with a link to the
+   upgrade or migration guide if there is one.
+2. Grouped sections, empty ones left out, in this order: `## Breaking
+   changes`, `## Features`, `## Security`, `## Fixes`, `## Documentation`,
+   `## Maintenance`. Each bullet ends with its issue and pull request
+   numbers, e.g., `(#12, #34)`.
+3. `## Commits`: GitHub's generated notes, verbatim (including "New
+   Contributors"), without their `## What's Changed` header.
+4. Last, GitHub's generated `**Full Changelog**: ...` line.
+
+The curated notes in `docs/releases/<version>.md` hold parts 1 and 2,
+without a title (the release's title is its tag). The release body never
+changes, so they link with full URLs to the release's docs
+(`https://pubgrade.readthedocs.io/en/v<version>/...`) and files
+(`blob/v<version>/`), never to versions that move (`latest`, `dev`) and
+never with relative links, which don't work in the release body. The release
+workflow fails if the notes contain `TODO`, aren't in this format, or are
+missing once any release has curated notes (`scripts/release_notes.py`, the
+same as Pubgrade-Sidecar's); the tests check all notes in `docs/releases/`
+too. The workflow adds parts 3 and 4 from GitHub's generated notes; for a
+first release (no published release before it), `scripts/release_notes.py
+first` builds them instead, because without a previous tag GitHub starts at
+an older tag of its own choice. The notes of immutable releases stay
+editable, their assets don't, so the release is created as a draft, gets its
+assets and is published last
 (`scripts/release_assets.py`); a re-run of failed jobs finishes it. Don't
 re-run all jobs of a release that was published: that builds new image
 digests and moves the release's image tags to them before it fails at the

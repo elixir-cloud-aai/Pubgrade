@@ -19,13 +19,17 @@
 # failed jobs reuses the digests already pushed (and scans them again if a
 # scan failed); a full re-run of a release that was already published moves
 # its image tags to the new digests before it fails at the release (whose
-# assets can't change), so re-run failed jobs only. Release notes are
-# GitHub's generated notes (for a first release, built by
-# `scripts/release_notes.py first`), edited by hand into the agreed format
-# after publishing (the notes of immutable releases stay editable). Release
-# tags are immutable (tag ruleset). Until 1.0.0, all releases are GitHub
-# pre-releases (but stable ones still move `latest`). The images are spelled
-# out in `push`, `scan` and `publish`; keep them in sync.
+# assets can't change), so re-run failed jobs only. Release notes are the
+# curated `docs/releases/<version>.md` followed by GitHub's generated notes
+# (for a first release, built by `scripts/release_notes.py first`) if the
+# former exists (the run fails if it contains `TODO` or is not in the agreed
+# format, and, once any release has curated notes, if they are missing; see
+# `scripts/release_notes.py`), otherwise the generated notes alone; add
+# curated notes to the `nav` of `mkdocs.yml` too (the docs build fails
+# otherwise). Release tags are immutable (tag ruleset). Until 1.0.0, all
+# releases are GitHub pre-releases (but stable ones still move `latest`).
+# The images are spelled out in `push`, `scan` and `publish`; keep them in
+# sync.
 
 name: Release
 
@@ -126,6 +130,23 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: python scripts/citation.py check "${VERSION}"
+      # Curated release notes are published as written, so unfinished ones
+      # (with a `TODO`) must not be published, nor ones that are not in the
+      # agreed format (`scripts/release_notes.py`); they are required for
+      # every release after the first one that had them (`docs/releases/`)
+      - name: Check release notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          python scripts/release_notes.py require "${VERSION}"
+          notes="docs/releases/${VERSION}.md"
+          if [[ -f "${notes}" ]]; then
+              if grep -n "TODO" "${notes}"; then
+                  echo "::error::${notes} contains TODO: finish the release notes, then tag a new release"
+                  exit 1
+              fi
+              python scripts/release_notes.py check "${notes}"
+          fi
       # The checks above don't run the tests: require a successful run of
       # the CI workflow for a push of the release commit (to `dev`, before it
       # moved to `main`); runs for pull requests test merge commits, not the
@@ -468,8 +489,9 @@ jobs:
       # Re-runs finish a draft of an earlier attempt; a release that is
       # already published (e.g., by hand) gets no uploads, but must have all
       # assets, or the step fails, saying what to do (see
-      # `scripts/release_assets.py`); only its title and flags are updated.
-      # The final edit is the only one that sets `latest`
+      # `scripts/release_assets.py`); only its title, flags and (curated)
+      # notes are updated, which stay editable. The final edit is the only
+      # one that sets `latest`
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -479,12 +501,18 @@ jobs:
           PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
           PREVIOUS: ${{ steps.previous.outputs.previous_tag }}
         run: |
+          # With curated notes of the release commit, the body is the curated
+          # notes, then the generated ones (the agreed format, see
+          # `scripts/release_notes.py`); otherwise the generated ones alone.
+          # Generated on every run, so that a draft of an earlier attempt gets
+          # the notes since the current previous release.
           # Without a previous published release, GitHub's generated notes
           # would start at an older tag of its choice, even one without a
           # release (e.g., of a failed attempt), so the notes of a first
           # release list all merged pull requests in the history of the
           # release commit instead, in GitHub's format
           # (`scripts/release_notes.py first`)
+          curated="docs/releases/${VERSION}.md"
           notes_file="$(mktemp)"
           if [[ -n "${PREVIOUS}" ]]; then
               gh api "repos/${GH_REPO}/releases/generate-notes" \
@@ -499,6 +527,12 @@ jobs:
               python scripts/release_notes.py first "${TAG}" \
                   --repository "${GH_REPO}" --pulls "${pulls}" \
                   --commits "${commits}" > "${notes_file}"
+          fi
+          if [[ -f "${curated}" ]]; then
+              generated="${notes_file}"
+              notes_file="$(mktemp)"
+              python scripts/release_notes.py body "${curated}" "${generated}" \
+                  > "${notes_file}"
           fi
           # GitHub never marks pre-releases as the latest release, so don't
           # ask it to
@@ -522,10 +556,13 @@ jobs:
                   --prerelease="${PRERELEASE}"
           fi
           edit=(--title "${TAG}" --prerelease="${PRERELEASE}" --latest="${LATEST}")
-          # Uploads to drafts may replace the assets of an earlier attempt;
-          # the notes of a published release are left as they are
+          # Uploads to drafts may replace the assets of an earlier attempt.
+          # The notes of a published release are replaced only by curated
+          # ones (generated ones are left as they are)
           if [[ "${state}" != "published" ]]; then
               gh release upload "${TAG}" dist/* --clobber
+              edit+=(--notes-file "${notes_file}")
+          elif [[ -f "${curated}" ]]; then
               edit+=(--notes-file "${notes_file}")
           fi
           # Publishes a draft
