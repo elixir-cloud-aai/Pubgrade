@@ -102,7 +102,8 @@ endpoints:
         id_length: 6
         retries: 3
     user:
-        # Switch off after setup to close registration
+        # Switch off after setup to close registration; admin users can still
+        # register (`X-Super-User-Id`, `X-Super-User-Access-Token`)
         registration_enabled: True
         uid_charset: [string.ascii_lowercase, string.digits , '.' , '-']
         uid_length: 6
@@ -111,7 +112,8 @@ endpoints:
         charset: [ string.ascii_lowercase, string.digits , '.' , '-' ]
         length: 32
     subscriptions:
-      # Switch off after setup to close registration
+      # Switch off after setup to close registration; admin users can still
+      # register (`X-Super-User-Id`, `X-Super-User-Access-Token`)
       registration_enabled: True
       # Seconds for each call to a subscriber, to connect and for the response.
       # Publishing waits for this, so with both, keep it below the time limit

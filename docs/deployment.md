@@ -269,8 +269,9 @@ they are then signed and their subscribers notified once more, as before.
 
 ## Upgrading to API 2.2.0
 
-Version 2.2.0 of the API lets admins register while registration is closed;
-nothing needs to change in deployments or clients:
+Version 2.2.0 of the API lets admins register while registration is closed.
+Deployments need no change; clients only if they send admin headers to the
+registrations (see the 401 below):
 
 - `POST /repositories`, `POST /users/register` and `POST /subscriptions` take
   the optional headers `X-Super-User-Id` and `X-Super-User-Access-Token` of

@@ -34,6 +34,7 @@ from pubgrade.modules.endpoints.subscriptions import (
 from tests.helpers import FocaApp, make_config
 from tests.mock_data import (
     ENDPOINT_CONFIG,
+    MOCK_ADMIN_USER_1,
     MOCK_BUILD_INFO,
     MOCK_BUILD_INFO_2,
     MOCK_REPOSITORIES,
@@ -231,6 +232,23 @@ class TestSubscriptions:
                 MOCK_USER["user_access_token"],
                 SUBSCRIPTION_PAYLOAD,
             )
+
+    def test_register_subscription_closed_by_admin(self) -> None:
+        """Admins let users subscribe while registration is closed."""
+        self.setup()
+        admin_users = self.app.config.foca.db.dbs["pubgradeStore"].collections[
+            "admin_users"
+        ]
+        admin_users.client = mongomock.MongoClient().db.collection
+        admin_users.client.insert_one(dict(MOCK_ADMIN_USER_1))
+        self.app.config.foca.endpoints["subscriptions"]["registration_enabled"] = False
+        user = (MOCK_USER["uid"], MOCK_USER["user_access_token"])
+        admin = (MOCK_ADMIN_USER_1["uid"], MOCK_ADMIN_USER_1["user_access_token"])
+        with self.app.app_context():
+            res = register_subscription(*user, SUBSCRIPTION_PAYLOAD, *admin)
+            assert "subscription_id" in res
+            with pytest.raises(Unauthorized):
+                register_subscription(*user, SUBSCRIPTION_PAYLOAD, admin[0], "wrong")
 
     def test_register_subscription_limit(self) -> None:
         """A repository takes no more subscriptions than configured."""

@@ -16,8 +16,13 @@ from pubgrade.settings import collection, endpoints
 from pubgrade.tokens import tokens_match
 
 
-def is_admin(admin_user_id: object, admin_user_access_token: object) -> bool:
+def is_admin(admin_user_id: str | None, admin_user_access_token: str | None) -> bool:
     """Check the credentials of an admin user.
+
+    Unknown admins and wrong tokens look the same to the caller (both
+    `False`), so that registrations answer both with a 401 and don't tell
+    which admin identifiers exist. (`GET /users` and the verification of
+    users answer an unknown admin with a 404, as before.)
 
     Args:
         admin_user_id: Identifier of the admin user, or `None`.

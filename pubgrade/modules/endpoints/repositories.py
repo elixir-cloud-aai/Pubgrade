@@ -38,13 +38,13 @@ def register_repository(
     """Register a new repository object.
 
     Args:
-         data (dict): Request object containing URL of git repository and,
-         optionally, the build types that its builds may have
-         (`build_types`).
-         admin_user_id: Identifier of an admin user, who may register also
-         while registration is closed; `None` if not given.
-         admin_user_access_token: Access token of the admin user; `None` if
-         not given.
+        data (dict): Request object containing URL of git repository and,
+            optionally, the build types that its builds may have
+            (`build_types`).
+        admin_user_id: Identifier of an admin user, who may register also
+            while registration is closed; `None` if not given.
+        admin_user_access_token: Access token of the admin user; `None` if
+            not given.
 
     Returns:
         repository_object (dict): Dictionary of repository contents (

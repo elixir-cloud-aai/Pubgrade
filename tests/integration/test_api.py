@@ -1008,6 +1008,26 @@ def test_admin_registers_while_closed(
     assert new_user["isVerified"] is False
 
 
+def test_admin_registers_while_open(api: FlaskClient, subscriber: Subscriber) -> None:
+    """With registration open, valid admin credentials are accepted too.
+
+    Args:
+        api: Test client of the app.
+        subscriber: Subscriber of the test.
+    """
+    user = register_user(api)
+    repository = check(
+        api.post("/repositories", json=REPOSITORY, headers=ADMIN_HEADERS)
+    )
+    check(
+        subscription_request(
+            api, {**user, **ADMIN_HEADERS}, repository["id"], subscriber.url
+        )
+    )
+    check(api.post("/users/register", json={"name": "Other"}, headers=ADMIN_HEADERS))
+    assert subscriptions(api) == 1
+
+
 @pytest.mark.parametrize("headers", INVALID_ADMIN_HEADERS)
 @pytest.mark.parametrize("closed", [False, True])
 def test_registration_with_invalid_admin_credentials(

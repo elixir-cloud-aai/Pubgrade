@@ -37,6 +37,7 @@ from pubgrade.modules.endpoints.subscriptions import register_subscription
 from tests.helpers import foca_config, set_foca
 from tests.mock_data import (
     ENDPOINT_CONFIG,
+    MOCK_ADMIN_USER_1,
     MOCK_BUILD_INFO,
     MOCK_BUILD_INFO_2,
     MOCK_BUILD_PAYLOAD,
@@ -117,6 +118,22 @@ class TestRepository:
         foca_config(self.app).endpoints["repository"]["registration_enabled"] = False
         with self.app.app_context(), pytest.raises(RegistrationDisabled):
             register_repository(data={"url": self.repository_url})
+
+    def test_register_repository_closed_by_admin(self) -> None:
+        """Admins register repositories while registration is closed."""
+        self.setup()
+        admin_users = (
+            foca_config(self.app).db.dbs["pubgradeStore"].collections["admin_users"]
+        )
+        admin_users.client = mongomock.MongoClient().db.collection
+        admin_users.client.insert_one(dict(MOCK_ADMIN_USER_1))
+        foca_config(self.app).endpoints["repository"]["registration_enabled"] = False
+        admin = (MOCK_ADMIN_USER_1["uid"], MOCK_ADMIN_USER_1["user_access_token"])
+        with self.app.app_context():
+            res = register_repository({"url": self.repository_url}, *admin)
+            assert set(res) == {"id", "access_token"}
+            with pytest.raises(Unauthorized):
+                register_repository({"url": self.repository_url}, admin[0], "x")
 
     def test_register_repository_url_not_found(self) -> None:
         """Registration without a URL fails."""

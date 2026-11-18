@@ -23,7 +23,7 @@ GET     /users                                  admins
 PUT     /users/{uid}/verify                     admins
 PUT     /users/{uid}/unverify                   admins
 GET     /subscriptions                          verified users: their subscriptions
-POST    /subscriptions                          verified users while registration is open, else with an admin
+POST    /subscriptions                          verified users while registration is open, else with admin credentials
 GET     /subscriptions/{subscription_id}        the subscription's user
 DELETE  /subscriptions/{subscription_id}        the subscription's user
 ```
@@ -42,9 +42,9 @@ build pods report their completion (with builds switched on only, else
 
 Registrations are open until they are closed in the
 [configuration](deployment.md#configuration); admins can still register
-then (see [Usage](usage.md#register-while-registration-is-closed)). The specification is the
-reference for the request and response bodies and the headers that carry the
-tokens. See [Usage](usage.md) for the typical flow.
+then (see [Usage](usage.md#register-while-registration-is-closed)). The
+specification is the reference for the request and response bodies and the
+headers that carry the tokens. See [Usage](usage.md) for the typical flow.
 
 Pubgrade also calls subscribers: the notification of a new image, a `PUT` to
 the subscription's `callback_url`, is described as the callback

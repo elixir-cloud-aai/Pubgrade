@@ -120,9 +120,7 @@ class TestUsers:
         self.setup()
         admin = (MOCK_ADMIN_USER_1["uid"], MOCK_ADMIN_USER_1["user_access_token"])
         with self.app.app_context():
-            assert register_user({"name": "N", "verified": True}, *admin)[
-                "isVerified"
-            ]
+            assert register_user({"name": "N", "verified": True}, *admin)["isVerified"]
             with pytest.raises(VerificationNotAllowed):
                 register_user({"name": "N", "verified": True})
             with pytest.raises(Unauthorized):

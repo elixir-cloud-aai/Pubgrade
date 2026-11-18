@@ -29,13 +29,13 @@ def register_user(
     """Register a new user object.
 
     Args:
-         data (dict): Contains Name of the user and, optionally, whether it
-         is verified at once (`verified`, admins only).
-         admin_user_id: Identifier of an admin user, who may register also
-         while registration is closed, and register verified users; `None`
-         if not given.
-         admin_user_access_token: Access token of the admin user; `None` if
-         not given.
+        data (dict): Contains Name of the user and, optionally, whether it
+            is verified at once (`verified`, admins only).
+        admin_user_id: Identifier of an admin user, who may register also
+            while registration is closed, and register verified users;
+            `None` if not given.
+        admin_user_access_token: Access token of the admin user; `None` if
+            not given.
 
     Returns:
         user_object (dict): Dictionary of user contents (
