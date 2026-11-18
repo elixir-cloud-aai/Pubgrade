@@ -23,7 +23,7 @@ GET     /users                                  admins
 PUT     /users/{uid}/verify                     admins
 PUT     /users/{uid}/unverify                   admins
 GET     /subscriptions                          verified users: their subscriptions
-POST    /subscriptions                          verified users while registration is open, else with admin credentials
+POST    /subscriptions                          verified users; while registration is closed, also admin credentials
 GET     /subscriptions/{subscription_id}        the subscription's user
 DELETE  /subscriptions/{subscription_id}        the subscription's user
 ```
