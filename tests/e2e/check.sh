@@ -357,10 +357,13 @@ jq -n --arg image "${image}:${new_tag}" --arg tag "${new_tag}" \
 publish
 # A Service whose EndpointSlice is ready may still refuse connections for a
 # moment, until each node's proxy routes it; Pubgrade then gets no answer and
-# notifies only once. So without an answer, publish once more, a bit later
-if [ "${result}" = failed ] && [ "${http_status}" = none ]; then
-  log "Pubgrade's notification of ${callback_url} got no answer (build" \
-    "${build_id}); publishing again in 5 s"
+# notifies only once. So without an answer, or with a server error (e.g.
+# when the sidecar can't reach the Kubernetes API for a moment), publish once
+# more, a bit later. Other statuses (e.g. 401) won't change on a retry
+if [ "${result}" = failed ] \
+  && { [ "${http_status}" = none ] || [ "${http_status}" -ge 500 ]; }; then
+  log "Pubgrade's notification of ${callback_url} failed (HTTP status" \
+    "${http_status}, build ${build_id}); publishing again in 5 s"
   sleep 5
   publish
 fi
