@@ -13,11 +13,11 @@ from pymongo.errors import DuplicateKeyError
 from pubgrade.charsets import EXCLUDED, NOT_AT_ENDS, get_charset, usable
 from pubgrade.errors.exceptions import (
     InternalServerError,
-    RegistrationDisabled,
     RepositoryNotFound,
     UndeclaredBuildType,
     URLNotFound,
 )
+from pubgrade.registration import check_registration
 from pubgrade.settings import collection, endpoints
 from pubgrade.tokens import tokens_match
 
@@ -30,13 +30,21 @@ ACCEPTING: dict[str, Any] = {"deleting": {"$exists": False}}
 HIDDEN: dict[str, Any] = {"access_token": False, "_id": False, "deleting": False}
 
 
-def register_repository(data: dict[str, Any]) -> dict[str, Any]:
+def register_repository(
+    data: dict[str, Any],
+    admin_user_id: str | None = None,
+    admin_user_access_token: str | None = None,
+) -> dict[str, Any]:
     """Register a new repository object.
 
     Args:
          data (dict): Request object containing URL of git repository and,
          optionally, the build types that its builds may have
          (`build_types`).
+         admin_user_id: Identifier of an admin user, who may register also
+         while registration is closed; `None` if not given.
+         admin_user_access_token: Access token of the admin user; `None` if
+         not given.
 
     Returns:
         repository_object (dict): Dictionary of repository contents (
@@ -47,10 +55,11 @@ def register_repository(data: dict[str, Any]) -> dict[str, Any]:
         InternalServerError: Raised when it's unable to create unique
         identifier for the repository_object.
         RegistrationDisabled: Raised when registration is closed by the
-        setting `endpoints.repository.registration_enabled`.
+        setting `endpoints.repository.registration_enabled` and the request
+        has no admin credentials.
+        Unauthorized: Raised when admin credentials are given but invalid.
     """
-    if not endpoints()["repository"].get("registration_enabled", True):
-        raise RegistrationDisabled
+    check_registration("repository", admin_user_id, admin_user_access_token)
     repository_object: dict[str, Any] = {}
     try:
         repository_object["url"] = data["url"]

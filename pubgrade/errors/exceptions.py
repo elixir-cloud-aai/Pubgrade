@@ -79,6 +79,12 @@ class RegistrationDisabled(Forbidden):
     pass
 
 
+class VerificationNotAllowed(Forbidden):
+    """Raised when a user that isn't an admin registers a verified user."""
+
+    pass
+
+
 class InvalidImage(BadRequest):
     """Raised when a request doesn't name exactly one image with a tag."""
 
@@ -260,6 +266,11 @@ exceptions = {
         "title": "Forbidden",
         "status": 403,
         "detail": "Registration is closed.",
+    },
+    VerificationNotAllowed: {
+        "title": "Forbidden",
+        "status": 403,
+        "detail": "Only admins can register verified users.",
     },
     InvalidImage: {
         "title": "Bad Request",

@@ -95,7 +95,8 @@ endpoints:
     # `string.digits` and literal characters (see "Configuration" in
     # `docs/deployment.md`; checked at start)
     repository:
-        # Switch off after setup to close registration
+        # Switch off after setup to close registration; admin users can still
+        # register (`X-Super-User-Id`, `X-Super-User-Access-Token`)
         registration_enabled: True
         id_charset: [string.ascii_lowercase, string.digits , '.' , '-']
         id_length: 6

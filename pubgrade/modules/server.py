@@ -53,7 +53,11 @@ def postRepositories() -> dict[str, Any]:
         accessing repository operations next time
 
     """
-    return register_repository(request.json)
+    return register_repository(
+        request.json,
+        request.headers.get("X-Super-User-Id"),
+        request.headers.get("X-Super-User-Access-Token"),
+    )
 
 
 @log_traffic
@@ -180,6 +184,8 @@ def postSubscription() -> dict[str, str]:
         request.headers["X-User-Id"],
         request.headers["X-User-Access-Token"],
         request.json,
+        request.headers.get("X-Super-User-Id"),
+        request.headers.get("X-Super-User-Access-Token"),
     )
 
 
@@ -242,7 +248,11 @@ def postUser() -> dict[str, Any]:
         user_object (dict): Dictionary of user contents (
         identifier and access_token).
     """
-    return register_user(request.json)
+    return register_user(
+        request.json,
+        request.headers.get("X-Super-User-Id"),
+        request.headers.get("X-Super-User-Access-Token"),
+    )
 
 
 @log_traffic

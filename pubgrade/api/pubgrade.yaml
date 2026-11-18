@@ -1,7 +1,7 @@
 openapi: 3.0.2
 info:
   title: 'ELIXIR Pubgrade Registry API Specification'
-  version: 2.1.0
+  version: 2.2.0
   description: |
     Pubgrade leverages the publish-subscribe (pub/sub) pattern to effectively
     decouple continuous integration (CI) from continuous deilivery (CD):
@@ -28,10 +28,17 @@ paths:
       summary: 'Register repository'
       description: Register a repository to enable publishing updates via the
         `/repositories/{id}/builds` endpoint and allow administrators to
-        subscribe to them.
+        subscribe to them. While registration is closed
+        (`endpoints.repository.registration_enabled`), only requests with
+        the credentials of an admin user are allowed; others get a 403.
+        Admin credentials that are given must be valid, also while
+        registration is open; otherwise the request gets a 401.
       operationId: postRepositories
       tags:
         - repositories
+      parameters:
+        - $ref: '#/components/parameters/AdminUserAccessToken'
+        - $ref: '#/components/parameters/AdminUserId'
       requestBody:
         description: Schema for repository
         required: true
@@ -544,11 +551,19 @@ paths:
     post:
       summary: Register new subscription.
       description: Register a new subscription to allow deployments get notified
-        for available updates of opted repository.
+        for available updates of opted repository. While registration is
+        closed (`endpoints.subscriptions.registration_enabled`), only
+        requests that also carry the credentials of an admin user are
+        allowed; others get a 403. The subscription still belongs to the
+        user of `X-User-Id`, who must be verified. Admin credentials that are
+        given must be valid, also while registration is open; otherwise the
+        request gets a 401.
       operationId: postSubscription
       tags:
         - subscriptions
       parameters:
+        - $ref: '#/components/parameters/AdminUserAccessToken'
+        - $ref: '#/components/parameters/AdminUserId'
         - in: header
           name: X-User-Access-Token
           required: true
@@ -893,9 +908,16 @@ paths:
     post:
       summary: Register new user.
       description: Register a new system administrator user to use pubgrade.
+        While registration is closed (`endpoints.user.registration_enabled`),
+        only requests with the credentials of an admin user are allowed;
+        others get a 403. Admin credentials that are given must be valid,
+        also while registration is open; otherwise the request gets a 401.
       operationId: postUser
       tags:
         - users
+      parameters:
+        - $ref: '#/components/parameters/AdminUserAccessToken'
+        - $ref: '#/components/parameters/AdminUserId'
       requestBody:
         required: true
         content:
@@ -907,6 +929,15 @@ paths:
                         type: string
                         description: Name of the user to be registered.
                         example: 'Akash Saini'
+                    verified:
+                        type: boolean
+                        default: false
+                        description: Whether the user is verified at once,
+                          so that it can subscribe without
+                          `PUT /users/{uid}/verify`. Only requests with the
+                          credentials of an admin user may set it to `true`;
+                          others get a 403.
+                        example: false
                   required:
                     - name
       responses:
@@ -925,6 +956,20 @@ paths:
                       type: string
                       description: Secret used to verify administrator account.
                       example: 'c42a6d44e3d0'
+                    isVerified:
+                      type: boolean
+                      description: Whether the user is verified.
+                      example: false
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        default:
+          $ref: '#/components/responses/Error'
     delete:
       summary: Delete User
       description: Deletes user object and associated subscriptions for the user.
@@ -1053,6 +1098,23 @@ paths:
          default:
            $ref: '#/components/responses/Error'
 components:
+  parameters:
+    AdminUserAccessToken:
+      in: header
+      name: X-Super-User-Access-Token
+      required: false
+      schema:
+        type: string
+      description: Access token of an admin user (`X-Super-User-Id`), to
+        register while registration is closed.
+    AdminUserId:
+      in: header
+      name: X-Super-User-Id
+      required: false
+      schema:
+        type: string
+      description: Identifier of an admin user (`subscriptions.admin_users` in
+        the configuration), to register while registration is closed.
   responses:
     BadRequest:
       description: 'Bad Request
