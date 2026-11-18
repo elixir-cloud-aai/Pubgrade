@@ -138,8 +138,18 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          python scripts/release_notes.py require "${VERSION}"
           notes="docs/releases/${VERSION}.md"
+          # Only a regular file of the repository counts: a symbolic link (also
+          # of a directory on the way) could make the release publish another file,
+          # e.g., `/proc/self/environ` with this step's token
+          if [[ -e "${notes}" || -L "${notes}" ]]; then
+              if [[ -L "${notes}" || ! -f "${notes}" \
+                  || "$(realpath -- "${notes}")" != "$(realpath -- .)/${notes}" ]]; then
+                  echo "::error::${notes} must be a regular file of the repository, not a symbolic link"
+                  exit 1
+              fi
+          fi
+          python scripts/release_notes.py require "${VERSION}"
           if [[ -f "${notes}" ]]; then
               if grep -n "TODO" "${notes}"; then
                   echo "::error::${notes} contains TODO: finish the release notes, then tag a new release"
@@ -513,6 +523,16 @@ jobs:
           # release commit instead, in GitHub's format
           # (`scripts/release_notes.py first`)
           curated="docs/releases/${VERSION}.md"
+          # Only a regular file of the repository counts: a symbolic link (also
+          # of a directory on the way) could make the release publish another file,
+          # e.g., `/proc/self/environ` with this step's token
+          if [[ -e "${curated}" || -L "${curated}" ]]; then
+              if [[ -L "${curated}" || ! -f "${curated}" \
+                  || "$(realpath -- "${curated}")" != "$(realpath -- .)/${curated}" ]]; then
+                  echo "::error::${curated} must be a regular file of the repository, not a symbolic link"
+                  exit 1
+              fi
+          fi
           notes_file="$(mktemp)"
           if [[ -n "${PREVIOUS}" ]]; then
               gh api "repos/${GH_REPO}/releases/generate-notes" \

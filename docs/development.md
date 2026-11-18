@@ -246,7 +246,8 @@ without a title (the release's title is its tag). The release body never
 changes, so they link with full URLs to the release's docs
 (`https://pubgrade.readthedocs.io/en/v<version>/...`) and files
 (`blob/v<version>/`), never to versions that move (`latest`, `dev`) and
-never with relative links, which don't work in the release body. The release
+never with relative links, which don't work in the release body. The notes must be
+a regular file (not a symbolic link). The release
 workflow fails if the notes contain `TODO`, aren't in this format, or are
 missing once any release has curated notes (`scripts/release_notes.py`, the
 same as Pubgrade-Sidecar's); the tests check all notes in `docs/releases/`
