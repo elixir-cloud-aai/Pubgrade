@@ -443,7 +443,7 @@ CHECK_NAME            pubgrade-check-<run>, prefix of the names of the user
                       and the objects: <prefix>-target, <prefix>-sidecar
 CHECK_CALLBACK_URL    http://<sidecar Service>.<namespace>.svc:8080/deployment
                       (the sidecar's PUT /deployment)
-CHECK_SIDECAR_IMAGE   elixircloud/pubgrade-sidecar:0.2.0
+CHECK_SIDECAR_IMAGE   elixircloud/pubgrade-sidecar:0.3.0
 CHECK_IMAGE           rancher/mirrored-pause (on Docker Hub)
 CHECK_OLD_TAG         3.9, the tag the test Deployment starts with
 CHECK_NEW_TAG         3.10, the tag the check publishes

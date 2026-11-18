@@ -23,7 +23,7 @@
 #   CHECK_CALLBACK_URL     The URL Pubgrade notifies; by default the sidecar's
 #                          Service, which works if Pubgrade runs in the same
 #                          cluster and may reach the namespace
-#   CHECK_SIDECAR_IMAGE    default: elixircloud/pubgrade-sidecar:0.2.0
+#   CHECK_SIDECAR_IMAGE    default: elixircloud/pubgrade-sidecar:0.3.0
 #   CHECK_IMAGE            Image repository on Docker Hub that the test
 #                          Deployment runs (default: rancher/mirrored-pause),
 #   CHECK_OLD_TAG          from this tag (default: 3.9)
@@ -58,7 +58,7 @@ namespace="${CHECK_NAMESPACE:-pubgrade-check-${run_id}}"
 target="${name}-target"
 sidecar="${name}-sidecar"
 callback_url="${CHECK_CALLBACK_URL:-http://${sidecar}.${namespace}.svc:8080/deployment}"
-sidecar_image="${CHECK_SIDECAR_IMAGE:-elixircloud/pubgrade-sidecar:0.2.0}"
+sidecar_image="${CHECK_SIDECAR_IMAGE:-elixircloud/pubgrade-sidecar:0.3.0}"
 image="${CHECK_IMAGE:-rancher/mirrored-pause}"
 old_tag="${CHECK_OLD_TAG:-3.9}"
 new_tag="${CHECK_NEW_TAG:-3.10}"
