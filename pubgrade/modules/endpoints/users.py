@@ -10,21 +10,32 @@ from pubgrade.charsets import get_charset
 from pubgrade.errors.exceptions import (
     InternalServerError,
     NameNotFound,
-    RegistrationDisabled,
     UserNotFound,
+    VerificationNotAllowed,
 )
 from pubgrade.modules.endpoints.repositories import generate_id
+from pubgrade.registration import check_registration
 from pubgrade.settings import collection, endpoints
 from pubgrade.tokens import tokens_match
 
 logger = logging.getLogger(__name__)
 
 
-def register_user(data: dict[str, Any]) -> dict[str, Any]:
+def register_user(
+    data: dict[str, Any],
+    admin_user_id: str | None = None,
+    admin_user_access_token: str | None = None,
+) -> dict[str, Any]:
     """Register a new user object.
 
     Args:
-         data (dict): Contains Name of the user.
+        data (dict): Contains Name of the user and, optionally, whether it
+            is verified at once (`verified`, admins only).
+        admin_user_id: Identifier of an admin user, who may register also
+            while registration is closed, and register verified users;
+            `None` if not given.
+        admin_user_access_token: Access token of the admin user; `None` if
+            not given.
 
     Returns:
         user_object (dict): Dictionary of user contents (
@@ -35,10 +46,16 @@ def register_user(data: dict[str, Any]) -> dict[str, Any]:
         InternalServerError: Raised when it's unable to create unique
         identifier for the user_object.
         RegistrationDisabled: Raised when registration is closed by the
-        setting `endpoints.user.registration_enabled`.
+        setting `endpoints.user.registration_enabled` and the request has no
+        admin credentials.
+        Unauthorized: Raised when admin credentials are given but invalid.
+        VerificationNotAllowed: Raised when a request without admin
+        credentials asks for a verified user.
     """
-    if not endpoints()["user"].get("registration_enabled", True):
-        raise RegistrationDisabled
+    admin = check_registration("user", admin_user_id, admin_user_access_token)
+    verified = data.get("verified") is True
+    if verified and not admin:
+        raise VerificationNotAllowed
     user_object: dict[str, Any] = {}
 
     try:
@@ -62,7 +79,7 @@ def register_user(data: dict[str, Any]) -> dict[str, Any]:
         user_object["user_access_token"] = str(
             generate_id(charset=access_token_charset, length=access_token_length)
         )
-        user_object["isVerified"] = False
+        user_object["isVerified"] = verified
         try:
             db_collection.insert_one(user_object)
             break
@@ -80,7 +97,11 @@ def register_user(data: dict[str, Any]) -> dict[str, Any]:
 
     user_object.pop("_id", None)
     # del user_object['isVerified']
-    logger.info("Added user %s.", user_object["uid"])
+    logger.info(
+        "Added user %s%s.",
+        user_object["uid"],
+        " (verified by an admin)" if verified else "",
+    )
     return user_object
 
 

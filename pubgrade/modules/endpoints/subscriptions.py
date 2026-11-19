@@ -14,7 +14,6 @@ from pubgrade.charsets import get_charset
 from pubgrade.errors.exceptions import (
     BuildNotFound,
     InternalServerError,
-    RegistrationDisabled,
     RepositoryNotFound,
     SubscriptionNotFound,
     TooManySubscriptions,
@@ -29,6 +28,7 @@ from pubgrade.modules.endpoints.repositories import (
     declaring,
     generate_id,
 )
+from pubgrade.registration import check_registration
 from pubgrade.settings import collection, endpoints
 from pubgrade.timestamps import now, repaired_subscription
 from pubgrade.tokens import tokens_match
@@ -52,7 +52,11 @@ SUBSCRIPTION_FIELDS = frozenset(
 
 
 def register_subscription(
-    uid: str, user_access_token: str, data: dict[str, Any]
+    uid: str,
+    user_access_token: str,
+    data: dict[str, Any],
+    admin_user_id: str | None = None,
+    admin_user_access_token: str | None = None,
 ) -> dict[str, str]:
     """Register new subscription for the user.
 
@@ -60,6 +64,11 @@ def register_subscription(
         uid (str): Unique identifier for user.
         user_access_token (str): Secret to verify user.
         data (dict): Dictionary element of request received.
+        admin_user_id: Identifier of an admin user, who may let the user
+            subscribe also while registration is closed; `None` if not
+            given.
+        admin_user_access_token: Access token of the admin user; `None` if
+            not given.
 
     Returns:
         subscription_id (str): Identifier generated for created subscription.
@@ -69,17 +78,17 @@ def register_subscription(
         the pubgrade, or it is being deleted; a subscription registered
         meanwhile is removed again.
         Unauthorized: Raised when access_token is invalid or not specified
-        in request.
+        in request, or when admin credentials are given but invalid.
         UserNotFound: Raised when there is no user with specified uid.
         RegistrationDisabled: Raised when registration is closed by the
-        setting `endpoints.subscriptions.registration_enabled`.
+        setting `endpoints.subscriptions.registration_enabled` and the
+        request has no admin credentials.
         TooManySubscriptions: Raised when the repository has reached the limit
         `endpoints.subscriptions.max_per_repository`.
         UndeclaredBuildType: Raised when the repository doesn't declare one of
         the subscription's `build_types`.
     """
-    if not endpoints()["subscriptions"].get("registration_enabled", True):
-        raise RegistrationDisabled
+    check_registration("subscriptions", admin_user_id, admin_user_access_token)
     data = {key: value for key, value in data.items() if key in SUBSCRIPTION_FIELDS}
     db_collection_subscriptions = collection("subscriptions")
     db_collection_user = collection("users")

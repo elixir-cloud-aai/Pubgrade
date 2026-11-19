@@ -88,7 +88,10 @@ from the Secret given by `pubgrade.configSecret`. The environment variable
 - `repository.registration_enabled`, `user.registration_enabled` and
   `subscriptions.registration_enabled` (default: on): switch these off once
   repositories, users and subscriptions are set up. Further registrations then
-  get a 403.
+  get a 403, unless they carry the credentials of an admin user
+  (`X-Super-User-Id` and `X-Super-User-Access-Token`): admins can still add
+  repositories, users and subscriptions without opening registration (see
+  [Usage](usage.md#register-while-registration-is-closed)).
 - `subscriptions.notification_timeout` (default: 10): seconds for each call to
   a subscriber, to connect and for the response. Publishing waits for this, so
   with both, keep it below the time limit of the Route or Ingress (e.g., 30
@@ -263,6 +266,24 @@ recorded: canceled ones lose their token at Pubgrade's start; others keep it
 until they are canceled or their repository is deleted, or, if earlier
 versions recorded them as `SUCCEEDED`, until their pod reports them again:
 they are then signed and their subscribers notified once more, as before.
+
+## Upgrading to API 2.2.0
+
+Version 2.2.0 of the API lets admins register while registration is closed.
+Deployments need no change; clients only if they send admin headers to the
+registrations (see the 401 below):
+
+- `POST /repositories`, `POST /users/register` and `POST /subscriptions` take
+  the optional headers `X-Super-User-Id` and `X-Super-User-Access-Token` of
+  an admin user. With them, they are allowed even while registration is
+  closed (see [Configuration](#configuration)), so adding a repository or a
+  subscriber no longer means opening registration and restarting Pubgrade
+  twice. Admin credentials that are given must be valid, whether
+  registration is open or not: a wrong token, an unknown admin or only one
+  of the two headers gets a 401.
+- `POST /users/register` takes `"verified": true` from admins, to register a
+  user that can subscribe at once; others get a 403 for it. The response
+  says whether the user is verified (`isVerified`), as before.
 
 ## Upgrading to API 2.1.0
 

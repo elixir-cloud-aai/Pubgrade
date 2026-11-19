@@ -8,7 +8,7 @@ the endpoints at `/ui/`. Pubgrade validates requests and responses against it.
 ```text
 Endpoint                                        Who
 GET     /repositories                           anyone
-POST    /repositories                           anyone, while registration is open
+POST    /repositories                           anyone while registration is open, else admins
 GET     /repositories/{id}                      anyone
 PUT     /repositories/{id}                      the repository (its access token)
 DELETE  /repositories/{id}                      the repository
@@ -17,13 +17,13 @@ POST    /repositories/{id}/builds               the repository: publish an image
 GET     /repositories/{id}/builds/{build_id}    anyone
 PUT     /repositories/{id}/builds/{build_id}    the repository's build pods (internal), builds on only
 DELETE  /repositories/{id}/builds/{build_id}    the repository: cancel a build
-POST    /users/register                         anyone, while registration is open
+POST    /users/register                         anyone while registration is open, else admins
 DELETE  /users/register                         the user
 GET     /users                                  admins
 PUT     /users/{uid}/verify                     admins
 PUT     /users/{uid}/unverify                   admins
 GET     /subscriptions                          verified users: their subscriptions
-POST    /subscriptions                          verified users, while registration is open
+POST    /subscriptions                          verified users; while registration is closed, also admin credentials
 GET     /subscriptions/{subscription_id}        the subscription's user
 DELETE  /subscriptions/{subscription_id}        the subscription's user
 ```
@@ -41,16 +41,19 @@ build pods report their completion (with builds switched on only, else
 `403`); for a canceled build, it gets a `409`.
 
 Registrations are open until they are closed in the
-[configuration](deployment.md#configuration). The specification is the
-reference for the request and response bodies and the headers that carry the
-tokens. See [Usage](usage.md) for the typical flow.
+[configuration](deployment.md#configuration); admins can still register
+then (see [Usage](usage.md#register-while-registration-is-closed)). The
+specification is the reference for the request and response bodies and the
+headers that carry the tokens. See [Usage](usage.md) for the typical flow.
 
 Pubgrade also calls subscribers: the notification of a new image, a `PUT` to
 the subscription's `callback_url`, is described as the callback
 `notification` of `POST /subscriptions`, with the body `NotificationRequest`
 (see [Usage](usage.md#receiving-notifications-without-the-sidecar)).
 
-Version 2.1.0 of the API completes the subscriptions API; see
+Version 2.2.0 of the API lets admins register while registration is closed;
+see [Upgrading to API 2.2.0](deployment.md#upgrading-to-api-220). Version
+2.1.0 completes the subscriptions API; see
 [Upgrading to API 2.1.0](deployment.md#upgrading-to-api-210).
 
 Since version 2.0.0 of the API, errors are

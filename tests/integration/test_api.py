@@ -921,3 +921,192 @@ def test_build_of_other_repository_not_found(api: FlaskClient) -> None:
     assert stored is not None
     check(api.get(f"/repositories/{repository['id']}/builds/{stored['id']}"))
     check(api.get(f"/repositories/{other['id']}/builds/{stored['id']}"), 404)
+
+
+def close_registration(api: FlaskClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Close the registration of repositories, users and subscriptions.
+
+    Args:
+        api: Test client of the app.
+        monkeypatch: Pytest's monkeypatch fixture.
+    """
+    with api.application.app_context():
+        settings = endpoints()
+    for section in ("repository", "user", "subscriptions"):
+        monkeypatch.setitem(settings[section], "registration_enabled", False)
+
+
+def subscription_request(
+    api: FlaskClient, headers: dict[str, str], repository_id: str, callback_url: str
+) -> Any:
+    """Request a subscription to tag `1` of a repository.
+
+    Args:
+        api: Client of the API.
+        headers: Headers of the request (user, and admin if given).
+        repository_id: Identifier of the repository.
+        callback_url: URL to notify.
+
+    Returns:
+        The response.
+    """
+    return api.post(
+        "/subscriptions",
+        headers=headers,
+        json={
+            "repository_id": repository_id,
+            "callback_url": callback_url,
+            "access_token": "subscriber-token",
+            "type": "tag",
+            "value": "1",
+        },
+    )
+
+
+# Admin credentials that aren't valid: wrong token, unknown admin, only one of
+# the two headers
+INVALID_ADMIN_HEADERS = [
+    {**ADMIN_HEADERS, "X-Super-User-Access-Token": "wrong"},
+    {**ADMIN_HEADERS, "X-Super-User-Id": "unknown"},
+    {"X-Super-User-Id": ADMIN["uid"]},
+    {"X-Super-User-Access-Token": ADMIN["user_access_token"]},
+]
+REPOSITORY = {"url": "https://github.com/elixir-cloud-aai/app.git"}
+
+
+def test_admin_registers_while_closed(
+    api: FlaskClient, subscriber: Subscriber, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With registration closed, an admin registers all three; others can't.
+
+    Args:
+        api: Test client of the app.
+        subscriber: Subscriber of the test.
+        monkeypatch: Pytest's monkeypatch fixture.
+    """
+    user = register_user(api)
+    close_registration(api, monkeypatch)
+    check(api.post("/repositories", json=REPOSITORY), 403)
+    check(api.post("/users/register", json={"name": "Other"}), 403)
+    repository = check(
+        api.post("/repositories", json=REPOSITORY, headers=ADMIN_HEADERS)
+    )
+    check(subscription_request(api, user, repository["id"], subscriber.url), 403)
+    assert subscriptions(api) == 0
+    subscription = check(
+        subscription_request(
+            api, {**user, **ADMIN_HEADERS}, repository["id"], subscriber.url
+        )
+    )["subscription_id"]
+    # The subscription is the user's
+    assert check(api.get("/subscriptions", headers=user)) == [
+        {"subscription_id": subscription}
+    ]
+    new_user = check(
+        api.post("/users/register", json={"name": "Other"}, headers=ADMIN_HEADERS)
+    )
+    assert new_user["isVerified"] is False
+
+
+def test_admin_registers_while_open(api: FlaskClient, subscriber: Subscriber) -> None:
+    """With registration open, valid admin credentials are accepted too.
+
+    Args:
+        api: Test client of the app.
+        subscriber: Subscriber of the test.
+    """
+    user = register_user(api)
+    repository = check(
+        api.post("/repositories", json=REPOSITORY, headers=ADMIN_HEADERS)
+    )
+    check(
+        subscription_request(
+            api, {**user, **ADMIN_HEADERS}, repository["id"], subscriber.url
+        )
+    )
+    check(api.post("/users/register", json={"name": "Other"}, headers=ADMIN_HEADERS))
+    assert subscriptions(api) == 1
+
+
+@pytest.mark.parametrize("headers", INVALID_ADMIN_HEADERS)
+@pytest.mark.parametrize("closed", [False, True])
+def test_registration_with_invalid_admin_credentials(
+    api: FlaskClient,
+    subscriber: Subscriber,
+    monkeypatch: pytest.MonkeyPatch,
+    headers: dict[str, str],
+    closed: bool,
+) -> None:
+    """Admin credentials that are given must be valid, open or closed.
+
+    Args:
+        api: Test client of the app.
+        subscriber: Subscriber of the test.
+        monkeypatch: Pytest's monkeypatch fixture.
+        headers: Invalid admin headers.
+        closed: Whether registration is closed.
+    """
+    user = register_user(api)
+    repository = register_repository(api)
+    if closed:
+        close_registration(api, monkeypatch)
+    check(api.post("/repositories", json=REPOSITORY, headers=headers), 401)
+    check(api.post("/users/register", json={"name": "Other"}, headers=headers), 401)
+    check(
+        subscription_request(
+            api, {**user, **headers}, repository["id"], subscriber.url
+        ),
+        401,
+    )
+    assert subscriptions(api) == 0
+    with api.application.app_context():
+        assert collection("repositories").count_documents({}) == 1
+        assert collection("users").count_documents({}) == 1
+
+
+@pytest.mark.parametrize("closed", [False, True])
+def test_admin_registers_verified_user(
+    api: FlaskClient,
+    subscriber: Subscriber,
+    monkeypatch: pytest.MonkeyPatch,
+    closed: bool,
+) -> None:
+    """An admin may register a user as verified; it can subscribe at once.
+
+    Args:
+        api: Test client of the app.
+        subscriber: Subscriber of the test.
+        monkeypatch: Pytest's monkeypatch fixture.
+        closed: Whether registration is closed.
+    """
+    repository = register_repository(api)
+    if closed:
+        close_registration(api, monkeypatch)
+    user = check(
+        api.post(
+            "/users/register",
+            json={"name": "Deployer", "verified": True},
+            headers=ADMIN_HEADERS,
+        )
+    )
+    assert user["isVerified"] is True
+    headers = {
+        "X-User-Id": user["uid"],
+        "X-User-Access-Token": user["user_access_token"],
+        **(ADMIN_HEADERS if closed else {}),
+    }
+    check(subscription_request(api, headers, repository["id"], subscriber.url))
+    assert subscriptions(api) == 1
+
+
+def test_only_admins_register_verified_users(api: FlaskClient) -> None:
+    """Others can't register a verified user, but may ask for an unverified one.
+
+    Args:
+        api: Test client of the app.
+    """
+    check(api.post("/users/register", json={"name": "A", "verified": True}), 403)
+    user = check(api.post("/users/register", json={"name": "A", "verified": False}))
+    assert user["isVerified"] is False
+    with api.application.app_context():
+        assert collection("users").count_documents({"isVerified": True}) == 0

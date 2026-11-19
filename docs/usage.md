@@ -44,6 +44,39 @@ curl --request PUT '<base URL>/users/<user ID>/verify' \
   --header 'X-Super-User-Access-Token: <admin access token>'
 ```
 
+## Register while registration is closed
+
+Once a deployment has closed registration (see
+[Configuration](deployment.md#configuration)), only admins can register
+repositories, users and subscriptions: they add their credentials to the
+request.
+
+```bash
+curl --request POST '<base URL>/repositories' \
+  --header 'X-Super-User-Id: <admin user ID>' \
+  --header 'X-Super-User-Access-Token: <admin access token>' \
+  --header 'Content-Type: application/json' \
+  --data '{"url": "<repository URL>"}'
+```
+
+An admin can also register a user that is verified at once, with
+`"verified": true` (others get a 403 for it); this works while registration
+is open, too:
+
+```bash
+curl --request POST '<base URL>/users/register' \
+  --header 'X-Super-User-Id: <admin user ID>' \
+  --header 'X-Super-User-Access-Token: <admin access token>' \
+  --header 'Content-Type: application/json' \
+  --data '{"name": "<name>", "verified": true}'
+```
+
+For a subscription, the request carries both the user's credentials
+(`X-User-Id`, `X-User-Access-Token`) and the admin's; the subscription
+belongs to the user, who must be verified. Admin credentials that are given
+must be valid, whether registration is open or not: otherwise, the request
+gets a 401.
+
 ## Subscribe to a repository
 
 A verified user subscribes a callback URL, e.g. of a Pubgrade-Sidecar, to a

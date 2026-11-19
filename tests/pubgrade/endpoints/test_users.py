@@ -15,6 +15,7 @@ from pubgrade.errors.exceptions import (
     NameNotFound,
     RegistrationDisabled,
     UserNotFound,
+    VerificationNotAllowed,
 )
 from pubgrade.modules.endpoints.users import (
     delete_user,
@@ -104,6 +105,26 @@ class TestUsers:
         foca_config(self.app).endpoints["user"]["registration_enabled"] = False
         with self.app.app_context(), pytest.raises(RegistrationDisabled):
             register_user({"name": "Name"})
+
+    def test_register_user_closed_by_admin(self) -> None:
+        """Admins register users while registration is closed."""
+        self.setup()
+        foca_config(self.app).endpoints["user"]["registration_enabled"] = False
+        admin = (MOCK_ADMIN_USER_1["uid"], MOCK_ADMIN_USER_1["user_access_token"])
+        with self.app.app_context():
+            response = register_user({"name": "Name"}, *admin)
+        assert response["isVerified"] is False
+
+    def test_register_verified_user(self) -> None:
+        """Only admins register verified users."""
+        self.setup()
+        admin = (MOCK_ADMIN_USER_1["uid"], MOCK_ADMIN_USER_1["user_access_token"])
+        with self.app.app_context():
+            assert register_user({"name": "N", "verified": True}, *admin)["isVerified"]
+            with pytest.raises(VerificationNotAllowed):
+                register_user({"name": "N", "verified": True})
+            with pytest.raises(Unauthorized):
+                register_user({"name": "N", "verified": True}, admin[0], "wrong")
 
     def test_register_user_keyerror(self) -> None:
         """Registration without a name fails."""
