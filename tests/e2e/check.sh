@@ -337,21 +337,43 @@ api POST /subscriptions 200 "${work}/user.headers" "${work}/subscription.json" \
 subscription_id="$(jq -r .subscription_id "${work}/subscription")"
 log "OK: subscribed ${callback_url} to tag ${new_tag}"
 
-# Pubgrade notifies the subscriptions before it answers
+# Publish the new tag as a build, and set `build_id`, `result` (of the
+# notification of the subscription) and `http_status` (of the sidecar's
+# answer, `none` without one). Pubgrade notifies the subscriptions before it
+# answers
+publish() {
+  build_id="$(api POST "/repositories/${repository_id}/builds" 200 \
+    "${work}/repository.headers" "${work}/build.json" | jq -r .id)"
+  api GET "/repositories/${repository_id}/builds/${build_id}" 200 "" > "${work}/build"
+  local notification
+  notification="$(jq -c --arg id "${subscription_id}" \
+    '[.notifications[]? | select(.subscription_id == $id)][0] // {}' "${work}/build")"
+  result="$(jq -r '.result // "none"' <<< "${notification}")"
+  http_status="$(jq -r '.http_status // "none"' <<< "${notification}")"
+}
+
 jq -n --arg image "${image}:${new_tag}" --arg tag "${new_tag}" \
   '{images: [{name: $image}], head_commit: {tag: $tag}}' > "${work}/build.json"
-build_id="$(api POST "/repositories/${repository_id}/builds" 200 \
-  "${work}/repository.headers" "${work}/build.json" | jq -r .id)"
-api GET "/repositories/${repository_id}/builds/${build_id}" 200 "" > "${work}/build"
-result="$(jq -r --arg id "${subscription_id}" \
-  '[.notifications[]? | select(.subscription_id == $id) | .result][0] // "none"' \
-  "${work}/build")"
-if [ "${result}" != delivered ]; then
-  fail "Pubgrade's notification of ${callback_url}: ${result}, expected delivered" \
-    "(build status $(jq -r .status "${work}/build")). Can Pubgrade reach the" \
-    "callback URL, e.g. past NetworkPolicies, and are builds off?"
+publish
+# A Service whose EndpointSlice is ready may still refuse connections for a
+# moment, until each node's proxy routes it; Pubgrade then gets no answer and
+# notifies only once. So without an answer, or with a server error (e.g.
+# when the sidecar can't reach the Kubernetes API for a moment), publish once
+# more, a bit later. Other statuses (e.g. 401) won't change on a retry
+if [ "${result}" = failed ] \
+  && { [ "${http_status}" = none ] || [ "${http_status}" -ge 500 ]; }; then
+  log "Pubgrade's notification of ${callback_url} failed (HTTP status" \
+    "${http_status}, build ${build_id}); publishing again in 5 s"
+  sleep 5
+  publish
 fi
-log "OK: published ${image}:${new_tag} as build ${build_id}; the sidecar accepted it"
+if [ "${result}" != delivered ]; then
+  fail "Pubgrade's notification of ${callback_url}: ${result}, HTTP status" \
+    "${http_status}, expected delivered (build status $(jq -r .status "${work}/build"))." \
+    "Can Pubgrade reach the callback URL, e.g. past NetworkPolicies, and are builds off?"
+fi
+log "OK: published ${image}:${new_tag} as build ${build_id}; the sidecar accepted it" \
+  "(HTTP status ${http_status})"
 
 start="${SECONDS}"
 until [ "$(image_of)" = "${image}:${new_tag}" ]; do
