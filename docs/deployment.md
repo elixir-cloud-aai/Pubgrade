@@ -434,7 +434,10 @@ repository, a user and a subscription of the sidecar, publishes a prebuilt
 image and checks that the sidecar rolls it out. Afterwards, also when a step
 fails, it removes everything it created and names anything it couldn't
 remove. It prints one line per step and exits with a non-zero status on
-failure. It needs curl, jq and kubectl (or `oc`, with `KUBECTL=oc`).
+failure. If Pubgrade's notification of the sidecar gets no answer, e.g. because
+the new Service isn't routed on every node yet, or a server error (5xx), the
+check publishes once more after 5 seconds; it prints the HTTP status of the
+sidecar's answer. It needs curl, jq and kubectl (or `oc`, with `KUBECTL=oc`).
 
 Credentials come from the environment only, never from the command line:
 

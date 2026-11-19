@@ -19,6 +19,15 @@ PORT=18080
 
 kubeconfig_dir="$(umask 077 && mktemp -d)"
 down() {
+  local status=$?
+  # Pubgrade logs why a notification failed (the error's type only)
+  if [ "${status}" -ne 0 ]; then
+    echo "Pubgrade's log of notifications:" >&2
+    # With a time limit, so that a stalled cluster doesn't hold up the cleanup
+    k logs --request-timeout=30s --namespace pubgrade deployment/pubgrade \
+      --tail=500 2>&1 \
+      | grep -i notif >&2 || true
+  fi
   cluster_down
   rm -rf "${kubeconfig_dir}"
 }
