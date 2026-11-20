@@ -15,6 +15,7 @@
 [![Coverage][badge-coverage]][badge-url-coverage]
 [![GitHub_tag][badge-github-tag]][badge-url-github-tag]
 [![Docker_image][badge-docker]][badge-url-docker]
+[![DOI][badge-doi]][badge-url-doi]
 
 <!-- --8<-- [start:synopsis] -->
 **Pubgrade** (**Pub**lish-Up**grade**) is a publish-subscribe service that
@@ -56,7 +57,10 @@ Then open the API's web interface at `https://<host name>/ui/`.
 ## Citation
 
 <!-- --8<-- [start:citation] -->
-If you use Pubgrade, please cite it with the metadata in
+If you use Pubgrade, please cite it with its DOI
+[10.5281/zenodo.24093877](https://doi.org/10.5281/zenodo.24093877), which
+always resolves to the latest version on [Zenodo](https://zenodo.org/); the
+Zenodo record lists the DOI of each version, too. The citation metadata is in
 [`CITATION.cff`](https://github.com/elixir-cloud-aai/Pubgrade/blob/dev/CITATION.cff):
 on GitHub, "Cite this repository" in the sidebar of the repository formats it
 as APA or BibTeX.
@@ -76,12 +80,14 @@ This project is covered by the [Apache License 2.0][badge-url-license], also
 [badge-build-status]: <https://github.com/elixir-cloud-aai/Pubgrade/actions/workflows/ci.yml/badge.svg?branch=dev>
 [badge-coverage]: <https://codecov.io/gh/elixir-cloud-aai/Pubgrade/branch/dev/graph/badge.svg?branch=dev>
 [badge-docker]: <https://img.shields.io/docker/v/elixircloud/pubgrade?sort=semver&label=image&color=C39BD3>
+[badge-doi]: <https://zenodo.org/badge/DOI/10.5281/zenodo.24093877.svg>
 [badge-docs]: <https://img.shields.io/readthedocs/pubgrade>
 [badge-github-tag]: <https://img.shields.io/github/v/tag/elixir-cloud-aai/Pubgrade?color=C39BD3>
 [badge-license]: <https://img.shields.io/badge/license-Apache%202.0-blue.svg>
 [badge-url-build-status]: <https://github.com/elixir-cloud-aai/Pubgrade/actions/workflows/ci.yml?query=branch%3Adev>
 [badge-url-coverage]: <https://codecov.io/gh/elixir-cloud-aai/Pubgrade?branch=dev>
 [badge-url-docker]: <https://hub.docker.com/r/elixircloud/pubgrade/tags>
+[badge-url-doi]: <https://doi.org/10.5281/zenodo.24093877>
 [badge-url-docs]: <https://pubgrade.readthedocs.io/en/latest/>
 [badge-url-github-tag]: <https://github.com/elixir-cloud-aai/Pubgrade/releases>
 [badge-url-license]: <https://www.apache.org/licenses/LICENSE-2.0>
