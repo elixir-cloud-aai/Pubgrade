@@ -41,8 +41,8 @@ certificate from cert-manager for `hostName`, stored in the Secret
 (annotation `cert-manager.io/cluster-issuer`, also if the kind is `null`), or
 a namespaced Issuer in the release's namespace with `issuerKind: Issuer`
 (annotation `cert-manager.io/issuer`), for clusters where projects can only
-create Issuers. Other kinds fail the rendering, as do annotations that name
-both kinds, which cert-manager refuses.
+create Issuers. Other kinds fail the rendering, as do an empty `issuer` and
+annotations that name both kinds, which cert-manager refuses.
 
 `pubgrade.ingress.annotations` are added to the Ingress and take precedence
 over the chart's own annotation of the issuer; set one to `null` to remove

@@ -73,6 +73,10 @@ chart="$(render "${ingress[@]}" --set pubgrade.ingress.https.issuerKind=Issuer \
 has "${chart}" '^    cert-manager.io/issuer: "?letsencrypt"?$' "issuerKind=Issuer"
 hasnt "${chart}" 'cert-manager.io/cluster-issuer' "issuerKind=Issuer"
 has "${chart}" 'secretName: pubgrade-tls' "issuerKind=Issuer"
+# The issuer's name is a string, as annotations must be, also if YAML reads it
+# as a number
+has "$(render "${ingress[@]}" --set pubgrade.ingress.https.issuer=2024)" \
+  '^    cert-manager.io/cluster-issuer: "2024"$' "numeric issuer"
 # No issuer without HTTPS, whatever the kind
 chart="$(render "${ingress[@]}" --set pubgrade.ingress.https.enabled=false \
   --set pubgrade.ingress.https.issuerKind=Issuer --show-only templates/pubgrade/ingress.yaml)"
@@ -98,13 +102,35 @@ for removed in \
   hasnt "${removed}" 'cert-manager.io/' "annotation removed"
   has "${removed}" 'secretName: pubgrade-tls' "annotation removed"
 done
-# Fails on other kinds, a missing issuer, and annotations naming both kinds
-for args in "--set pubgrade.ingress.https.issuerKind=Foo" \
-  "--set pubgrade.ingress.https.issuer=" \
-  "--set pubgrade.ingress.https.issuerKind=Issuer --set pubgrade.ingress.annotations.cert-manager\.io/cluster-issuer=other"; do
+# The same for a namespaced Issuer: overridden, removed, and a ClusterIssuer's
+# annotation set to `null` (which it doesn't have) is no conflict
+issuer=("${ingress[@]}" --set pubgrade.ingress.https.issuerKind=Issuer)
+chart="$(render "${issuer[@]}" \
+  --set 'pubgrade.ingress.annotations.cert-manager\.io/issuer=other')"
+has "${chart}" '^    cert-manager.io/issuer: "?other"?$' "Issuer override"
+hasnt "${chart}" 'cert-manager.io/cluster-issuer' "Issuer override"
+chart="$(render "${issuer[@]}" \
+  --set 'pubgrade.ingress.annotations.cert-manager\.io/issuer=null')"
+hasnt "${chart}" 'cert-manager.io/' "Issuer removed"
+chart="$(render "${issuer[@]}" \
+  --set 'pubgrade.ingress.annotations.cert-manager\.io/cluster-issuer=null')"
+has "${chart}" '^    cert-manager.io/issuer: "?letsencrypt-prod"?$' "Issuer, ClusterIssuer null"
+hasnt "${chart}" 'cert-manager.io/cluster-issuer' "Issuer, ClusterIssuer null"
+# Fails with its own message on other kinds (also empty or not a string), a
+# missing issuer, and annotations naming both kinds (`kind|message|args`)
+for entry in \
+  "Foo|issuerKind must be ClusterIssuer or Issuer|--set pubgrade.ingress.https.issuerKind=Foo" \
+  "empty|issuerKind must be ClusterIssuer or Issuer|--set pubgrade.ingress.https.issuerKind=" \
+  "number|issuerKind must be ClusterIssuer or Issuer|--set pubgrade.ingress.https.issuerKind=1" \
+  "issuer|https.issuer must be set|--set pubgrade.ingress.https.issuer=" \
+  "both|must not have both|--set pubgrade.ingress.https.issuerKind=Issuer --set pubgrade.ingress.annotations.cert-manager\.io/cluster-issuer=other"; do
+  IFS='|' read -r name message args <<< "${entry}"
   # shellcheck disable=SC2086 # split into arguments on purpose
-  if render "${ingress[@]}" ${args} > /dev/null 2>&1; then
-    echo "::error::Ingress with ${args} must fail"
+  if output="$(render "${ingress[@]}" ${args} 2>&1)"; then
+    echo "::error::Ingress (${name}) must fail"
+    status=1
+  elif ! grep -qF -- "${message}" <<< "${output}"; then
+    echo "::error::Ingress (${name}): expected '${message}', got: ${output}"
     status=1
   fi
 done

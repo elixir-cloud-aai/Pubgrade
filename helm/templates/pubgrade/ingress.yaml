@@ -5,8 +5,8 @@ from the `issuer` of kind `issuerKind`, a ClusterIssuer by default (also if
 unset or `null`) or a namespaced Issuer. `pubgrade.ingress.annotations` take
 precedence over the chart's annotations; `null` removes one. Fails on other
 kinds, without an issuer, and if the annotations name both a ClusterIssuer
-and an Issuer, which cert-manager refuses. As in FOCA's library chart
-(`foca-common`)
+and an Issuer, which cert-manager refuses. Values and behaviour as in the
+Ingress of FOCA's library chart (`foca-common`)
 */}}
 {{- if .Values.pubgrade.ingress.enabled }}
 {{- $hostName := required "hostName must be set if an Ingress is created" .Values.hostName }}
@@ -22,7 +22,7 @@ and an Issuer, which cert-manager refuses. As in FOCA's library chart
 {{- $annotations := dict }}
 {{- if $https.enabled }}
 {{- $issuerAnnotation := ternary "cert-manager.io/issuer" "cert-manager.io/cluster-issuer" (eq $issuerKind "Issuer") }}
-{{- $_ := set $annotations $issuerAnnotation (required "pubgrade.ingress.https.issuer must be set if pubgrade.ingress.https.enabled" $https.issuer) }}
+{{- $_ := set $annotations $issuerAnnotation (toString (required "pubgrade.ingress.https.issuer must be set if pubgrade.ingress.https.enabled" $https.issuer)) }}
 {{- end }}
 {{- range $name, $value := $ingress.annotations | default dict }}
 {{- if kindIs "invalid" $value }}
