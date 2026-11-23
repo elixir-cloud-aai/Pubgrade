@@ -25,10 +25,78 @@ fixed.
 The service is exposed by a Route if the cluster serves Routes (OpenShift; TLS
 at the router); on other clusters, enable an Ingress with
 `--set pubgrade.ingress.enabled=true`, which requests a certificate from
-[cert-manager](https://cert-manager.io/) by default. See
+[cert-manager](https://cert-manager.io/) by default (see [Ingress and
+certificates](#ingress-and-certificates)). See
 [`helm/values.yaml`](https://github.com/elixir-cloud-aai/Pubgrade/blob/dev/helm/values.yaml)
 for all values. Pubgrade's pods run as any user ID in group 0, with no fixed
 ID, as OpenShift assigns its own.
+
+### Ingress and certificates
+
+With `pubgrade.ingress.https.enabled` (the default), the Ingress requests a
+certificate from cert-manager for `hostName`, stored in the Secret
+`pubgrade-tls`: from the issuer `pubgrade.ingress.https.issuer`
+(`letsencrypt-prod` by default), of the kind
+`pubgrade.ingress.https.issuerKind`. That is a ClusterIssuer by default
+(annotation `cert-manager.io/cluster-issuer`, also if the kind is `null`), or
+a namespaced Issuer in the release's namespace with `issuerKind: Issuer`
+(annotation `cert-manager.io/issuer`), for clusters where projects can only
+create Issuers. Other kinds fail the rendering, as do an empty `issuer` and
+annotations that name both kinds, which cert-manager refuses.
+
+`pubgrade.ingress.annotations` are added to the Ingress and take precedence
+over the chart's own annotation of the issuer; set one to `null` to remove
+it. Up to chart 0.3.0, the chart wrote its issuer annotation before the
+configured ones, so that setting the same key again rendered it twice.
+
+For example, on OpenShift with a namespaced Let's Encrypt Issuer whose
+HTTP-01 solver uses OpenShift's Ingress class:
+
+```yaml
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: letsencrypt-prod
+  namespace: pubgrade
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@example.org
+    privateKeySecretRef:
+      name: letsencrypt-prod-account-key
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: openshift-default
+```
+
+```yaml
+pubgrade:
+  ingress:
+    enabled: true
+    className: openshift-default
+    annotations:
+      route.openshift.io/termination: edge
+    https:
+      enabled: true
+      issuer: letsencrypt-prod
+      issuerKind: Issuer
+```
+
+The solver's `ingressClassName` must be the Ingress's `className`, or the
+HTTP-01 challenge is not answered. OpenShift creates a Route for the Ingress,
+with edge termination and the certificate from `pubgrade-tls`, and updates it
+when cert-manager renews the certificate; the chart's own Route is not
+created while the Ingress is enabled. Annotations for the router (e.g.,
+timeouts) then go into `pubgrade.ingress.annotations`, which OpenShift copies
+to the Route it creates, as `pubgrade.route.annotations` apply only to the
+chart's own Route.
+
+The Ingress serves `hostName` only. For a second host name, create a second
+Ingress outside the chart for that name, with the same class and
+annotations, to the Service `pubgrade-service` (port `http`), and a `tls`
+section with a Secret of its own, so that cert-manager issues and renews its
+certificate, too.
 
 ### Security contexts
 
