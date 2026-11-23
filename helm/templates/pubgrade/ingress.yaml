@@ -1,18 +1,46 @@
+{{- /*
+Ingress for `hostName`, if `pubgrade.ingress.enabled`. With
+`pubgrade.ingress.https.enabled`, it requests a certificate from cert-manager:
+from the `issuer` of kind `issuerKind`, a ClusterIssuer by default (also if
+unset or `null`) or a namespaced Issuer. `pubgrade.ingress.annotations` take
+precedence over the chart's annotations; `null` removes one. Fails on other
+kinds, without an issuer, and if the annotations name both a ClusterIssuer
+and an Issuer, which cert-manager refuses. As in FOCA's library chart
+(`foca-common`)
+*/}}
 {{- if .Values.pubgrade.ingress.enabled }}
 {{- $hostName := required "hostName must be set if an Ingress is created" .Values.hostName }}
 {{- $ingress := .Values.pubgrade.ingress }}
+{{- $https := $ingress.https | default dict }}
+{{- $issuerKind := "ClusterIssuer" }}
+{{- if not (kindIs "invalid" $https.issuerKind) }}
+{{- $issuerKind = $https.issuerKind }}
+{{- if not (has $issuerKind (list "ClusterIssuer" "Issuer")) }}
+{{- fail (printf "pubgrade.ingress.https.issuerKind must be ClusterIssuer or Issuer, not %q" (toString $issuerKind)) }}
+{{- end }}
+{{- end }}
+{{- $annotations := dict }}
+{{- if $https.enabled }}
+{{- $issuerAnnotation := ternary "cert-manager.io/issuer" "cert-manager.io/cluster-issuer" (eq $issuerKind "Issuer") }}
+{{- $_ := set $annotations $issuerAnnotation (required "pubgrade.ingress.https.issuer must be set if pubgrade.ingress.https.enabled" $https.issuer) }}
+{{- end }}
+{{- range $name, $value := $ingress.annotations | default dict }}
+{{- if kindIs "invalid" $value }}
+{{- $_ := unset $annotations $name }}
+{{- else }}
+{{- $_ := set $annotations $name $value }}
+{{- end }}
+{{- end }}
+{{- if and (hasKey $annotations "cert-manager.io/issuer") (hasKey $annotations "cert-manager.io/cluster-issuer") }}
+{{- fail "pubgrade.ingress: the Ingress must not have both annotations cert-manager.io/issuer and cert-manager.io/cluster-issuer, which cert-manager refuses: set pubgrade.ingress.https.issuerKind instead, or remove one with null in pubgrade.ingress.annotations" }}
+{{- end }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: pubgrade
-  {{- if or $ingress.annotations $ingress.https.enabled }}
+  {{- with $annotations }}
   annotations:
-    {{- if $ingress.https.enabled }}
-    cert-manager.io/cluster-issuer: {{ $ingress.https.issuer | quote }}
-    {{- end }}
-    {{- with $ingress.annotations }}
     {{- toYaml . | nindent 4 }}
-    {{- end }}
   {{- end }}
 spec:
   {{- with $ingress.className }}
@@ -29,7 +57,7 @@ spec:
                 name: pubgrade-service
                 port:
                   name: http
-  {{- if $ingress.https.enabled }}
+  {{- if $https.enabled }}
   tls:
     - hosts:
         - {{ $hostName | quote }}

@@ -60,6 +60,55 @@ if render --api-versions route.openshift.io/v1 > /dev/null 2>&1; then
   status=1
 fi
 
+# cert-manager's issuer: a ClusterIssuer by default (also for `issuerKind`
+# unset or `null`), a namespaced Issuer on request, never both
+ingress=(--set hostName=pubgrade.example.org --set pubgrade.ingress.enabled=true)
+for kind in ClusterIssuer null; do
+  chart="$(render "${ingress[@]}" --set "pubgrade.ingress.https.issuerKind=${kind}")"
+  has "${chart}" '^    cert-manager.io/cluster-issuer: "?letsencrypt-prod"?$' "issuerKind=${kind}"
+  hasnt "${chart}" 'cert-manager.io/issuer:' "issuerKind=${kind}"
+done
+chart="$(render "${ingress[@]}" --set pubgrade.ingress.https.issuerKind=Issuer \
+  --set pubgrade.ingress.https.issuer=letsencrypt)"
+has "${chart}" '^    cert-manager.io/issuer: "?letsencrypt"?$' "issuerKind=Issuer"
+hasnt "${chart}" 'cert-manager.io/cluster-issuer' "issuerKind=Issuer"
+has "${chart}" 'secretName: pubgrade-tls' "issuerKind=Issuer"
+# No issuer without HTTPS, whatever the kind
+chart="$(render "${ingress[@]}" --set pubgrade.ingress.https.enabled=false \
+  --set pubgrade.ingress.https.issuerKind=Issuer --show-only templates/pubgrade/ingress.yaml)"
+hasnt "${chart}" 'cert-manager.io/' "HTTPS off"
+hasnt "${chart}" 'annotations:' "HTTPS off"
+hasnt "${chart}" 'tls:' "HTTPS off"
+# Configured annotations override the chart's, and `null` removes them
+chart="$(render "${ingress[@]}" \
+  --set 'pubgrade.ingress.annotations.cert-manager\.io/cluster-issuer=other' \
+  --set 'pubgrade.ingress.annotations.example\.org/key=value')"
+has "${chart}" '^    cert-manager.io/cluster-issuer: "?other"?$' "annotation override"
+has "${chart}" '^    example.org/key: "?value"?$' "annotation override"
+count_issuers="$(grep -c 'cert-manager.io/cluster-issuer' <<< "${chart}")"
+if [ "${count_issuers}" -ne 1 ]; then
+  echo "::error::annotation override: expected one cert-manager.io/cluster-issuer"
+  status=1
+fi
+for removed in \
+  "$(render "${ingress[@]}" -f <(printf '%s\n' 'pubgrade:' '  ingress:' \
+    '    annotations:' '      cert-manager.io/cluster-issuer: null'))" \
+  "$(render "${ingress[@]}" \
+    --set 'pubgrade.ingress.annotations.cert-manager\.io/cluster-issuer=null')"; do
+  hasnt "${removed}" 'cert-manager.io/' "annotation removed"
+  has "${removed}" 'secretName: pubgrade-tls' "annotation removed"
+done
+# Fails on other kinds, a missing issuer, and annotations naming both kinds
+for args in "--set pubgrade.ingress.https.issuerKind=Foo" \
+  "--set pubgrade.ingress.https.issuer=" \
+  "--set pubgrade.ingress.https.issuerKind=Issuer --set pubgrade.ingress.annotations.cert-manager\.io/cluster-issuer=other"; do
+  # shellcheck disable=SC2086 # split into arguments on purpose
+  if render "${ingress[@]}" ${args} > /dev/null 2>&1; then
+    echo "::error::Ingress with ${args} must fail"
+    status=1
+  fi
+done
+
 # The configuration from a Secret
 chart="$(render --set pubgrade.configSecret=config)"
 has "${chart}" 'secretName: config' "config"

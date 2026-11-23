@@ -84,12 +84,18 @@ pubgrade:
     enabled: false
     # Ingress class; the cluster's default class if empty
     className: ""
+    # Added to the Ingress; they take precedence over the chart's (e.g., the
+    # issuer's annotation from `https`), and `null` removes one of those
     annotations: {}
     https:
-      # Request a certificate from cert-manager (via `issuer`, a ClusterIssuer)
-      # and serve HTTPS
+      # Request a certificate from cert-manager (from `issuer`, of kind
+      # `issuerKind`) and serve HTTPS
       enabled: true
       issuer: letsencrypt-prod
+      # `ClusterIssuer` (also if `null`) or `Issuer`, a namespaced issuer in
+      # the release's namespace, for clusters where projects can't use
+      # ClusterIssuers
+      issuerKind: ClusterIssuer
   # An OpenShift Route, with TLS at the router: created if the cluster serves
   # Routes, unless this is off or an Ingress is enabled; `hostName` is required
   # then
