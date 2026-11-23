@@ -89,7 +89,7 @@ pubgrade:
     annotations: {}
     https:
       # Request a certificate from cert-manager (from `issuer`, of kind
-      # `issuerKind`) and serve HTTPS
+      # `issuerKind`) and serve HTTPS. Quote an issuer name made of digits
       enabled: true
       issuer: letsencrypt-prod
       # `ClusterIssuer` (also if `null`) or `Issuer`, a namespaced issuer in

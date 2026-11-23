@@ -73,8 +73,9 @@ chart="$(render "${ingress[@]}" --set pubgrade.ingress.https.issuerKind=Issuer \
 has "${chart}" '^    cert-manager.io/issuer: "?letsencrypt"?$' "issuerKind=Issuer"
 hasnt "${chart}" 'cert-manager.io/cluster-issuer' "issuerKind=Issuer"
 has "${chart}" 'secretName: pubgrade-tls' "issuerKind=Issuer"
-# The issuer's name is a string, as annotations must be, also if YAML reads it
-# as a number
+# The issuer's name is a string, as annotations must be, also if it is given
+# as a number (long numbers from a values file come out in scientific
+# notation, so `helm/values.yaml` says to quote such names)
 has "$(render "${ingress[@]}" --set pubgrade.ingress.https.issuer=2024)" \
   '^    cert-manager.io/cluster-issuer: "2024"$' "numeric issuer"
 # No issuer without HTTPS, whatever the kind
