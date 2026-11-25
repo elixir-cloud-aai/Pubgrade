@@ -231,12 +231,20 @@ cosign verify elixircloud/pubgrade:<version> \
 ```
 
 After publishing the release, the job `Notify Pubgrade` registers the app's
-image (`elixircloud/pubgrade:X.Y.Z`), with the release tag, at a Pubgrade
-instance (`POST /repositories/{id}/builds`), which notifies the deployments
+image (`elixircloud/pubgrade:X.Y.Z`, with the organization in
+`DOCKERHUB_ORG` if set), with the release tag, at a Pubgrade instance in
+publish mode (builds disabled, the default;
+[#33](https://github.com/elixir-cloud-aai/Pubgrade/issues/33)) with
+`POST /repositories/{id}/builds`. Pubgrade then notifies the deployments
 that subscribed to upgrades, the instance's own deployment among them if it
-subscribed. The build has no build type, so it reaches only subscriptions
-without `build_types`, whose `value` is the release tag (`vX.Y.Z`) or `*`;
-`*` also matches pre-releases (`vX.Y.ZrcN` and the like). It uses
+subscribed. The build has a tag and no build type, so it reaches the
+subscriptions of `type` `tag` whose `value` is the release tag (`vX.Y.Z`)
+or `*`, and whose `build_types` are missing or empty; `*` also matches
+pre-releases (`vX.Y.ZrcN` and the like), and subscriptions of `type`
+`branch` or `commit` never match. Whether each deployment accepted the
+notification is in the build's `notifications` (see
+[Notifications](usage.md#notifications)); the job doesn't fail if one
+didn't. It uses
 this repository's action `actions/notify` (see
 [Notify Pubgrade from CI](usage.md#notify-pubgrade-from-ci)), pinned to the
 commit of
@@ -274,7 +282,9 @@ tags the images and creates the release.
   on an invalid setting or with "Could not reach Pubgrade (curl exit status
   6)" or "(… 7)" (no connection), Pubgrade may have registered the build all
   the same: check the repository's builds (`GET /repositories/{id}/builds`)
-  before re-running it.
+  before re-running it. Re-running the job of an older release sends its
+  older tag again, also after a newer release: sidecars with
+  `refuseDowngrades` ignore it, other subscribers may roll back.
 
 Release notes follow the format agreed for all repositories of the
 organization:
