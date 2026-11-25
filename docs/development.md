@@ -218,9 +218,10 @@ them, then attests and signs the images and the chart, tags the images
 `X.Y.Z` (and `latest` if it is the highest stable release;
 `scripts/release_version.py`) and creates the GitHub release, with the chart
 and its Sigstore bundle attached; then it notifies Pubgrade, if configured
-(see below). Pushing the images and publishing the release each need
-approval in the environment `release`, which holds the Docker Hub secrets
-`DOCKERHUB_LOGIN` and `DOCKERHUB_TOKEN`. Verify a released
+(see below). Pushing the images, publishing the release
+and notifying Pubgrade each need approval in the environment `release`,
+which holds the Docker Hub secrets `DOCKERHUB_LOGIN` and `DOCKERHUB_TOKEN`
+(and `PUBGRADE_TOKEN`). Verify a released
 image's signature with:
 
 ```bash
@@ -229,20 +230,21 @@ cosign verify elixircloud/pubgrade:<version> \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
-After publishing the release, the workflow registers the app's image
-(`elixircloud/pubgrade:X.Y.Z`), with the release tag, at a Pubgrade
-instance (`POST /repositories/{id}/builds`, through this repository's action
-[`actions/notify`](https://github.com/elixir-cloud-aai/Pubgrade/tree/344a58adc1c871135f86c404eb33ed91011886ad/actions/notify),
-pinned to the commit of 0.3.0, as in the other repositories), which
-notifies the deployments that subscribed to upgrades, also for
-pre-releases, if they subscribed to those; that includes the instance's own
-deployment, if it subscribed. The updater's image isn't registered:
+After publishing the release, the job `Notify Pubgrade` registers the app's
+image (`elixircloud/pubgrade:X.Y.Z`), with the release tag, at a Pubgrade
+instance (`POST /repositories/{id}/builds`), which notifies the deployments
+that subscribed to upgrades, the instance's own deployment among them if it
+subscribed. The build has no build type, so it reaches only subscriptions
+without `build_types`, whose `value` is the release tag (`vX.Y.Z`) or `*`;
+`*` also matches pre-releases (`vX.Y.ZrcN` and the like). It uses
+this repository's action `actions/notify` (see
+[Notify Pubgrade from CI](usage.md#notify-pubgrade-from-ci)), pinned to the
+commit of
+[0.3.0](https://github.com/elixir-cloud-aai/Pubgrade/tree/344a58adc1c871135f86c404eb33ed91011886ad/actions/notify),
+not the action of the tagged commit. The updater's image isn't registered:
 Pubgrade runs it for builds, not in a Deployment that a sidecar upgrades.
-The job runs after the GitHub release because the same job (`publish`) tags
-the images and creates the release. The action masks the token and retries
-a request only if it never reached Pubgrade, so that one run registers the
-build at most once; re-running the job registers it again. It needs these
-settings:
+The job runs after the GitHub release, because the same job (`publish`)
+tags the images and creates the release.
 
 | Setting | Kind | Where | Meaning |
 |---|---|---|---|
@@ -250,24 +252,29 @@ settings:
 | `PUBGRADE_REPOSITORY_ID` | Variable | Repository, or the `release` environment | The repository's `id` from registering it at Pubgrade. |
 | `PUBGRADE_TOKEN` | Secret | The `release` environment | The repository's `access_token` from registering it at Pubgrade. |
 
-Without `PUBGRADE_URL`, the job `Notify Pubgrade` is skipped, so releases
-don't wait for its approval. Set `PUBGRADE_URL` for the repository, not in
-the `release` environment: a job's condition is evaluated before the job
-enters its environment, so a variable there doesn't switch the job on (and
-would override the repository's URL within the job). An organization
-variable would switch it on for every repository it is shared with, also
-those without a Pubgrade token. With `PUBGRADE_URL`, the job waits for an
-approval in the `release` environment, like pushing and publishing, and fails
-if one of the other settings is missing or invalid: the identifier and the
-token may only hold letters, digits, `.`, `~` and `-` (as Pubgrade issues
-them). If only this job fails or is rejected, the release is published all
-the same: fix the settings and re-run the job (only this one, not
-`publish`; see below), or leave it; don't release a new version for it.
-Unless it failed on an invalid setting or with "Could not reach Pubgrade
-(curl exit status 6)" or "(… 7)" (no connection), Pubgrade may have
-registered the build all the same: check the repository's builds
-(`GET /repositories/{id}/builds`) before re-running it, as re-running
-notifies the subscribed deployments again.
+- **Switching it on:** without `PUBGRADE_URL`, the job is skipped, so
+  releases don't wait for its approval. Set `PUBGRADE_URL` for the
+  repository, not in the `release` environment: a job's condition is
+  evaluated before the job enters its environment, so a variable there
+  doesn't switch the job on (and would override the repository's URL within
+  the job). An organization variable would switch it on for every
+  repository it is shared with, also those without a Pubgrade token. With
+  `PUBGRADE_URL`, the job waits for an approval in the `release`
+  environment, like pushing and publishing.
+- **Failures:** the job fails if one of the other settings is missing or
+  invalid: the identifier and the token may only hold letters, digits, `.`,
+  `~` and `-` (as Pubgrade issues them). The action masks the token and
+  retries a request only if it never reached Pubgrade, so that one run
+  registers the build at most once. If only this job fails or is rejected,
+  the release is published all the same: fix the settings and re-run this
+  job alone (not `publish`, see below), or leave it; don't release a new
+  version for it.
+- **Re-runs:** re-running the job registers the build again and notifies
+  the subscribed deployments again, without a new release. Unless it failed
+  on an invalid setting or with "Could not reach Pubgrade (curl exit status
+  6)" or "(… 7)" (no connection), Pubgrade may have registered the build all
+  the same: check the repository's builds (`GET /repositories/{id}/builds`)
+  before re-running it.
 
 Release notes follow the format agreed for all repositories of the
 organization:

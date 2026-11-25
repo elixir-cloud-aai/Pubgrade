@@ -13,8 +13,10 @@
 # chart are released together, with one version: the tag must match
 # `version` in `[project]` of `pyproject.toml` and the chart's `version` and
 # `appVersion` (set by the release-prep pull request; see "Versioning and
-# releases" in `docs/development.md`). `push` and `publish` each need
-# approval in the `release` environment. Re-running all jobs builds, scans,
+# releases" in `docs/development.md`). `push`, `publish` and, if Pubgrade
+# is configured, `notify` each need approval in the `release` environment.
+# Re-running only `notify` notifies the subscribed deployments again, without
+# a new release. Re-running all jobs builds, scans,
 # signs and tags new digests (and packages the chart again); re-running
 # failed jobs reuses the digests already pushed (and scans them again if a
 # scan failed); a full re-run of a release that was already published moves
@@ -592,28 +594,20 @@ jobs:
           gh release edit "${TAG}" "${edit[@]}" --draft=false
 
   # Registers the app's image at Pubgrade (publish mode,
-  # elixir-cloud-aai/Pubgrade#33) with the action `actions/notify` of this
-  # repository, which notifies the subscribed deployments. The action is
-  # pinned to the commit of a release, as in the other repositories, not used
-  # from the tagged commit (`./actions/notify`), so that a release never runs
-  # an action that no release has shipped and CI has tested on `dev` before.
-  # It needs the tag `X.Y.Z` that the sidecars pull, which `publish` sets in
-  # the same job that creates the GitHub release, so it runs after `publish`
-  # (unlike in tesk-api, whose image is tagged in a job of its own). The
-  # updater's image isn't registered: Pubgrade runs it for builds, as the
-  # chart's values say, not in a Deployment that a sidecar upgrades.
-  # The action checks its inputs, masks the token and retries only requests
-  # that never reached Pubgrade (no connection), so that one run registers
-  # the build at most once; a failed run says so, and re-running this job
-  # sends it again. The token is a secret of the `release` environment, like
-  # the other release credentials, so this job needs an approval there, too.
-  # The job only runs if the variable `PUBGRADE_URL` is set for the
-  # repository: variables of an environment aren't visible to a job's `if:`
-  # (it is evaluated before the job enters the environment), and a check in a
-  # step would leave every release without Pubgrade waiting for an approval
-  # that serves nothing. The step fails if `PUBGRADE_REPOSITORY_ID` or
-  # `PUBGRADE_TOKEN` is missing or invalid. See "Versioning and releases" in
-  # `docs/development.md` for where to set them.
+  # elixir-cloud-aai/Pubgrade#33) with the action `actions/notify`, which
+  # notifies the subscribed deployments. The action is pinned to the commit
+  # of a release, not used from the tagged commit (`./actions/notify`), so
+  # that a release never runs an action that no release has shipped. It needs
+  # the tag `X.Y.Z` that the sidecars pull, which `publish` sets in the same
+  # job that creates the GitHub release, so it runs after `publish`. The
+  # updater's image isn't registered: Pubgrade runs it for builds, not in a
+  # Deployment that a sidecar upgrades. The token is a secret of the
+  # `release` environment, so this job needs an approval there, too. The
+  # condition is on the job, with the repository variable `PUBGRADE_URL`:
+  # variables of an environment aren't visible to a job's `if:`, and a check
+  # in a step would leave every release without Pubgrade waiting for an
+  # approval that serves nothing. Settings, failures and re-runs: "Versioning
+  # and releases" in `docs/development.md`.
   notify:
     name: Notify Pubgrade
     needs: [prepare, publish]
