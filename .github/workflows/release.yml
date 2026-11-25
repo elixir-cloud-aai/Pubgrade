@@ -28,8 +28,11 @@
 # curated notes to the `nav` of `mkdocs.yml` too (the docs build fails
 # otherwise). Release tags are immutable (tag ruleset). Until 1.0.0, all
 # releases are GitHub pre-releases (but stable ones still move `latest`).
-# The images are spelled out in `push`, `scan` and `publish`; keep them in
-# sync.
+# Once the images are tagged and released, the app's image is registered at
+# Pubgrade, if it is configured (`notify`), so that the deployments that
+# subscribed to upgrades follow the release, Pubgrade's own among them. The
+# images are spelled out in `push`, `scan`, `publish` and `notify` (the
+# app's image only); keep them in sync.
 
 name: Release
 
@@ -587,3 +590,44 @@ jobs:
           fi
           # Publishes a draft
           gh release edit "${TAG}" "${edit[@]}" --draft=false
+
+  # Registers the app's image at Pubgrade (publish mode,
+  # elixir-cloud-aai/Pubgrade#33) with the action `actions/notify` of this
+  # repository, which notifies the subscribed deployments. The action is
+  # pinned to the commit of a release, as in the other repositories, not used
+  # from the tagged commit (`./actions/notify`), so that a release never runs
+  # an action that no release has shipped and CI has tested on `dev` before.
+  # It needs the tag `X.Y.Z` that the sidecars pull, which `publish` sets in
+  # the same job that creates the GitHub release, so it runs after `publish`
+  # (unlike in tesk-api, whose image is tagged in a job of its own). The
+  # updater's image isn't registered: Pubgrade runs it for builds, as the
+  # chart's values say, not in a Deployment that a sidecar upgrades.
+  # The action checks its inputs, masks the token and retries only requests
+  # that never reached Pubgrade (no connection), so that one run registers
+  # the build at most once; a failed run says so, and re-running this job
+  # sends it again. The token is a secret of the `release` environment, like
+  # the other release credentials, so this job needs an approval there, too.
+  # The job only runs if the variable `PUBGRADE_URL` is set for the
+  # repository: variables of an environment aren't visible to a job's `if:`
+  # (it is evaluated before the job enters the environment), and a check in a
+  # step would leave every release without Pubgrade waiting for an approval
+  # that serves nothing. The step fails if `PUBGRADE_REPOSITORY_ID` or
+  # `PUBGRADE_TOKEN` is missing or invalid. See "Versioning and releases" in
+  # `docs/development.md` for where to set them.
+  notify:
+    name: Notify Pubgrade
+    needs: [prepare, publish]
+    if: vars.PUBGRADE_URL != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: release
+    permissions: {}
+    steps:
+      - name: Notify Pubgrade
+        uses: elixir-cloud-aai/Pubgrade/actions/notify@344a58adc1c871135f86c404eb33ed91011886ad # v0.3.0
+        with:
+          url: ${{ vars.PUBGRADE_URL }}
+          repository-id: ${{ vars.PUBGRADE_REPOSITORY_ID }}
+          token: ${{ secrets.PUBGRADE_TOKEN }}
+          image: ${{ env.IMAGE_ORG }}/pubgrade:${{ needs.prepare.outputs.version }}
+          git-tag: ${{ github.ref_name }}
