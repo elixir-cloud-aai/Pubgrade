@@ -1,6 +1,6 @@
 [project]
 name = "pubgrade"
-version = "0.3.0"
+version = "0.3.1"
 description = "Publish-subscribe service that notifies deployments of new images"
 authors = [
     {name = "ELIXIR On-Cloud", email = "cloud-service@elixir-europe.org"},
