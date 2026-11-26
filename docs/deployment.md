@@ -347,8 +347,7 @@ configuration. What changes (see FOCA's
   builds) no longer match their pattern and get a 400 with the code
   `pattern-mismatch`; before, they were accepted. Clients that read build
   types from files must strip them. Repositories and subscriptions that
-  stored such a build type keep it, but no build can name it any more, and
-  a `PUT` of the repository that repeats it gets the 400.
+  stored such a build type keep it, but builds can no longer name it.
 - **Request bodies:** a configuration of your own
   (`pubgrade.configSecret`) without `server.max_content_length` now limits
   bodies to 10 MiB (before: no limit); with `null`, they stay unlimited.
