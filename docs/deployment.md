@@ -347,7 +347,12 @@ configuration. What changes (see FOCA's
   builds) no longer match their pattern and get a 400 with the code
   `pattern-mismatch`; before, they were accepted. Clients that read build
   types from files must strip them. Repositories and subscriptions that
-  stored such a build type keep it, but builds can no longer name it.
+  stored such a build type keep it, but builds can no longer name it. To
+  find them before the upgrade, e.g., in `mongosh` (database
+  `pubgradeStore`), run
+  `db.repositories.find({build_types: {$regex: "\n$"}}, {id: 1})` and the
+  same for `db.subscriptions`. Then change the repository (`PUT`) and
+  subscribe again without the newline.
 - **Request bodies:** a configuration of your own
   (`pubgrade.configSecret`) without `server.max_content_length` now limits
   bodies to 10 MiB (before: no limit); with `null`, they stay unlimited.
