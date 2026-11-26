@@ -568,7 +568,7 @@ wheels = [
 
 [[package]]
 name = "foca"
-version = "0.22.0"
+version = "0.23.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "addict" },
@@ -591,9 +591,9 @@ dependencies = [
     { name = "urllib3" },
     { name = "werkzeug" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/71/f9/7a6d79ffb5ded48aefb3969b71bb6782b9a5681cc93d6abb879899a7e007/foca-0.22.0.tar.gz", hash = "sha256:20caeaf43327b3525f135a3fda2b8fb6146b2a2264156fb043e2130f35e2c271", size = 718720, upload-time = "2026-11-09T07:55:23.689Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/84/21/4c4c58cee4bbeff6429e10e267750e3f389ae3fca942d46b213e2d60aaf4/foca-0.23.0.tar.gz", hash = "sha256:b2948394531d6719100131f01e56087263629efddb16e861c9702a31db762769", size = 824294, upload-time = "2026-11-25T22:05:28.957Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/4e/ed/4bd06a6674ca193f4838136df067891e29613210e65a645ac10ab3e25965/foca-0.22.0-py3-none-any.whl", hash = "sha256:5e38071c451f0a70b33802094f333b11bde2010cfe55cf7563e741bdc1a5411e", size = 376230, upload-time = "2026-11-09T07:55:22.024Z" },
+    { url = "https://files.pythonhosted.org/packages/bb/09/88e61dfa67db8bf3fe99455dacce6117022e4e91b8a28c15714dd312bb58/foca-0.23.0-py3-none-any.whl", hash = "sha256:f365f2d9e5d39465cba38bceaa2af61d655cb13cc1c42241a960a29c922b20aa", size = 424843, upload-time = "2026-11-25T22:05:27.504Z" },
 ]
 
 [[package]]
@@ -1234,7 +1234,7 @@ docs = [
 requires-dist = [
     { name = "connexion", specifier = ">=2.15.1,<3" },
     { name = "flask", specifier = ">=3.1.3,<4" },
-    { name = "foca", specifier = ">=0.22.0,<0.23" },
+    { name = "foca", specifier = ">=0.23.0,<0.24" },
     { name = "gitpython", specifier = ">=3.2.1,<4" },
     { name = "gunicorn", specifier = ">=26.2.0,<28" },
     { name = "kubernetes", specifier = ">=37.0.2,<38" },
