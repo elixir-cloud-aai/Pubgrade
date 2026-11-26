@@ -188,6 +188,23 @@ def test_invalid_build_types_rejected(api: FlaskClient, build_types: Any) -> Non
     )
 
 
+def test_build_type_with_trailing_newline_rejected(api: FlaskClient) -> None:
+    """A build type with a trailing newline doesn't match its pattern.
+
+    The pattern ends in `$`, which matches only at the end of the value
+    since FOCA 0.23 (as in ECMA 262); before, it also matched before a
+    newline at the end (as in Python).
+    """
+    error = check(
+        api.post(
+            "/repositories",
+            json={"url": "https://example.org/app.git", "build_types": ["prod\n"]},
+        ),
+        400,
+    )
+    assert [field["code"] for field in error["errors"]] == ["pattern-mismatch"]
+
+
 def test_modify_build_types(api: FlaskClient) -> None:
     """Changing a repository keeps its build types unless they are given."""
     repository = register_repository(api, build_types=TYPES)
