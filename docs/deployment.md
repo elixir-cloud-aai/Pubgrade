@@ -335,6 +335,35 @@ until they are canceled or their repository is deleted, or, if earlier
 versions recorded them as `SUCCEEDED`, until their pod reports them again:
 they are then signed and their subscribers notified once more, as before.
 
+## Upgrading to FOCA 0.23
+
+From Pubgrade 0.3.1, the image runs on FOCA 0.23 instead of 0.22. The API
+(2.2.0), the chart and its values stay the same, and so does the image's
+configuration. What changes (see FOCA's
+[migration guide](https://foca.readthedocs.io/en/v0.23.0/migration-0.23/)):
+
+- **Build types** with a trailing newline (e.g., `"production\n"` in
+  `build_types` of repositories and subscriptions, or `build_type` of
+  builds) no longer match their pattern and get a 400 with the code
+  `pattern-mismatch`; before, they were accepted. Clients that read build
+  types from files must strip them. Repositories and subscriptions that
+  stored such a build type keep it, but builds can no longer name it. To
+  find them before the upgrade, e.g., in `mongosh` (database
+  `pubgradeStore`), run
+  `db.repositories.find({build_types: {$regex: "\n$"}}, {id: 1})` and the
+  same for `db.subscriptions`. Then change the repository (`PUT`) and
+  subscribe again without the newline.
+- **Request bodies:** a configuration of your own
+  (`pubgrade.configSecret`) without `server.max_content_length` now limits
+  bodies to 10 MiB (before: no limit); with `null`, they stay unlimited.
+  The image's configuration keeps its 1 MiB. URL-encoded bodies larger than
+  500 kB are rejected too, which changes nothing, as the API takes JSON
+  only.
+- **Users and tokens:** nothing changes. Pubgrade checks its own access
+  tokens (the `X-...-Access-Token` headers), not bearer tokens of trusted
+  issuers, so FOCA's issuer-namespaced subjects and its token check before
+  the body don't apply, and no issuer needs `namespace: ""`.
+
 ## Upgrading to API 2.2.0
 
 Version 2.2.0 of the API lets admins register while registration is closed.
